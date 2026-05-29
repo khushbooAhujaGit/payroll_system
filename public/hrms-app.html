@@ -1,0 +1,3647 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HRMS Payroll Platform</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    :root {
+      --bg: #f0f2f5;
+      --s1: #ffffff;
+      --s2: #f8f9fb;
+      --s3: #eef0f4;
+      --b1: #e2e5eb;
+      --b2: #cbd0d9;
+      --acc: #2563eb;
+      --acc2: #eff4ff;
+      --accT: #1d4ed8;
+      --grn: #16a34a;
+      --grn2: #f0fdf4;
+      --red: #dc2626;
+      --red2: #fef2f2;
+      --yel: #d97706;
+      --yel2: #fffbeb;
+      --pur: #7c3aed;
+      --pur2: #f5f3ff;
+      --cyn: #0891b2;
+      --cyn2: #ecfeff;
+      --txt: #111827;
+      --t2: #374151;
+      --t3: #6b7280;
+      --t4: #9ca3af;
+      --sw: 228px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--txt);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* LOGIN */
+    #login {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    .lb {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 44px;
+      width: 420px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, .25);
+    }
+
+    .ll {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .ll .ico {
+      width: 38px;
+      height: 38px;
+      background: var(--acc);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .ll h1 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .ll .sub {
+      font-size: 10px;
+      color: var(--t3);
+    }
+
+    .lb h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .lb .hint {
+      color: var(--t3);
+      margin-bottom: 22px;
+      font-size: 12px;
+    }
+
+    .fg {
+      margin-bottom: 14px;
+    }
+
+    .fg label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--t2);
+      margin-bottom: 5px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .fg input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--b1);
+      border-radius: 7px;
+      padding: 9px 12px;
+      color: var(--txt);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .fg input:focus {
+      border-color: var(--acc);
+    }
+
+    .lbtn {
+      width: 100%;
+      background: var(--acc);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 10px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+
+    .lbtn:hover {
+      background: #3b7de8;
+    }
+
+    .lerr {
+      color: var(--red);
+      font-size: 12px;
+      margin-top: 10px;
+      text-align: center;
+      display: none;
+    }
+
+    /* LAYOUT */
+    #app {
+      display: none;
+      width: 100%;
+    }
+
+    #app.on {
+      display: flex;
+    }
+
+    aside {
+      width: var(--sw);
+      background: var(--s1);
+      border-right: 1.5px solid var(--b1);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      flex-shrink: 0;
+    }
+
+    .sh {
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--b1);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .sh .ico {
+      width: 30px;
+      height: 30px;
+      background: var(--acc);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+
+    .nl {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--t3);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: 10px 8px 4px;
+    }
+
+    .ni {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--t2);
+      transition: all .12s;
+      margin-bottom: 1px;
+    }
+
+    .ni:hover {
+      background: var(--s2);
+      color: var(--txt);
+    }
+
+    .ni.on {
+      background: var(--acc2);
+      color: var(--acc);
+      font-weight: 600;
+    }
+
+    .sf {
+      padding: 10px 12px;
+      border-top: 1px solid var(--b1);
+    }
+
+    .up {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+
+    .up:hover {
+      background: var(--s2);
+    }
+
+    .uav {
+      width: 26px;
+      height: 26px;
+      background: var(--acc);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .hdr {
+      height: 52px;
+      border-bottom: 1px solid var(--b1);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 10px;
+    }
+
+    .hdr h2 {
+      font-size: 14px;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .pg {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--s2);
+      border: 1px solid var(--b1);
+      color: var(--txt);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .12s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: var(--s3);
+    }
+
+    .btn.acc {
+      background: var(--acc);
+      border-color: var(--acc);
+      color: #fff;
+    }
+
+    .btn.acc:hover {
+      background: #3b7de8;
+    }
+
+    .btn.grn {
+      background: var(--grn);
+      border-color: var(--grn);
+      color: #fff;
+    }
+
+    .btn.red {
+      background: var(--red);
+      border-color: var(--red);
+      color: #fff;
+    }
+
+    .btn.sm {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    /* CARDS */
+    .g4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .g3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .g2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .card {
+      background: var(--s1);
+      border: 1px solid var(--b1);
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .card:last-child {
+      margin-bottom: 0;
+    }
+
+    .ch {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .ct {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .sc {
+      background: var(--s1);
+      border: 1px solid var(--b1);
+      border-radius: 10px;
+      padding: 18px;
+    }
+
+    .sc .lbl {
+      font-size: 11px;
+      color: var(--t3);
+      margin-bottom: 6px;
+    }
+
+    .sc .val {
+      font-size: 26px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .sc .sub {
+      font-size: 11px;
+      color: var(--t3);
+      margin-top: 4px;
+    }
+
+    /* TABLES */
+    .tw {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th {
+      padding: 7px 12px;
+      text-align: left;
+      color: var(--t3);
+      font-weight: 600;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-bottom: 1px solid var(--b1);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(42, 47, 66, .4);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, .02);
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+
+    /* BADGES */
+    .bx {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .bx.g {
+      background: var(--grn2);
+      color: var(--grn);
+    }
+
+    .bx.r {
+      background: var(--red2);
+      color: var(--red);
+    }
+
+    .bx.y {
+      background: var(--yel2);
+      color: var(--yel);
+    }
+
+    .bx.b {
+      background: var(--acc2);
+      color: var(--acc);
+    }
+
+    .bx.p {
+      background: var(--pur2);
+      color: var(--pur);
+    }
+
+    .bx.c {
+      background: var(--cyn2);
+      color: var(--cyn);
+    }
+
+    .bx.gr {
+      background: var(--s2);
+      color: var(--t3);
+    }
+
+    /* FORMS */
+    .fg2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .fld {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .fld label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--t2);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .fld input,
+    .fld select,
+    .fld textarea {
+      background: #f9fafb;
+      border: 1.5px solid var(--b1);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--txt);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .fld input:focus,
+    .fld select:focus,
+    .fld textarea:focus {
+      border-color: var(--acc);
+      background: #fff;
+    }
+
+    .fld.full {
+      grid-column: 1/-1;
+    }
+
+    .fld select option {
+      background: var(--s2);
+    }
+
+    /* MODALS */
+    .ov {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, .4);
+      z-index: 150;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(2px);
+    }
+
+    .ov.on {
+      display: flex;
+    }
+
+    .mo {
+      background: var(--s1);
+      border: 1px solid var(--b1);
+      border-radius: 12px;
+      padding: 26px;
+      width: 560px;
+      max-height: 88vh;
+      overflow-y: auto;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .5);
+    }
+
+    .mo.wide {
+      width: 720px;
+    }
+
+    .mo.xl {
+      width: 900px;
+    }
+
+    .mh {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+
+    .mt {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .mc {
+      background: none;
+      border: none;
+      color: var(--t3);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 2px 6px;
+    }
+
+    .mc:hover {
+      color: var(--txt);
+    }
+
+    .mf {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--b1);
+    }
+
+    /* MISC */
+    .loader {
+      color: var(--t3);
+      padding: 50px;
+      text-align: center;
+    }
+
+    .sp {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--b2);
+      border-top-color: var(--acc);
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      margin-right: 7px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--t3);
+    }
+
+    .empty .ico {
+      font-size: 44px;
+      margin-bottom: 10px;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      background: var(--s2);
+      border: 1px solid var(--b1);
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 12px;
+      z-index: 999;
+      display: none;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .3);
+      max-width: 400px;
+    }
+
+    #toast.on {
+      display: block;
+    }
+
+    #toast.ok {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #166534;
+    }
+
+    #toast.er {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #991b1b;
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 2px;
+      background: var(--s2);
+      border-radius: 8px;
+      padding: 3px;
+      margin-bottom: 18px;
+    }
+
+    .tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--t2);
+      transition: all .12s;
+    }
+
+    .tab.on {
+      background: var(--s1);
+      color: var(--txt);
+    }
+
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--b1);
+      border-radius: 4px;
+    }
+
+    .ibox {
+      background: var(--acc2);
+      border: 1px solid rgba(79, 142, 247, .3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--t2);
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+
+    .wbox {
+      background: var(--yel2);
+      border: 1px solid rgba(245, 158, 11, .3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--t2);
+      margin-bottom: 14px;
+    }
+
+    .fup {
+      background: var(--s2);
+      border: 1px solid var(--b1);
+      border-radius: 7px;
+      padding: 8px;
+      color: var(--txt);
+      width: 100%;
+    }
+
+    .pbar {
+      height: 3px;
+      background: var(--acc);
+      border-radius: 3px;
+      width: 0;
+      transition: width .3s;
+    }
+
+    @media print {
+
+      aside,
+      .hdr,
+      #pacts,
+      .btn,
+      button {
+        display: none !important
+      }
+
+      .pg {
+        overflow: visible !important;
+        padding: 0 !important
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- LOGIN -->
+  <div id="login">
+    <div class="lb">
+      <div class="ll">
+        <div class="ico">💼</div>
+        <div>
+          <h1>HRMS Payroll</h1>
+          <div class="sub">Enterprise Platform</div>
+        </div>
+      </div>
+      <h2>Sign In</h2>
+      <div class="hint">Enter your credentials to continue</div>
+      <div class="fg"><label>API URL</label><input id="api-url" value="http://127.0.0.1:8000"></div>
+      <div class="fg"><label>Email</label><input id="lemail" type="email" value="admin@hrms.local"></div>
+      <div class="fg"><label>Password</label><input id="lpass" type="password" value="Admin@123"></div>
+      <button class="lbtn" onclick="doLogin()">Sign In →</button>
+      <div class="lerr" id="lerr"></div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="app">
+    <aside>
+      <div class="sh">
+        <div class="ico">💼</div>
+        <div>
+          <div style="font-size:13px;font-weight:700">HRMS</div>
+          <div style="font-size:10px;color:var(--t3)">Payroll Platform</div>
+        </div>
+      </div>
+      <nav>
+        <div class="nl">Overview</div>
+        <div class="ni on" onclick="go('dashboard')"><span>📊</span> Dashboard</div>
+        <div class="nl">HR</div>
+        <div class="ni" onclick="go('employees')"><span>👥</span> Employees</div>
+        <div class="ni" onclick="go('attendance')"><span>🕐</span> Attendance</div>
+        <div class="ni" onclick="go('leave')"><span>🏖️</span> Leave Management</div>
+        <div class="nl">Payroll</div>
+        <div class="ni" onclick="go('payroll')"><span>💰</span> Payroll Runs</div>
+        <div class="ni" onclick="go('salary')"><span>🧾</span> Salary Details</div>
+        <div class="ni" onclick="go('revisions')"><span>📈</span> Salary Revisions</div>
+        <div class="nl">Finance</div>
+        <div class="ni" onclick="go('loans')"><span>🏦</span> Loans</div>
+        <div class="ni" onclick="go('reimbursements')"><span>💳</span> Reimbursements</div>
+        <div class="nl">Statutory</div>
+        <div class="ni" onclick="go('statutory')"><span>📋</span> Compliance</div>
+        <div class="ni" onclick="go('tds')"><span>📑</span> TDS Slabs</div>
+        <div class="nl">More</div>
+        <div class="ni" onclick="go('holidays')"><span>🗓️</span> Holidays</div>
+        <div class="ni" onclick="go('helpdesk')"><span>🎫</span> Helpdesk</div>
+        <div class="ni" onclick="go('reports')"><span>📊</span> Reports</div>
+        <div class="nl">Masters</div>
+        <div class="ni" onclick="go('masters')"><span>🏢</span> Company / Entity</div>
+        <div class="ni" onclick="go('depts')"><span>🏗️</span> Departments</div>
+      </nav>
+      <div class="sf">
+        <div class="up" onclick="logout()">
+          <div class="uav" id="uav">A</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              id="uname">Admin</div>
+            <div style="font-size:10px;color:var(--t3)" id="urole">super_admin</div>
+          </div>
+          <span style="color:var(--t3);font-size:11px">⏻</span>
+        </div>
+      </div>
+    </aside>
+    <main>
+      <div class="hdr">
+        <h2 id="ptitle">Dashboard</h2>
+        <div style="display:flex;gap:6px" id="pacts"></div>
+      </div>
+      <div class="pg" id="pg">
+        <div class="loader"><span class="sp"></span>Loading...</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MARK ATTENDANCE MODAL -->
+  <div class="ov" id="m-att">
+    <div class="mo xl">
+      <div class="mh">
+        <div class="mt">Mark Attendance</div><button class="mc" onclick="cm('m-att')">✕</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
+        <div class="fld"><label>Date *</label><input type="date" id="att-date"></div>
+        <button class="btn sm grn" onclick="setAllAtt('present')">✓ All Present</button>
+        <button class="btn sm red" onclick="setAllAtt('absent')">✗ All Absent</button>
+        <button class="btn sm" onclick="setAllAtt('work_from_home')">🏠 All WFH</button>
+      </div>
+      <div style="max-height:420px;overflow-y:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Emp ID</th>
+              <th>Name</th>
+              <th>Status</th>
+              <th>In (HH:MM)</th>
+              <th>Out (HH:MM)</th>
+            </tr>
+          </thead>
+          <tbody id="att-rows">
+            <tr>
+              <td colspan="5" style="color:var(--t3);text-align:center;padding:20px">Loading employees...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mf"><button class="btn" onclick="cm('m-att')">Cancel</button><button class="btn acc"
+          onclick="saveAttendance()">Save Attendance</button></div>
+    </div>
+  </div>
+
+  <!-- APPLY LEAVE MODAL -->
+  <div class="ov" id="m-leave">
+    <div class="mo wide">
+      <div class="mh">
+        <div class="mt">Apply Leave</div><button class="mc" onclick="cm('m-leave')">✕</button>
+      </div>
+      <div class="wbox">⚠ Leave is applied for the <strong>logged-in user (admin@hrms.local)</strong>. Dates must be
+        today or future.</div>
+      <div class="fg2">
+        <div class="fld"><label>Leave Type *</label>
+          <select id="lv-type" onchange="calcDays()">
+            <option value="">Select Type</option>
+          </select>
+        </div>
+        <div class="fld"><label>From Date * (today or future)</label><input type="date" id="lv-from"
+            onchange="calcDays()"></div>
+        <div class="fld"><label>To Date *</label><input type="date" id="lv-to" onchange="calcDays()"></div>
+        <div class="fld"><label>No. of Days</label><input id="lv-days" type="number" step="0.5" readonly></div>
+        <div class="fld full"><label>Reason</label><input id="lv-reason" placeholder="Reason for leave (optional)">
+        </div>
+      </div>
+      <div id="lv-bal" style="margin-top:8px"></div>
+      <div class="mf"><button class="btn" onclick="cm('m-leave')">Cancel</button><button class="btn acc"
+          onclick="submitLeave()">Apply Leave</button></div>
+    </div>
+  </div>
+
+  <!-- ADD EMPLOYEE MODAL -->
+  <div class="ov" id="m-emp">
+    <div class="mo wide">
+      <div class="mh">
+        <div class="mt" id="emp-title">Add Employee</div><button class="mc" onclick="cm('m-emp')">✕</button>
+      </div>
+      <div class="tab-bar" id="emp-tabs">
+        <div class="tab on" onclick="empTab(0,this)">Personal Info</div>
+        <div class="tab" onclick="empTab(1,this)">Job & Salary</div>
+        <div class="tab" onclick="empTab(2,this)">Bank Details</div>
+      </div>
+      <div id="et0">
+        <div class="fg2">
+          <div class="fld"><label>First Name *</label><input id="e-fn" placeholder="First name"></div>
+          <div class="fld"><label>Last Name *</label><input id="e-ln" placeholder="Last name"></div>
+          <div class="fld"><label>Official Email</label><input id="e-em" type="email" placeholder="email@company.com">
+          </div>
+          <div class="fld"><label>Mobile (10 digits) *</label><input id="e-mb" placeholder="10-digit mobile"
+              maxlength="10"></div>
+          <div class="fld"><label>Date of Joining *</label><input id="e-dj" type="date"></div>
+          <div class="fld"><label>Date of Birth</label><input id="e-db" type="date"></div>
+          <div class="fld"><label>Gender *</label><select id="e-gn">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select></div>
+          <div class="fld"><label>Marital Status</label><select id="e-ms">
+              <option value="single">Single</option>
+              <option value="married">Married</option>
+            </select></div>
+          <div class="fld"><label>PAN (format: ABCDE1234F)</label><input id="e-pan" placeholder="ABCDE1234F"
+              style="text-transform:uppercase" maxlength="10"></div>
+          <div class="fld"><label>Bio ID (Biometric)</label><input id="e-bio" placeholder="e.g. II-6"></div>
+        </div>
+      </div>
+      <div id="et1" style="display:none">
+        <div class="fg2">
+          <div class="fld"><label>Department</label><select id="e-dp">
+              <option value="">-- None --</option>
+            </select></div>
+          <div class="fld"><label>Designation</label><select id="e-dg">
+              <option value="">-- None --</option>
+            </select></div>
+          <div class="fld"><label>Employment Type *</label><select id="e-et">
+              <option value="full_time">Full Time</option>
+              <option value="part_time">Part Time</option>
+              <option value="contract">Contract</option>
+              <option value="intern">Intern</option>
+              <option value="consultant">Consultant</option>
+              <option value="retainer">Retainer</option>
+            </select></div>
+          <div class="fld"><label>Work Type *</label><select id="e-wt">
+              <option value="wfo">Work from Office</option>
+              <option value="wfh">Work from Home</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="client_location">Client Location</option>
+            </select></div>
+          <div class="fld"><label>Gross Monthly Salary (Rs)</label><input id="e-gs" type="number"
+              placeholder="e.g. 25000" oninput="showSplit(this.value)"></div>
+          <div class="fld"><label>PF Applicable</label><select id="e-pf">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select></div>
+          <div class="fld"><label>Reporting Manager</label><select id="e-rm">
+              <option value="">None</option>
+            </select></div>
+          <div class="fld"><label>Firm</label><input id="e-fm" placeholder="e.g. Rutul Shah & Co LLP"></div>
+        </div>
+        <div id="sal-split"
+          style="display:none;margin-top:10px;background:var(--s2);border-radius:8px;padding:10px;font-size:11px;color:var(--t2)">
+        </div>
+      </div>
+      <div id="et2" style="display:none">
+        <div class="fg2">
+          <div class="fld"><label>Bank Name</label><input id="e-bk" placeholder="e.g. HDFC Bank"></div>
+          <div class="fld"><label>Account Number</label><input id="e-ac" placeholder="Account number"></div>
+          <div class="fld"><label>IFSC Code</label><input id="e-if" placeholder="e.g. HDFC0001234"
+              style="text-transform:uppercase"></div>
+          <div class="fld"><label>UAN Number</label><input id="e-ua" placeholder="Universal Account Number"></div>
+          <div class="fld"><label>ESI Number</label><input id="e-es" placeholder="ESI if applicable"></div>
+          <div class="fld"><label>PF Number</label><input id="e-pfn" placeholder="PF account number"></div>
+        </div>
+      </div>
+      <div class="mf"><button class="btn" onclick="cm('m-emp')">Cancel</button><button class="btn acc" id="emp-btn"
+          onclick="saveEmployee()">Add Employee</button></div>
+    </div>
+  </div>
+
+  <!-- UPLOAD ATTENDANCE -->
+  <div class="ov" id="m-upatt">
+    <div class="mo wide">
+      <div class="mh">
+        <div class="mt">Upload Attendance</div><button class="mc" onclick="cm('m-upatt')">✕</button>
+      </div>
+      <div class="tab-bar" id="att-up-tabs">
+        <div class="tab on" onclick="attUpTab(0,this)">Daily Attendance Sheet</div>
+        <div class="tab" onclick="attUpTab(1,this)">Punch Exceptions (Biometric)</div>
+      </div>
+      <div id="att-up-t0">
+        <div class="ibox">Columns: <code
+            style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">EmpID | EmployeeName | Date | Status | InTime | OutTime</code><br>Status
+          values: Present, Absent, WFH, Half Day, On Leave</div>
+        <div
+          style="display:flex;justify-content:space-between;align-items:center;background:var(--s2);border-radius:8px;padding:10px;margin-bottom:12px">
+          <span style="font-size:12px;color:var(--t2)">Download template pre-filled with your employees</span>
+          <button class="btn sm acc" onclick="dlTemplate('attendance')">⬇ Download Template</button>
+        </div>
+        <div class="fg2" style="margin-bottom:12px">
+          <div class="fld"><label>Month</label><input type="month" id="upatt-month"></div>
+          <div class="fld"><label>Sheet name (leave blank = first sheet)</label><input id="upatt-sheet"
+              placeholder="Template"></div>
+        </div>
+        <div class="fld"><label>Select Excel File</label><input type="file" id="upatt-file" class="fup"
+            accept=".xlsx,.xlsm,.xls" onchange="prevAttFile(this)"></div>
+      </div>
+      <div id="att-up-t1" style="display:none">
+        <div class="ibox">Upload biometric punch exceptions. Columns: <code
+            style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">EMP ID | Name | Date | Leave Type | Reason</code>
+        </div>
+        <div
+          style="display:flex;justify-content:space-between;align-items:center;background:var(--s2);border-radius:8px;padding:10px;margin-bottom:12px">
+          <span style="font-size:12px;color:var(--t2)">Download punch exception template</span>
+          <button class="btn sm acc" onclick="dlTemplate('punch')">⬇ Download Template</button>
+        </div>
+        <div class="fld"><label>Select Excel File (.xlsm / .xlsx)</label><input type="file" id="upatt-file2" class="fup"
+            accept=".xlsx,.xlsm,.xls" onchange="prevPunchFile(this)"></div>
+      </div>
+      <div id="upatt-prev" style="margin-top:14px"></div>
+      <div class="mf"><button class="btn" onclick="cm('m-upatt')">Cancel</button><button class="btn acc" id="upatt-btn"
+          style="display:none" onclick="importAttendance()">Import Records</button></div>
+    </div>
+  </div>
+
+  <!-- IMPORT EMPLOYEES -->
+  <div class="ov" id="m-impemp">
+    <div class="mo wide">
+      <div class="mh">
+        <div class="mt">Import Employees from Excel</div><button class="mc" onclick="cm('m-impemp')">✕</button>
+      </div>
+      <div class="ibox">Expected columns: <code
+          style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">NewEmpID | EmployeeName | Department | DesignationFinal | Gender | BirthDate | JoinDate | MobileNumber | PAN | BankName | AccountNumber | IFSCCode | UANNo | Firm</code>
+      </div>
+      <div
+        style="display:flex;justify-content:space-between;align-items:center;background:var(--s2);border-radius:8px;padding:10px;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--t2)">Download blank template</span>
+        <button class="btn sm acc" onclick="dlTemplate('employee')">⬇ Download Template</button>
+      </div>
+      <div class="fld"><label>Select Excel File</label><input type="file" id="impemp-file" class="fup"
+          accept=".xlsx,.xlsm,.xls" onchange="prevEmpFile(this)"></div>
+      <div id="impemp-prev" style="margin-top:14px"></div>
+      <div class="mf"><button class="btn" onclick="cm('m-impemp')">Cancel</button><button class="btn acc"
+          id="impemp-btn" style="display:none" onclick="importEmployees()">Import Employees</button></div>
+    </div>
+  </div>
+
+  <!-- IMPORT LEAVE -->
+  <div class="ov" id="m-implv">
+    <div class="mo wide">
+      <div class="mh">
+        <div class="mt">Import Leave Data</div><button class="mc" onclick="cm('m-implv')">✕</button>
+      </div>
+      <div class="ibox">Columns: <code
+          style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">EmpID | EmployeeName | FromDate | ToDate | LeaveType | Reason</code><br>Leave
+        Types: CL, SL, EL, WFH, HCL, HSL, CO, LOP, PTL, MTL, RL, CP, AP</div>
+      <div
+        style="display:flex;justify-content:space-between;align-items:center;background:var(--s2);border-radius:8px;padding:10px;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--t2)">Download leave import template</span>
+        <button class="btn sm acc" onclick="dlTemplate('leave')">⬇ Download Template</button>
+      </div>
+      <div class="fld"><label>Select Excel File</label><input type="file" id="implv-file" class="fup"
+          accept=".xlsx,.xlsm,.xls" onchange="prevLvFile(this)"></div>
+      <div id="implv-prev" style="margin-top:14px"></div>
+      <div class="mf"><button class="btn" onclick="cm('m-implv')">Cancel</button><button class="btn acc" id="implv-btn"
+          style="display:none" onclick="importLeaves()">Import Leave Data</button></div>
+    </div>
+  </div>
+
+  <!-- UPLOAD SALARY -->
+  <div class="ov" id="m-upsal">
+    <div class="mo wide">
+      <div class="mh">
+        <div class="mt">Upload Salary Sheet</div><button class="mc" onclick="cm('m-upsal')">✕</button>
+      </div>
+      <div class="ibox">Columns: <code
+          style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">EmpID | EmployeeName | GrossSalary | BasicPay | HRA | SpecialAllowance | LOPDays</code>
+      </div>
+      <div
+        style="display:flex;justify-content:space-between;align-items:center;background:var(--s2);border-radius:8px;padding:10px;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--t2)">Download salary template with your employees</span>
+        <button class="btn sm acc" onclick="dlTemplate('salary')">⬇ Download Template</button>
+      </div>
+      <div class="fld" style="margin-bottom:12px"><label>Payroll Period *</label><select id="upsal-period">
+          <option value="">-- Select period --</option>
+        </select></div>
+      <div class="fld"><label>Select Excel File</label><input type="file" id="upsal-file" class="fup"
+          accept=".xlsx,.xlsm,.xls" onchange="prevSalFile(this)"></div>
+      <div id="upsal-prev" style="margin-top:14px"></div>
+      <div class="mf"><button class="btn" onclick="cm('m-upsal')">Cancel</button><button class="btn acc" id="upsal-btn"
+          style="display:none" onclick="importSalary()">Process & Import</button></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    // ═══════════════════════════════════════════════════
+    // CORE STATE & UTILITIES
+    // ═══════════════════════════════════════════════════
+    let API = 'http://127.0.0.1:8000', ENTITY = 1;
+    let _emps = [], _depts = [], _desigs = [], _leaveTypes = [], _attData = [], _attMode = 'daily';
+    const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const $ = id => document.getElementById(id);
+    const setPg = h => $('pg').innerHTML = h;
+    const setActs = h => $('pacts').innerHTML = h;
+    const loader = () => setPg('<div class="loader"><span class="sp"></span>Loading...</div>');
+    const fmt = n => Number(n || 0).toLocaleString('en-IN');
+    const fmtD = d => d ? String(d).slice(0, 10) : '-';
+
+    // ═══════════════════════════════════════════════════
+    // SANCTUM TOKEN — sessionStorage + BroadcastChannel
+    //
+    // Why sessionStorage instead of localStorage?
+    //   • Cleared automatically when the browser/tab closes.
+    //   • Never persisted to disk in private/incognito mode.
+    //   • Isolated per-tab by default, so a compromised tab
+    //     cannot silently reuse another tab's token after reload.
+    //
+    // Why BroadcastChannel?
+    //   • sessionStorage is tab-local. Opening a new tab would
+    //     force the user to log in again. BroadcastChannel lets
+    //     an existing logged-in tab share its token with any new
+    //     tab that asks, without exposing it to the server.
+    //   • A logout in one tab broadcasts to all other tabs so
+    //     every tab is signed out simultaneously.
+    // ═══════════════════════════════════════════════════
+    const SESSION_KEY = 'hrms_session';
+    const bc = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('hrms_auth') : null;
+
+    function getToken() {
+      try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}').token || null; }
+      catch { return null; }
+    }
+
+    function saveSession(token, user) {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, user }));
+      bc?.postMessage({ type: 'session_created', token, user });
+    }
+
+    function clearSession() {
+      sessionStorage.removeItem(SESSION_KEY);
+      bc?.postMessage({ type: 'session_destroyed' });
+    }
+
+    if (bc) {
+      bc.onmessage = ({ data }) => {
+        if (data.type === 'session_request') {
+          // A new/duplicate tab is asking — share our token if we have one
+          const raw = sessionStorage.getItem(SESSION_KEY);
+          if (raw) bc.postMessage({ type: 'session_response', ...JSON.parse(raw) });
+        } else if (data.type === 'session_destroyed') {
+          // Another tab logged out — clear and reload this tab too
+          sessionStorage.removeItem(SESSION_KEY);
+          location.reload();
+        }
+        // NOTE: 'session_response' is handled only inside requestSessionFromSiblings()
+        // so mountApp() is never called from two places at the same time.
+      };
+    }
+
+    // Broadcasts a request to all open tabs and waits up to 500 ms for one to reply.
+    // Returns { token, user } on success, or null if no tab responds in time.
+    function requestSessionFromSiblings() {
+      if (!bc) return Promise.resolve(null);
+      return new Promise(resolve => {
+        const timer = setTimeout(() => {
+          bc.removeEventListener('message', onReply);
+          resolve(null);
+        }, 500);
+        function onReply({ data }) {
+          if (data.type === 'session_response') {
+            clearTimeout(timer);
+            bc.removeEventListener('message', onReply);
+            resolve({ token: data.token, user: data.user });
+          }
+        }
+        bc.addEventListener('message', onReply);
+        bc.postMessage({ type: 'session_request' });
+      });
+    }
+
+    // ─── Fetch wrapper — injects Sanctum Bearer token automatically ───
+    async function api(path, opts = {}) {
+      const token = getToken();
+      const res = await fetch(API + '/api' + path, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+          ...(opts.headers || {})
+        },
+        ...opts
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw data;
+      return data;
+    }
+
+    function toast(msg, t = 'ok') {
+      const el = $('toast');
+      el.textContent = (t === 'ok' ? '✓ ' : '✗ ') + msg;
+      el.className = 'on ' + t;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.className = '', 4000);
+    }
+
+    const om = id => $(id).classList.add('on');
+    const cm = id => $(id).classList.remove('on');
+
+    function exDate(v) {
+      if (!v) return '';
+      if (typeof v === 'number') return new Date((v - 25569) * 86400000).toISOString().slice(0, 10);
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      const s = String(v).slice(0, 10);
+      // Handle DD-MM-YYYY
+      if (/^\d{2}-\d{2}-\d{4}$/.test(s)) { const [d, mo, y] = s.split('-'); return `${y}-${mo}-${d}`; }
+      return s;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // MOUNT APP  (shared by login, session-restore, and cross-tab adopt)
+    // ═══════════════════════════════════════════════════
+    async function mountApp(user) {
+      $('uname').textContent = user.name || user.email;
+      $('urole').textContent = (user.roles || [])[0] || 'user';
+      $('uav').textContent = (user.name || 'A')[0].toUpperCase();
+      if (user.employee?.entity_id) ENTITY = user.employee.entity_id;
+      $('login').style.display = 'none';
+      $('app').classList.add('on');
+      await prefetch();
+      go('dashboard');
+    }
+
+    // ═══════════════════════════════════════════════════
+    // LOGIN / LOGOUT
+    // ═══════════════════════════════════════════════════
+    async function doLogin() {
+      API = $('api-url').value.replace(/\/$/, '');
+      const btn = document.querySelector('.lbtn');
+      btn.textContent = 'Signing in...'; btn.disabled = true;
+      try {
+        const r = await api('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email: $('lemail').value, password: $('lpass').value })
+        });
+        // Sanctum returns { token, user } — store token in sessionStorage, never in the DOM
+        saveSession(r.token, r.user);
+        await mountApp(r.user);
+      } catch (e) {
+        const el = $('lerr');
+        el.textContent = e.message || 'Login failed. Check credentials and server.';
+        el.style.display = 'block';
+      }
+      btn.textContent = 'Sign In →'; btn.disabled = false;
+    }
+
+    async function logout() {
+      if (!confirm('Sign out?')) return;
+      // Tell the server to invalidate the Sanctum token
+      try { await api('/auth/logout', { method: 'POST' }); } catch (_) { /* already expired */ }
+      // Clear local storage and notify all other tabs
+      clearSession();
+      location.reload();
+    }
+
+    $('lpass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+    // ═══════════════════════════════════════════════════
+    // SESSION RESTORE ON PAGE LOAD
+    //
+    // Order of checks:
+    //   1. sessionStorage already has a token (same tab, refreshed page)
+    //   2. No local token → ask other open tabs via BroadcastChannel
+    //      (gives them 300 ms to reply before giving up)
+    //   3. Validate the token against /auth/me — if expired, force login
+    //   4. Nothing found → show login screen
+    // ═══════════════════════════════════════════════════
+    (async function restoreSession() {
+      // 1 — check this tab's own sessionStorage (page refresh, back/forward)
+      let token = getToken();
+
+      if (!token) {
+        // 2 — ask any already-open tab (handles duplicate tab / new tab)
+        const shared = await requestSessionFromSiblings();
+        if (shared) {
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(shared));
+          token = shared.token;
+        }
+      }
+
+      if (!token) return; // no session anywhere — show login screen
+
+      // 3 — validate the token is still alive on the server
+      try {
+        const r = await api('/auth/me');
+        if (r.data) await mountApp(r.data);
+        else clearSession();
+      } catch (_) {
+        clearSession(); // 401 — token revoked or expired
+      }
+    })();
+
+    // ═══════════════════════════════════════════════════
+    // PREFETCH MASTER DATA
+    // ═══════════════════════════════════════════════════
+    async function prefetch() {
+      // Employees
+      try {
+        const r = await api('/employees?entity_id=' + ENTITY + '&per_page=300');
+        _emps = r.data || [];
+        // Fill employee dropdowns
+        const opts = _emps.map(e => `<option value="${e.id}">${e.employee_id || e.id} — ${e.first_name} ${e.last_name}</option>`).join('');
+        $('e-rm').innerHTML = '<option value="">None</option>' + opts;
+      } catch (e) { }
+
+      // Departments
+      try {
+        const r = await api('/master/departments?entity_id=' + ENTITY + '&per_page=100');
+        _depts = r.data || [];
+        $('e-dp').innerHTML = '<option value="">-- None --</option>' + _depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      } catch (e) { }
+
+      // Designations
+      try {
+        const r = await api('/master/designations?entity_id=' + ENTITY + '&per_page=100');
+        _desigs = r.data || [];
+        $('e-dg').innerHTML = '<option value="">-- None --</option>' + _desigs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      } catch (e) { }
+
+      // Leave types
+      try {
+        const r = await api('/leave/types?entity_id=' + ENTITY);
+        _leaveTypes = r.data || [];
+        $('lv-type').innerHTML = '<option value="">Select Type</option>' + _leaveTypes.map(t => `<option value="${t.id}">${t.code} — ${t.name}</option>`).join('');
+      } catch (e) { }
+
+      // Payroll periods for salary upload dropdown
+      try {
+        const r = await api('/payroll/periods?entity_id=' + ENTITY + '&per_page=50');
+        $('upsal-period').innerHTML = '<option value="">-- Select --</option>' + (r.data || []).map(p => `<option value="${p.id}">${M[p.month - 1]} ${p.year}</option>`).join('');
+      } catch (e) { }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // NAVIGATION
+    // ═══════════════════════════════════════════════════
+    const TITLES = { dashboard: 'Dashboard', employees: 'Employees', attendance: 'Attendance', leave: 'Leave Management', payroll: 'Payroll Runs', salary: 'Salary Details', revisions: 'Salary Revisions', loans: 'Loans', reimbursements: 'Reimbursements', statutory: 'Statutory Compliance', tds: 'TDS Slabs', holidays: 'Holidays', helpdesk: 'Helpdesk', reports: 'Reports', masters: 'Company & Entity Masters', depts: 'Departments & Designations' };
+
+    // function go(page) {
+    //   document.querySelectorAll('.ni').forEach(n => n.classList.remove('on'));
+    //   document.querySelectorAll('.ni').forEach(n => { if (n.getAttribute('onclick')?.includes(`'${page}'`)) n.classList.add('on'); });
+    //   $('ptitle').textContent = TITLES[page] || page;
+    //   setActs('');
+    //   (window[page] || { dashboard, employees, attendance, leave, payroll, salary, revisions, loans, reimbursements, statutory, tds, holidays, helpdesk, reports, masters, depts }[page] || loader)();
+    // }
+
+    function go(page) {
+      document.querySelectorAll('.ni').forEach(n => n.classList.remove('on'));
+      document.querySelectorAll('.ni').forEach(n => { if (n.getAttribute('onclick')?.includes(`'${page}'`)) n.classList.add('on'); });
+      $('ptitle').textContent = TITLES[page] || page;
+
+      // ADD THIS — dispatch to the right function
+      const fns = {
+        dashboard, employees, attendance, leave, payroll,
+        salary, revisions, loans, reimbursements, statutory,
+        tds, holidays, helpdesk, reports, masters, depts
+      };
+      if (fns[page]) fns[page]();
+    }
+
+    function empTab(i, el) {
+      [0, 1, 2].forEach(j => { $(`et${j}`).style.display = j === i ? '' : 'none'; });
+      document.querySelectorAll('#m-emp .tab').forEach((t, j) => t.classList.toggle('on', j === i));
+    }
+
+    function showSplit(g) {
+      g = parseFloat(g) || 0;
+      if (!g) { $('sal-split').style.display = 'none'; return; }
+      $('sal-split').innerHTML = `Basic: Rs${fmt(Math.round(g * .7))} + HRA: Rs${fmt(Math.round(g * .28))} + Spec Allw: Rs${fmt(Math.round(g * .02))} | Net: Rs${fmt(g - 200)}/month`;
+      $('sal-split').style.display = '';
+    }
+
+    // ═══════════════════════════════════════════════════
+    // DASHBOARD
+    // ═══════════════════════════════════════════════════
+    async function dashboard() {
+      loader();
+      try {
+        const [ana, emp] = await Promise.allSettled([
+          api('/dashboards/hr-analytics?entity_id=' + ENTITY),
+          api('/employees?entity_id=' + ENTITY + '&per_page=6')
+        ]);
+        const a = ana.value || {}, emps = emp.value?.data || [];
+        setPg(`
+      <div class="g4">
+        <div class="sc"><div class="lbl">Active Employees</div><div class="val">${a.total_active || 0}</div></div>
+        <div class="sc"><div class="lbl">New Joiners</div><div class="val">${a.new_joiners || 0}</div><div class="sub">This month</div></div>
+        <div class="sc"><div class="lbl">Pending Leaves</div><div class="val" style="color:var(--yel)">${a.pending_actions?.leave_approvals || 0}</div></div>
+        <div class="sc"><div class="lbl">Open Tickets</div><div class="val" style="color:var(--red)">${a.pending_actions?.open_tickets || 0}</div></div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="ch"><div class="ct">Recent Employees</div><button class="btn sm" onclick="go('employees')">View All →</button></div>
+          ${emps.length
+            ? `<table><tr><th>Emp ID</th><th>Name</th><th>Status</th></tr>${emps.map(e => `<tr><td class="mono">${e.employee_id || e.id}</td><td>${e.first_name} ${e.last_name}</td><td><span class="bx ${e.employee_status === 'active' ? 'g' : 'gr'}">${e.employee_status || 'active'}</span></td></tr>`).join('')}</table>`
+            : `<div class="empty"><div class="ico">👥</div><p>No employees yet</p><button class="btn acc" onclick="om('m-emp')">+ Add Employee</button></div>`}
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ct">Quick Actions</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            ${[["+ Add Employee", "om('m-emp')"], ["✔ Mark Attendance", "go('attendance')"],
+          ["Apply Leave", "om('m-leave')"], ["Upload Attendance", "om('m-upatt')"],
+          ["Run Payroll", "go('payroll')"], ["Reports", "go('reports')"]
+          ].map(([l, a]) => `<button class="btn" style="justify-content:flex-start" onclick="${a}">${l}</button>`).join('')}
+          </div>
+          ${(a.dept_strength || []).length ? `
+          <div style="margin-top:14px"><div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:8px">DEPARTMENT STRENGTH</div>
+            ${a.dept_strength.slice(0, 4).map(d => {
+            const p = a.total_active ? Math.round(d.count / a.total_active * 100) : 0; return `
+              <div style="margin-bottom:7px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px"><span>${d.department?.name || 'Dept ' + d.department_id}</span><span style="color:var(--t3)">${d.count}</span></div>
+              <div style="background:var(--bg);border-radius:3px;height:4px"><div style="background:var(--acc);width:${p}%;height:100%;border-radius:3px"></div></div></div>`;
+          }).join('')}
+          </div>` : ''}
+        </div>
+      </div>`);
+      } catch (e) {
+        setPg(`<div class="empty"><div class="ico">⚠️</div><p>Dashboard error: ${e.message || 'Unknown'}</p></div>`);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // EMPLOYEES
+    // ═══════════════════════════════════════════════════
+    async function employees() {
+      setActs(`<button class="btn acc" onclick="openAddEmp()">+ Add Employee</button><button class="btn" onclick="om('m-impemp')" style="margin-left:6px">⬆ Import Excel</button>`);
+      loader();
+      try {
+        const d = await api('/employees?entity_id=' + ENTITY + '&per_page=100');
+        const list = d.data || [];
+        if (!list.length) {
+          setPg(`<div class="empty"><div class="ico">👥</div><p>No employees yet.</p><br><button class="btn acc" onclick="openAddEmp()">+ Add Employee</button><button class="btn" style="margin-left:8px" onclick="om('m-impemp')">Import from Excel</button></div>`);
+          return;
+        }
+        setPg(`<div class="card">
+      <div class="ch"><div class="ct">${d.total || list.length} Employees</div>
+        <input placeholder="Search..." oninput="filterTbl(this.value,'etbl')" style="background:var(--bg);border:1px solid var(--b1);border-radius:6px;padding:5px 10px;color:var(--txt);font-size:12px;width:180px">
+      </div>
+      <div class="tw"><table id="etbl">
+        <tr><th>Emp ID</th><th>Name</th><th>Dept</th><th>Designation</th><th>Email</th><th>Mobile</th><th>Joined</th><th>Status</th><th></th></tr>
+        ${list.map(e => `<tr>
+          <td class="mono">${e.employee_id || e.id}</td>
+          <td><strong>${e.first_name} ${e.last_name}</strong></td>
+          <td>${e.department?.name || '-'}</td>
+          <td>${e.designation?.name || '-'}</td>
+          <td style="color:var(--t2)">${e.official_email || '-'}</td>
+          <td class="mono">${e.mobile || '-'}</td>
+          <td style="color:var(--t2)">${fmtD(e.date_of_joining)}</td>
+          <td><span class="bx ${e.employee_status === 'active' ? 'g' : e.employee_status === 'resigned' ? 'r' : 'gr'}">${e.employee_status || 'active'}</span></td>
+          <td><button class="btn sm" onclick="viewEmp(${e.id})">View →</button></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    function filterTbl(q, id) {
+      document.querySelectorAll(`#${id} tr:not(:first-child)`).forEach(r => {
+        r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+      });
+    }
+
+    async function viewEmp(id) {
+      loader();
+      setActs(`<button class="btn sm" onclick="employees()">← Back</button>`);
+      try {
+        const resp = await api('/employees/' + id);
+        const e = resp.data || resp;
+        if (!e || !e.id) { toast('Employee not found', 'er'); employees(); return; }
+        const g = Number(e.currentSalary?.gross_monthly || e.currentSalary?.ctc_monthly || 0);
+        const bk = e.bankDetails?.[0] || e.bank_detail || null;
+        const stat = e.statutoryDetails || null;
+        setPg(`
+      <div class="g2">
+        <div>
+          <div class="card" style="margin-bottom:14px">
+            <div class="ch"><div class="ct">Personal Details</div></div>
+            <table>
+              <tr><td style="color:var(--t3);width:150px">Employee ID</td><td class="mono"><strong>${e.employee_id || e.id}</strong></td></tr>
+              <tr><td style="color:var(--t3)">Name</td><td><strong>${e.first_name} ${e.last_name}</strong></td></tr>
+              <tr><td style="color:var(--t3)">Email</td><td>${e.official_email || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Mobile</td><td>${e.mobile || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Gender</td><td>${e.gender || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Date of Birth</td><td>${fmtD(e.date_of_birth)}</td></tr>
+              <tr><td style="color:var(--t3)">Date of Joining</td><td>${fmtD(e.date_of_joining)}</td></tr>
+              <tr><td style="color:var(--t3)">Department</td><td>${e.department?.name || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Designation</td><td>${e.designation?.name || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Employment Type</td><td>${e.employment_type || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Work Type</td><td>${e.work_type || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Status</td><td><span class="bx ${e.employee_status === 'active' ? 'g' : 'r'}">${e.employee_status || '-'}</span></td></tr>
+              ${stat?.pan_number ? `<tr><td style="color:var(--t3)">PAN</td><td class="mono">${stat.pan_number}</td></tr>` : ''}
+              ${stat?.uan_number ? `<tr><td style="color:var(--t3)">UAN</td><td class="mono">${stat.uan_number}</td></tr>` : ''}
+            </table>
+          </div>
+          <div class="card">
+            <div class="ch"><div class="ct">Bank Details</div></div>
+            <table>
+              <tr><td style="color:var(--t3);width:150px">Bank</td><td>${bk?.bank_name || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">Account No</td><td class="mono">${bk?.account_number || '-'}</td></tr>
+              <tr><td style="color:var(--t3)">IFSC</td><td class="mono">${bk?.ifsc_code || '-'}</td></tr>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:14px">
+            <div class="ch"><div class="ct">Salary</div><button class="btn sm acc" onclick="promptSalaryUpdate(${e.id})">✏ ${g > 0 ? 'Update' : 'Set'} Salary</button></div>
+            ${g > 0 ? `<table>
+              <tr><td style="color:var(--t3);width:150px">Gross/Month</td><td><strong>Rs${fmt(g)}</strong></td></tr>
+              <tr><td style="color:var(--t3)">Annual CTC</td><td>Rs${fmt(Math.round(g * 12))}</td></tr>
+              <tr><td style="color:var(--t3)">Basic (70%)</td><td>Rs${fmt(Math.round(g * .7))}</td></tr>
+              <tr><td style="color:var(--t3)">HRA (28%)</td><td>Rs${fmt(Math.round(g * .28))}</td></tr>
+              <tr><td style="color:var(--t3)">Spec. Allw (2%)</td><td>Rs${fmt(Math.round(g * .02))}</td></tr>
+              <tr><td style="color:var(--t3)">Prof. Tax</td><td>Rs200 (deduction)</td></tr>
+              <tr><td style="color:var(--t3)">Net Salary</td><td><strong style="color:var(--grn)">Rs${fmt(g - 200)}/month</strong></td></tr>
+            </table>` : `<div style="color:var(--t3);font-size:12px;padding:8px">No salary set yet. Click "Set Salary" to add.</div>`}
+          </div>
+          <div class="card">
+            <div class="ch"><div class="ct">Leave Balances</div></div>
+            ${(e.leaveBalances || []).length ? `<table><tr><th>Type</th><th>Allocated</th><th>Used</th><th>Available</th></tr>
+              ${e.leaveBalances.map(b => `<tr><td>${b.leaveType?.code || '-'}</td><td>${b.allocated || 0}</td><td>${b.availed || 0}</td><td><strong>${b.available || Math.max(0, (b.allocated || 0) - (b.availed || 0))}</strong></td></tr>`).join('')}
+            </table>` : '<div style="color:var(--t3);font-size:12px;padding:8px">No leave balances found</div>'}
+          </div>
+        </div>
+      </div>`);
+      } catch (e) { toast('Failed to load employee: ' + (e.message || 'Unknown error'), 'er'); employees(); }
+    }
+
+    async function promptSalaryUpdate(empId) {
+      const monthly = prompt('Enter new Gross Monthly Salary (Rs):');
+      if (!monthly || isNaN(monthly)) return;
+      const gross = parseFloat(monthly);
+      if (gross < 1) { toast('Enter a valid amount', 'er'); return; }
+      const reason = prompt('Reason for salary update (required):');
+      if (!reason) return;
+      try {
+        await api('/salary-revisions', {
+          method: 'POST', body: JSON.stringify({
+            employee_id: empId,
+            new_ctc: Math.round(gross * 12),  // API needs ANNUAL CTC
+            effective_date: new Date().toISOString().slice(0, 10),
+            reason: reason
+          })
+        });
+        toast('Salary revision submitted! Rs' + fmt(gross) + '/month (Annual: Rs' + fmt(Math.round(gross * 12)) + ')');
+        viewEmp(empId);
+      } catch (e) { toast(e.message || JSON.stringify(e.errors || 'Failed'), 'er'); }
+    }
+
+    function openAddEmp() {
+      $('emp-title').textContent = 'Add Employee';
+      $('emp-tabs').style.display = '';
+      $('emp-btn').setAttribute('onclick', 'saveEmployee()');
+      $('emp-btn').textContent = 'Add Employee';
+      empTab(0, document.querySelector('#m-emp .tab'));
+      $('sal-split').style.display = 'none';
+      ['e-fn', 'e-ln', 'e-em', 'e-mb', 'e-dj', 'e-db', 'e-pan', 'e-bio', 'e-gs', 'e-fm', 'e-bk', 'e-ac', 'e-if', 'e-ua', 'e-es', 'e-pfn'].forEach(id => { if ($(id)) $(id).value = ''; });
+      om('m-emp');
+    }
+
+    async function saveEmployee() {
+      const fn = $('e-fn').value.trim();
+      const ln = $('e-ln').value.trim();
+      const doj = $('e-dj').value;
+      const mob = $('e-mb').value.replace(/\D/g, '').slice(-10);
+      if (!fn) { toast('First name required', 'er'); return; }
+      if (!doj) { toast('Date of joining required', 'er'); return; }
+      if (mob && mob.length !== 10) { toast('Mobile must be exactly 10 digits', 'er'); return; }
+      const pan = $('e-pan').value.toUpperCase().trim();
+      if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) { toast('Invalid PAN format. Must be ABCDE1234F', 'er'); return; }
+
+      const payload = {
+        entity_id: ENTITY,
+        first_name: fn,
+        last_name: ln || '.',
+        date_of_joining: doj,
+        gender: $('e-gn').value,
+        employment_type: $('e-et').value,
+        work_type: $('e-wt').value,
+        is_pf_applicable: $('e-pf').value === 'true',
+      };
+      if (mob) payload.mobile = mob;
+      if ($('e-em').value) payload.official_email = $('e-em').value;
+      if ($('e-db').value) payload.date_of_birth = $('e-db').value;
+      if (pan) payload.pan_number = pan;
+      if ($('e-dp').value) payload.department_id = parseInt($('e-dp').value);
+      if ($('e-dg').value) payload.designation_id = parseInt($('e-dg').value);
+      if ($('e-rm').value) payload.reporting_manager_id = parseInt($('e-rm').value);
+      if ($('e-bk').value) payload.bank_name = $('e-bk').value;
+      if ($('e-ac').value) payload.account_number = $('e-ac').value;
+      if ($('e-if').value) payload.ifsc_code = $('e-if').value.toUpperCase();
+      if ($('e-ua').value) payload.uan_number = $('e-ua').value;
+
+      try {
+        await api('/employees', { method: 'POST', body: JSON.stringify(payload) });
+        cm('m-emp');
+        toast('Employee added successfully!');
+        await prefetch();
+        employees();
+      } catch (e) { toast(e.message || JSON.stringify(e.errors || 'Failed'), 'er'); }
+    }
+
+    // Employee import
+    async function prevEmpFile(inp) {
+      const f = inp.files[0]; if (!f) return;
+      const prev = $('impemp-prev');
+      prev.innerHTML = '<div class="loader"><span class="sp"></span>Reading...</div>';
+      try {
+        const wb = XLSX.read(await f.arrayBuffer());
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+        const rows = raw.map(r => { const n = {}; Object.keys(r).forEach(k => n[k.trim()] = r[k]); return n; });
+        window._empImport = rows;
+        prev.innerHTML = `<div style="color:var(--grn);font-size:12px;margin-bottom:8px">✓ ${rows.length} employees found</div>
+      <div class="tw" style="max-height:200px;overflow-y:auto"><table>
+        <tr><th>Emp ID</th><th>Name</th><th>Dept</th><th>Join Date</th></tr>
+        ${rows.slice(0, 10).map(r => `<tr>
+          <td class="mono">${r['NewEmpID'] || r['New Emp ID'] || '-'}</td>
+          <td>${r['EmployeeName'] || r['Employee Name'] || '-'}</td>
+          <td>${r['Department'] || '-'}</td>
+          <td>${exDate(r['JoinDate'] || r['Join Date']) || '-'}</td>
+        </tr>`).join('')}
+      </table></div>`;
+        $('impemp-btn').style.display = '';
+      } catch (e) { prev.innerHTML = `<div style="color:var(--red)">Error: ${e.message}</div>`; }
+    }
+
+    async function importEmployees() {
+      const rows = window._empImport || [];
+      if (!rows.length) { toast('No data', 'er'); return; }
+      let ok = 0, skip = 0;
+      for (const r of rows) {
+        const nm = (r['EmployeeName'] || r['Employee Name'] || '').trim();
+        const parts = nm.split(' '); const fn = parts[0]; const ln = parts.slice(1).join(' ') || '.';
+        const doj = exDate(r['JoinDate'] || r['Join Date']);
+        if (!fn || !doj) { skip++; continue; }
+        const mob = String(r['MobileNumber'] || r['Mobile Number'] || '').replace(/\D/g, '').slice(-10);
+        const pan = String(r['PAN'] || '').trim().toUpperCase();
+        try {
+          const payload = { entity_id: ENTITY, first_name: fn, last_name: ln, date_of_joining: doj, gender: r['Gender'] || 'Male', employment_type: 'full_time', work_type: 'wfo', is_pf_applicable: r['PF Applicability'] === 'Yes' };
+          if (mob && mob.length === 10) payload.mobile = mob;
+          if (pan && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) payload.pan_number = pan;
+          if (r['BankName'] || r['Bank Name']) payload.bank_name = r['BankName'] || r['Bank Name'];
+          if (r['AccountNumber'] || r['Account Number']) payload.account_number = String(r['AccountNumber'] || r['Account Number']);
+          if (r['IFSCCode'] || r['IFSC Code']) payload.ifsc_code = String(r['IFSCCode'] || r['IFSC Code']).toUpperCase();
+          if (exDate(r['BirthDate'] || r['Birth Date'])) payload.date_of_birth = exDate(r['BirthDate'] || r['Birth Date']);
+          await api('/employees', { method: 'POST', body: JSON.stringify(payload) });
+          ok++;
+        } catch { skip++; }
+      }
+      cm('m-impemp');
+      toast(`Imported ${ok} employees. ${skip} skipped.`, skip > ok ? 'er' : 'ok');
+      await prefetch(); employees();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ATTENDANCE
+    // ═══════════════════════════════════════════════════
+    async function attendance() {
+      const today = new Date().toISOString().split('T')[0];
+      $('att-date').value = today;
+      setActs(`<button class="btn acc" onclick="loadAttModal()">✔ Mark Attendance</button><button class="btn" onclick="om('m-upatt')" style="margin-left:6px">⬆ Upload</button>`);
+      loader();
+      try {
+        const d = await api('/attendance/today?entity_id=' + ENTITY);
+        // d = {date, total_active, marked_count, not_marked, summary:{present:N, absent:N, work_from_home:N, leave:N, half_day:N...}}
+        const s = d.summary || {};
+        const present = s.present || 0, absent = s.absent || 0, wfh = s.work_from_home || 0, leave = s.leave || 0;
+
+        // Get daily records for table
+        let tableHtml = '';
+        try {
+          const now = new Date();
+          const monthly = await api(`/attendance/monthly?entity_id=${ENTITY}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
+          // monthly.data is grouped by employee_id: {1:[{...records}], 2:[{...}]}
+          const grouped = monthly.data || {};
+          const todayRecords = [];
+          Object.values(grouped).forEach(records => {
+            if (Array.isArray(records)) {
+              const rec = records.find(r => r.attendance_date === today || r.attendance_date?.slice(0, 10) === today);
+              if (rec) todayRecords.push(rec);
+            }
+          });
+          if (todayRecords.length) {
+            tableHtml = `<div class="tw"><table><tr><th>Emp ID</th><th>Name</th><th>Status</th><th>In Time</th><th>Out Time</th><th>Remarks</th></tr>
+          ${todayRecords.map(a => `<tr>
+            <td class="mono">${a.employee?.employee_id || '-'}</td>
+            <td>${a.employee?.first_name || ''} ${a.employee?.last_name || ''}</td>
+            <td><span class="bx ${a.status === 'present' ? 'g' : a.status === 'absent' ? 'r' : a.status === 'work_from_home' ? 'b' : 'y'}">${a.status}</span></td>
+            <td>${a.check_in || '-'}</td>
+            <td>${a.check_out || '-'}</td>
+            <td style="color:var(--t3)">${a.remarks || '-'}</td>
+          </tr>`).join('')}
+        </table></div>`;
+          }
+        } catch { }
+
+        setPg(`
+      <div class="g4">
+        <div class="sc"><div class="lbl">Present</div><div class="val" style="color:var(--grn)">${present}</div></div>
+        <div class="sc"><div class="lbl">Absent</div><div class="val" style="color:var(--red)">${absent}</div></div>
+        <div class="sc"><div class="lbl">WFH</div><div class="val" style="color:var(--acc)">${wfh}</div></div>
+        <div class="sc"><div class="lbl">Total Active</div><div class="val">${d.total_active || 0}</div><div class="sub">${d.marked_count || 0} marked today</div></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Today — ${today}</div><button class="btn sm" onclick="loadAttModal()">+ Mark More</button></div>
+        ${tableHtml || `<div class="empty" style="padding:30px"><p>No records marked today.</p><br><button class="btn acc" onclick="loadAttModal()">Mark Now</button></div>`}
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Upload Biometric Punch Data</div></div>
+        <p style="color:var(--t3);font-size:12px;margin-bottom:10px">Upload your <strong style="color:var(--txt)">01_Punch_Exceptions.xlsm</strong> to import biometric exceptions in bulk.</p>
+        <button class="btn acc" onclick="om('m-upatt')">⬆ Upload Now</button>
+      </div>`);
+      } catch (e) {
+        setPg(`<div class="empty"><div class="ico">🕐</div><p>No attendance data. <button class="btn sm" onclick="loadAttModal()">Mark now</button></p></div>`);
+      }
+    }
+
+    async function loadAttModal() {
+      om('m-att');
+      const rows = document.getElementById('att-rows');
+      rows.innerHTML = '<tr><td colspan="5" style="color:var(--t3);text-align:center;padding:20px"><span class="sp"></span> Loading...</td></tr>';
+      try {
+        const d = await api('/employees?entity_id=' + ENTITY + '&per_page=200');
+        const list = d.data || [];
+        if (!list.length) { rows.innerHTML = '<tr><td colspan="5" style="color:var(--t3);text-align:center;padding:20px">No employees found</td></tr>'; return; }
+        rows.innerHTML = list.map(e => `
+      <tr>
+        <td class="mono" style="font-size:11px;color:var(--t3)">${e.employee_id || e.id}</td>
+        <td style="font-size:12px">${e.first_name} ${e.last_name}</td>
+        <td><select data-emp="${e.id}" class="as" style="background:var(--bg);border:1px solid var(--b1);border-radius:5px;padding:3px 7px;color:var(--txt);font-size:11px">
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+          <option value="work_from_home">WFH</option>
+          <option value="half_day">Half Day</option>
+          <option value="leave">On Leave</option>
+          <option value="lop">LOP</option>
+        </select></td>
+        <td><input class="ain" data-emp="${e.id}" value="09:30" style="width:68px;background:var(--bg);border:1px solid var(--b1);border-radius:5px;padding:3px 6px;color:var(--txt);font-size:11px"></td>
+        <td><input class="aout" data-emp="${e.id}" value="18:30" style="width:68px;background:var(--bg);border:1px solid var(--b1);border-radius:5px;padding:3px 6px;color:var(--txt);font-size:11px"></td>
+      </tr>`).join('');
+      } catch (e) { rows.innerHTML = '<tr><td colspan="5" style="color:var(--red);padding:20px">Error: ' + e.message + '</td></tr>'; }
+    }
+
+    function setAllAtt(status) { document.querySelectorAll('.as').forEach(s => s.value = status); }
+
+    async function saveAttendance() {
+      const date = $('att-date').value;
+      if (!date) { toast('Select a date', 'er'); return; }
+      const records = [...document.querySelectorAll('.as')].map(s => ({
+        employee_id: parseInt(s.dataset.emp),
+        status: s.value,
+        check_in: document.querySelector('.ain[data-emp="' + s.dataset.emp + '"]')?.value || null,
+        check_out: document.querySelector('.aout[data-emp="' + s.dataset.emp + '"]')?.value || null
+      }));
+      try {
+        // Use bulk-mark
+        await api('/attendance/bulk-mark', { method: 'POST', body: JSON.stringify({ attendance_date: date, records }) });
+        cm('m-att'); toast('Saved ' + records.length + ' attendance records!'); attendance();
+      } catch {
+        // Fallback: individual mark
+        let ok = 0, fail = 0;
+        for (const rec of records) {
+          try {
+            await api('/attendance/mark', { method: 'POST', body: JSON.stringify({ attendance_date: date, ...rec }) });
+            ok++;
+          } catch { fail++; }
+        }
+        cm('m-att');
+        toast(`Saved ${ok} records${fail ? ' (' + fail + ' failed)' : ''}`, fail > ok ? 'er' : 'ok');
+        attendance();
+      }
+    }
+
+    // Attendance upload tab switching
+    function attUpTab(i, el) {
+      document.querySelectorAll('#att-up-tabs .tab').forEach(t => t.classList.remove('on'));
+      el.classList.add('on');
+      $('att-up-t0').style.display = i === 0 ? '' : 'none';
+      $('att-up-t1').style.display = i === 1 ? '' : 'none';
+      $('upatt-btn').style.display = 'none';
+      $('upatt-prev').innerHTML = '';
+    }
+
+    async function prevAttFile(inp) {
+      const f = inp.files[0]; if (!f) return;
+      const prev = $('upatt-prev');
+      prev.innerHTML = '<div class="loader"><span class="sp"></span>Reading...</div>';
+      try {
+        const wb = XLSX.read(await f.arrayBuffer());
+        const shName = ($('upatt-sheet').value || '').trim() || wb.SheetNames[0];
+        const sn = wb.SheetNames.includes(shName) ? shName : wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
+        const rows = raw.map(r => { const n = {}; Object.keys(r).forEach(k => n[k.trim()] = r[k]); return n; });
+        _attData = rows; _attMode = 'daily';
+        const sClr = { Present: 'g', Absent: 'r', WFH: 'b', 'Half Day': 'y', 'On Leave': 'y', present: 'g', absent: 'r', work_from_home: 'b' };
+        prev.innerHTML = `<div style="color:var(--grn);font-size:12px;margin-bottom:8px">✓ ${rows.length} records | Sheet: <strong>${sn}</strong></div>
+      <div class="tw" style="max-height:200px;overflow-y:auto"><table>
+        <tr><th>Emp ID</th><th>Name</th><th>Date</th><th>Status</th><th>In Time</th><th>Out Time</th></tr>
+        ${rows.slice(0, 10).map(r => `<tr>
+          <td class="mono">${r['EmpID'] || r['EMP ID'] || '-'}</td>
+          <td>${r['EmployeeName'] || r['Name'] || '-'}</td>
+          <td>${exDate(r['Date']) || String(r['Date'] || '').slice(0, 10) || '-'}</td>
+          <td><span class="bx ${sClr[r['Status']] || 'gr'}">${r['Status'] || '-'}</span></td>
+          <td>${r['InTime'] || '-'}</td>
+          <td>${r['OutTime'] || '-'}</td>
+        </tr>`).join('')}
+      </table></div>`;
+        $('upatt-btn').style.display = '';
+      } catch (e) { prev.innerHTML = `<div style="color:var(--red)">Error: ${e.message}</div>`; }
+    }
+
+    async function prevPunchFile(inp) {
+      const f = inp.files[0]; if (!f) return;
+      const prev = $('upatt-prev');
+      prev.innerHTML = '<div class="loader"><span class="sp"></span>Reading...</div>';
+      try {
+        const wb = XLSX.read(await f.arrayBuffer());
+        const sn = wb.SheetNames.includes('Mark Leave') ? 'Mark Leave' : wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
+        const rows = raw.map(r => { const n = {}; Object.keys(r).forEach(k => n[k.trim()] = r[k]); return n; });
+        _attData = rows; _attMode = 'punch';
+        prev.innerHTML = `<div style="color:var(--grn);font-size:12px;margin-bottom:8px">✓ ${rows.length} records from sheet: <strong>${sn}</strong></div>
+      <div class="tw" style="max-height:200px;overflow-y:auto"><table>
+        <tr><th>EMP ID</th><th>Name</th><th>Date</th><th>Leave Type</th><th>Reason</th></tr>
+        ${rows.slice(0, 10).map(r => `<tr>
+          <td class="mono">${r['EMP ID'] || r['Emp ID'] || '-'}</td>
+          <td>${r['Name'] || '-'}</td>
+          <td>${exDate(r['Date']) || '-'}</td>
+          <td><span class="bx y">${r['Leave Type'] || 'Exception'}</span></td>
+          <td style="color:var(--t3)">${r['Reason'] || '-'}</td>
+        </tr>`).join('')}
+      </table></div>`;
+        $('upatt-btn').style.display = '';
+      } catch (e) { prev.innerHTML = `<div style="color:var(--red)">Error: ${e.message}</div>`; }
+    }
+
+    async function importAttendance() {
+      if (!_attData.length) { toast('No data to import', 'er'); return; }
+      let ok = 0, skip = 0;
+      const statusMap = { Present: 'present', Absent: 'absent', WFH: 'work_from_home', 'Work From Home': 'work_from_home', 'Half Day': 'half_day', 'On Leave': 'leave', present: 'present', absent: 'absent', wfh: 'work_from_home' };
+      for (const row of _attData) {
+        let empId, dateStr, status, checkIn, checkOut;
+        if (_attMode === 'punch') {
+          empId = row['EMP ID'] || row['Emp ID'] || row['EmpID'];
+          dateStr = exDate(row['Date']);
+          status = 'leave';
+        } else {
+          empId = row['EmpID'] || row['EMP ID'];
+          dateStr = exDate(row['Date']) || String(row['Date'] || '').slice(0, 10);
+          status = statusMap[row['Status']] || 'present';
+          checkIn = row['InTime'] || null;
+          checkOut = row['OutTime'] || null;
+        }
+        if (!empId || !dateStr) { skip++; continue; }
+        const emp = _emps.find(e => String(e.employee_id) === String(empId) || String(e.id) === String(empId));
+        if (!emp) { skip++; continue; }
+        try {
+          await api('/attendance/mark', {
+            method: 'POST', body: JSON.stringify({
+              employee_id: emp.id, attendance_date: dateStr, status,
+              check_in: checkIn || null, check_out: checkOut || null,
+              remarks: _attMode === 'punch' ? (row['Reason'] || row['Leave Type'] || 'Biometric import') : null
+            })
+          });
+          ok++;
+        } catch { skip++; }
+      }
+      cm('m-upatt');
+      toast(`Imported ${ok} records. ${skip} skipped.`, skip > ok ? 'er' : 'ok');
+      attendance();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // LEAVE MANAGEMENT
+    // ═══════════════════════════════════════════════════
+    async function leave() {
+      setActs(`<button class="btn acc" onclick="om('m-leave');loadMyBalances()">+ Apply Leave</button><button class="btn" onclick="om('m-implv')" style="margin-left:6px">⬆ Import Leave</button>`);
+      loader();
+      try {
+        const [ty, ap, pend] = await Promise.allSettled([
+          api('/leave/types?entity_id=' + ENTITY),
+          api('/leave/applications?entity_id=' + ENTITY + '&per_page=50'),
+          api('/leave/pending-my-approvals').catch(() => ({ data: [] }))
+        ]);
+        const types = ty.value?.data || [], apps = ap.value?.data || [], pApps = pend.value?.data || [];
+        window._lvData = { apps, pApps, types };
+        const clr = { CL: 'b', SL: 'p', WFH: 'c', EL: 'g', LOP: 'r', HCL: 'b', HSL: 'p', CO: 'y' };
+        setPg(`
+      <div class="tab-bar" id="lv-tabs">
+        <div class="tab on" onclick="lvTab('all',this)">All Applications (${apps.length})</div>
+        <div class="tab" onclick="lvTab('pending',this)">Pending Approvals (${pApps.length})</div>
+        <div class="tab" onclick="lvTab('types',this)">Leave Types</div>
+        <div class="tab" onclick="lvTab('balance',this)">My Balances</div>
+      </div>
+      <div id="lv-panel">${renderLvApps(apps, clr)}</div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    function lvTab(t, el) {
+      document.querySelectorAll('#lv-tabs .tab').forEach(x => x.classList.remove('on')); el.classList.add('on');
+      const d = window._lvData || {}, clr = { CL: 'b', SL: 'p', WFH: 'c', EL: 'g', LOP: 'r', HCL: 'b', HSL: 'p', CO: 'y' };
+      if (t === 'all') $('lv-panel').innerHTML = renderLvApps(d.apps || [], clr);
+      else if (t === 'pending') $('lv-panel').innerHTML = renderPendLv(d.pApps || [], clr);
+      else if (t === 'types') $('lv-panel').innerHTML = renderLvTypes(d.types || []);
+      else if (t === 'balance') loadMyBalances2();
+    }
+
+    function renderLvApps(list, clr) {
+      if (!list.length) return '<div class="empty"><div class="ico">📋</div><p>No leave applications</p></div>';
+      return `<div class="card"><div class="ch"><div class="ct">${list.length} Applications</div></div>
+    <div class="tw"><table><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr>
+    ${list.map(a => `<tr>
+      <td>${a.employee?.first_name || ''} ${a.employee?.last_name || ''}</td>
+      <td><span class="bx ${clr[a.leaveType?.code || a.leave_type?.code] || 'gr'}">${a.leaveType?.code || a.leave_type?.code || '-'}</span></td>
+      <td>${fmtD(a.from_date)}</td><td>${fmtD(a.to_date)}</td>
+      <td>${a.days || a.total_days || '-'}</td>
+      <td><span class="bx ${a.status === 'approved' ? 'g' : a.status === 'rejected' ? 'r' : 'y'}">${a.status}</span></td>
+      <td>${a.status === 'pending' ? `<button class="btn sm grn" onclick="appLv(${a.id},'approved')">✓</button> <button class="btn sm red" onclick="appLv(${a.id},'rejected')">✗</button>` : '-'}</td>
+    </tr>`).join('')}
+    </table></div></div>`;
+    }
+
+    function renderPendLv(list, clr) {
+      if (!list.length) return '<div class="empty"><div class="ico">✓</div><p>No pending approvals for you</p><div style="font-size:12px;color:var(--t3);margin-top:8px">Note: You must be set as a Reporting Manager for an employee to approve their leaves.</div></div>';
+      return `<div class="card"><div class="ch"><div class="ct">${list.length} Pending Your Approval</div></div>
+    <div class="tw"><table><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Actions</th></tr>
+    ${list.map(a => `<tr>
+      <td><strong>${a.employee?.first_name || ''} ${a.employee?.last_name || ''}</strong></td>
+      <td><span class="bx ${clr[a.leaveType?.code || a.leave_type?.code] || 'gr'}">${a.leaveType?.code || a.leave_type?.code || '-'}</span></td>
+      <td>${fmtD(a.from_date)}</td><td>${fmtD(a.to_date)}</td>
+      <td><strong>${a.days || a.total_days || '-'}</strong></td>
+      <td style="color:var(--t2)">${a.reason || '-'}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn sm grn" onclick="appLv(${a.id},'approved')">✓ Approve</button>
+        <button class="btn sm red" onclick="appLv(${a.id},'rejected')">✗ Reject</button>
+      </td>
+    </tr>`).join('')}
+    </table></div></div>`;
+    }
+
+    function renderLvTypes(list) {
+      if (!list.length) return '<div class="empty"><p>No leave types configured</p></div>';
+      const clr = { CL: 'b', SL: 'p', WFH: 'c', EL: 'g', LOP: 'r', ML: 'p', PL: 'b' };
+      return `<div class="g3">${list.map(t => `<div class="sc">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span class="bx ${clr[t.code] || 'gr'}">${t.code}</span>${t.is_paid ? '<span class="bx g">Paid</span>' : '<span class="bx r">Unpaid</span>'}</div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px">${t.name}</div>
+    <div style="font-size:11px;color:var(--t3)">${t.gender_specific === 'all' ? 'All genders' : t.gender_specific || 'All'}</div>
+    ${t.is_carry_forward ? `<div style="font-size:11px;color:var(--t3)">Carry forward: max ${t.max_carry_forward || 0} days</div>` : ''}
+  </div>`).join('')}</div>`;
+    }
+
+    async function loadMyBalances2() {
+      try {
+        const d = await api('/leave/balances/me');
+        const list = d.data || [];
+        $('lv-panel').innerHTML = `<div class="card"><div class="ch"><div class="ct">My Leave Balances (${new Date().getFullYear()})</div></div>
+      ${list.length ? `<table><tr><th>Leave Type</th><th>Opening</th><th>Accrued</th><th>Used</th><th>Available</th></tr>
+      ${list.map(b => `<tr>
+        <td>${b.leaveType?.code || b.leave_type?.code || '-'} — ${b.leaveType?.name || b.leave_type?.name || '-'}</td>
+        <td>${b.opening_balance || 0}</td>
+        <td>${b.accrued || 0}</td>
+        <td>${b.availed || b.used || 0}</td>
+        <td><strong style="color:${(b.available || 0) > 0 ? 'var(--grn)' : 'var(--red)'}">${b.available || 0}</strong></td>
+      </tr>`).join('')}</table>`
+            : '<div class="empty" style="padding:20px"><p>No leave balance data found</p></div>'}
+    </div>`;
+      } catch (e) { $('lv-panel').innerHTML = `<div class="empty"><p>${e.message}</p></div>`; }
+    }
+
+    async function loadMyBalances() {
+      try {
+        const d = await api('/leave/balances/me');
+        const list = d.data || [];
+        const seen = {};
+        const unique = list.filter(b => { const c = b.leaveType?.code || b.leave_type?.code; return c && !seen[c] && (seen[c] = true); });
+        if (unique.length) {
+          $('lv-bal').innerHTML = `<div class="ibox" style="font-size:11px">My Balances: ${unique.slice(0, 8).map(b => `${b.leaveType?.code || '-'}: <strong>${b.available || 0}</strong>`).join(' · ')}</div>`;
+        }
+      } catch { }
+    }
+
+    function calcDays() {
+      const from = $('lv-from').value, to = $('lv-to').value;
+      if (from && to) {
+        const d = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+        $('lv-days').value = Math.max(d, 1);
+      }
+    }
+
+    async function submitLeave() {
+      const typeId = $('lv-type').value;
+      const from = $('lv-from').value;
+      const to = $('lv-to').value;
+      if (!typeId) { toast('Select leave type', 'er'); return; }
+      if (!from || !to) { toast('Select dates', 'er'); return; }
+      const today = new Date().toISOString().slice(0, 10);
+      if (from < today) { toast('From date cannot be in the past. The API requires today or future dates only.', 'er'); return; }
+      try {
+        await api('/leave/apply', {
+          method: 'POST', body: JSON.stringify({
+            leave_type_id: parseInt(typeId),
+            from_date: from, to_date: to,
+            reason: $('lv-reason').value || 'Personal'
+          })
+        });
+        cm('m-leave'); toast('Leave applied successfully!'); leave();
+      } catch (e) { toast(e.message || JSON.stringify(e.errors || 'Failed'), 'er'); }
+    }
+
+    async function appLv(id, action) {
+      let remarks = '';
+      if (action === 'rejected') {
+        remarks = prompt('Rejection reason (required):');
+        if (!remarks) return;
+      }
+      try {
+        await api('/leave/' + id + '/approve', { method: 'POST', body: JSON.stringify({ action, remarks: remarks || undefined }) });
+        toast('Leave ' + action + '!'); leave();
+      } catch (e) { toast(e.message || 'Failed - you may not be assigned as approver', 'er'); }
+    }
+
+    // Leave import
+    async function prevLvFile(inp) {
+      const f = inp.files[0]; if (!f) return;
+      const prev = $('implv-prev');
+      prev.innerHTML = '<div class="loader"><span class="sp"></span>Reading...</div>';
+      try {
+        const wb = XLSX.read(await f.arrayBuffer());
+        const sn = wb.SheetNames.includes('Template') ? 'Template' : wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
+        const rows = raw.map(r => { const n = {}; Object.keys(r).forEach(k => n[k.trim()] = r[k]); return n; });
+        window._lvImport = rows;
+        prev.innerHTML = `<div style="color:var(--grn);font-size:12px;margin-bottom:8px">✓ ${rows.length} records from ${sn}</div>
+      <div class="tw" style="max-height:180px;overflow-y:auto"><table>
+        <tr><th>Emp ID</th><th>Name</th><th>From</th><th>To</th><th>Type</th><th>Reason</th></tr>
+        ${rows.slice(0, 8).map(r => `<tr>
+          <td class="mono">${r['EmpID'] || '-'}</td><td>${r['EmployeeName'] || '-'}</td>
+          <td>${exDate(r['FromDate']) || '-'}</td><td>${exDate(r['ToDate']) || '-'}</td>
+          <td><span class="bx y">${r['LeaveType'] || '-'}</span></td>
+          <td style="color:var(--t3)">${r['Reason'] || '-'}</td>
+        </tr>`).join('')}
+      </table></div>`;
+        $('implv-btn').style.display = '';
+      } catch (e) { prev.innerHTML = `<div style="color:var(--red)">Error: ${e.message}</div>`; }
+    }
+
+    async function importLeaves() {
+      const rows = window._lvImport || [];
+      if (!rows.length) { toast('No data', 'er'); return; }
+      let ok = 0, skip = 0;
+      for (const row of rows) {
+        const empId = row['EmpID'];
+        const typeCode = row['LeaveType'];
+        const fromDate = exDate(row['FromDate']);
+        const toDate = exDate(row['ToDate']);
+        if (!empId || !typeCode || !fromDate) { skip++; continue; }
+        const emp = _emps.find(e => String(e.employee_id) === String(empId));
+        const lt = _leaveTypes.find(t => t.code === typeCode || t.name?.toUpperCase().includes(typeCode.toUpperCase()));
+        if (!emp || !lt) { skip++; continue; }
+        // Check if date is today or future (API restriction)
+        const today = new Date().toISOString().slice(0, 10);
+        const useFrom = fromDate >= today ? fromDate : today;
+        const useTo = toDate >= today ? toDate : today;
+        try {
+          await api('/leave/apply', {
+            method: 'POST', body: JSON.stringify({
+              leave_type_id: lt.id,
+              from_date: useFrom,
+              to_date: useTo,
+              reason: row['Reason'] || 'Imported from Excel'
+            })
+          });
+          ok++;
+        } catch { skip++; }
+      }
+      cm('m-implv');
+      toast(`Imported ${ok} leave records. ${skip} skipped (past dates or no match).`, skip > ok ? 'er' : 'ok');
+      leave();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // PAYROLL
+    // ═══════════════════════════════════════════════════
+    async function payroll() {
+      setActs(`<button class="btn acc" onclick="createPeriod()">+ New Period</button><button class="btn" onclick="om('m-upsal')" style="margin-left:6px">⬆ Upload Salary</button>`);
+      loader();
+      try {
+        const d = await api('/payroll/periods?entity_id=' + ENTITY);
+        const list = d.data || [];
+        if (!list.length) {
+          setPg(`<div class="empty"><div class="ico">💰</div><p>No payroll periods yet.</p><br><button class="btn acc" onclick="createPeriod()">+ Create First Period</button></div>`);
+          return;
+        }
+        setPg(`<div class="card">
+      <div class="ch"><div class="ct">${d.total || list.length} Payroll Periods</div></div>
+      <div class="tw"><table>
+        <tr><th>Period</th><th>Status</th><th>Locked</th><th>Runs</th><th>Actions</th></tr>
+        ${list.map(p => `<tr>
+          <td><strong>${M[p.month - 1]} ${p.year}</strong></td>
+          <td><span class="bx ${p.status === 'finalized' || p.status === 'locked' ? 'g' : 'y'}">${p.status || 'open'}</span></td>
+          <td>${p.is_locked ? '🔒 Locked' : '🔓 Open'}</td>
+          <td>${p.runs_count || 0}</td>
+          <td style="display:flex;gap:6px">
+            <button class="btn sm acc" onclick="initRun(${p.id},'${M[p.month - 1]} ${p.year}')">▶ Run Payroll</button>
+            <button class="btn sm" onclick="viewRuns(${p.id},'${M[p.month - 1]} ${p.year}')">📋 View Runs</button>
+          </td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    async function createPeriod() {
+      const now = new Date();
+      const y = prompt('Year:', now.getFullYear()); if (!y) return;
+      const mo = prompt('Month (1-12):', now.getMonth() + 1); if (!mo) return;
+      const ym = parseInt(y), mm = parseInt(mo);
+      const from = `${ym}-${String(mm).padStart(2, '0')}-01`;
+      const last = new Date(ym, mm, 0).getDate();
+      const to = `${ym}-${String(mm).padStart(2, '0')}-${last}`;
+      try {
+        await api('/payroll/periods', { method: 'POST', body: JSON.stringify({ entity_id: ENTITY, year: ym, month: mm, period_from: from, period_to: to, attendance_lock_date: to, payment_date: to }) });
+        toast('Period created!'); await prefetch(); payroll();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    async function initRun(periodId, label) {
+      if (!confirm(`Initialize payroll run for ${label}?`)) return;
+      try {
+        const r = await api('/payroll/runs', { method: 'POST', body: JSON.stringify({ payroll_period_id: periodId, run_type: 'regular', run_name: label + ' Regular' }) });
+        toast('Run created! ID: ' + (r.data?.id || '')); viewRuns(periodId, label);
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    async function viewRuns(periodId, label) {
+      loader(); $('ptitle').textContent = 'Payroll — ' + label;
+      setActs(`<button class="btn sm" onclick="payroll()">← Back</button><button class="btn sm acc" onclick="initRun(${periodId},'${label}')" style="margin-left:6px">+ New Run</button>`);
+      try {
+        // There's no GET /payroll/runs endpoint, runs are embedded in periods with runs_count
+        // We can access salary sheet via run ID if we know it
+        setPg(`<div class="card"><div class="ch"><div class="ct">${label} — Payroll Runs</div></div>
+      <div class="ibox">Runs are initiated per period. Click <strong>▶ Run Payroll</strong> to create a new run. Each run can be calculated and finalized.</div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn acc" onclick="initRun(${periodId},'${label}')">▶ Initialize New Run</button>
+        <button class="btn" onclick="go('salary')">View Salary Details →</button>
+        <button class="btn" onclick="go('reports')">📊 Payroll Register</button>
+      </div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    // Salary sheet upload
+    async function prevSalFile(inp) {
+      const f = inp.files[0]; if (!f) return;
+      const prev = $('upsal-prev');
+      prev.innerHTML = '<div class="loader"><span class="sp"></span>Reading...</div>';
+      try {
+        const wb = XLSX.read(await f.arrayBuffer());
+        const sn = wb.SheetNames.includes('SalProcessSheet') ? 'SalProcessSheet' : wb.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: 0 });
+        window._salImport = rows;
+        prev.innerHTML = `<div style="color:var(--grn);font-size:12px;margin-bottom:8px">✓ ${rows.length} employees from ${sn}</div>
+      <div class="tw" style="max-height:200px;overflow-y:auto"><table>
+        <tr><th>Emp ID</th><th>Name</th><th>Gross</th><th>LOP Days</th><th>Net Payable</th></tr>
+        ${rows.slice(0, 10).map(r => {
+          const g = Number(r['GrossSalary'] || r['Gross Salary'] || 0); return `<tr>
+          <td class="mono">${r['EmpID'] || r['Emp ID'] || '-'}</td>
+          <td>${r['EmployeeName'] || r['Employee'] || '-'}</td>
+          <td>Rs${fmt(g)}</td>
+          <td>${r['LOPDays'] || r['LOP Days'] || 0}</td>
+          <td><strong>Rs${fmt(g - 200)}</strong></td>
+        </tr>`;
+        }).join('')}
+      </table></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:8px">Net = Gross - PT (Rs200). LOP deductions applied separately.</div>`;
+        $('upsal-btn').style.display = '';
+      } catch (e) { prev.innerHTML = `<div style="color:var(--red)">Error: ${e.message}</div>`; }
+    }
+
+    async function importSalary() {
+      const periodId = $('upsal-period').value;
+      if (!periodId) { toast('Select payroll period', 'er'); return; }
+      try {
+        const r = await api('/payroll/runs', { method: 'POST', body: JSON.stringify({ payroll_period_id: parseInt(periodId), run_type: 'regular', run_name: 'Salary Upload' }) });
+        const total = (window._salImport || []).reduce((s, r) => s + Number(r['GrossSalary'] || r['Gross Salary'] || 0), 0);
+        cm('m-upsal');
+        toast(`Payroll run #${r.data?.id || ''} created. ${(window._salImport || []).length} employees. Total: Rs${fmt(total)}`);
+        payroll();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // SALARY DETAILS
+    // ═══════════════════════════════════════════════════
+    async function salary() {
+      setActs(`<button class="btn" onclick="go('revisions')">Salary Revisions →</button>`);
+      loader();
+      try {
+        const d = await api('/employees?entity_id=' + ENTITY + '&per_page=100');
+        const list = d.data || [];
+        if (!list.length) { setPg('<div class="empty"><div class="ico">🧾</div><p>No employees</p></div>'); return; }
+        const total = list.reduce((s, e) => s + Number(e.currentSalary?.gross_monthly || e.currentSalary?.ctc_monthly || 0), 0);
+        setPg(`<div class="card">
+      <div class="ch"><div class="ct">Salary Details</div>
+        <input placeholder="Search..." oninput="filterTbl(this.value,'stbl')" style="background:var(--bg);border:1px solid var(--b1);border-radius:6px;padding:5px 10px;color:var(--txt);font-size:12px;width:180px">
+      </div>
+      <div class="ibox">Structure: Basic 70% + HRA 28% + Special Allowance 2% of Gross. Professional Tax deduction Rs200/month.</div>
+      <div class="tw"><table id="stbl">
+        <tr><th>Emp ID</th><th>Name</th><th>Gross/Month</th><th>Basic</th><th>HRA</th><th>Spec Allw</th><th>PT</th><th>Net Salary</th><th>Action</th></tr>
+        ${list.map(e => {
+          const g = Number(e.currentSalary?.gross_monthly || e.currentSalary?.ctc_monthly || 0);
+          const net = g > 0 ? g - 200 : 0;
+          return `<tr>
+            <td class="mono">${e.employee_id || e.id}</td>
+            <td>${e.first_name} ${e.last_name}</td>
+            ${g > 0 ? `<td>Rs${fmt(g)}</td><td>Rs${fmt(Math.round(g * .7))}</td><td>Rs${fmt(Math.round(g * .28))}</td><td>Rs${fmt(Math.round(g * .02))}</td><td>Rs200</td><td><strong>Rs${fmt(net)}</strong></td>`
+              : `<td colspan="6" style="color:var(--t3)">No salary configured</td>`}
+            <td><button class="btn sm acc" onclick="promptSalaryUpdate(${e.id})">${g > 0 ? '✏ Edit' : '+ Set'}</button></td>
+          </tr>`;
+        }).join('')}
+        <tr style="font-weight:700;border-top:2px solid var(--b1)">
+          <td colspan="2">TOTAL</td>
+          <td>Rs${fmt(total)}</td>
+          <td>Rs${fmt(Math.round(total * .7))}</td>
+          <td>Rs${fmt(Math.round(total * .28))}</td>
+          <td>Rs${fmt(Math.round(total * .02))}</td>
+          <td>Rs${fmt(list.filter(e => Number(e.currentSalary?.gross_monthly || 0) > 0).length * 200)}</td>
+          <td>Rs${fmt(total - list.filter(e => Number(e.currentSalary?.gross_monthly || 0) > 0).length * 200)}</td>
+          <td></td>
+        </tr>
+      </table></div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // SALARY REVISIONS
+    // ═══════════════════════════════════════════════════
+    async function revisions() {
+      setActs(`<button class="btn acc" onclick="showRevModal()">+ Raise Revision</button>`);
+      loader();
+      try {
+        const d = await api('/salary-revisions?entity_id=' + ENTITY);
+        const list = d.data || [];
+        if (!list.length) {
+          setPg(`<div class="empty"><div class="ico">📈</div><p>No salary revisions yet.</p><br><button class="btn acc" onclick="showRevModal()">+ Raise First Revision</button></div>`);
+          return;
+        }
+        setPg(`<div class="card"><div class="ch"><div class="ct">Salary Revisions</div></div>
+      <div class="tw"><table>
+        <tr><th>Employee</th><th>Effective Date</th><th>Old Monthly</th><th>New Monthly</th><th>Change</th><th>%</th><th>Status</th><th>Actions</th></tr>
+        ${list.map(r => {
+          const oldM = Math.round(Number(r.old_ctc || 0) / 12);
+          const newM = Math.round(Number(r.new_ctc || 0) / 12);
+          const d = newM - oldM;
+          const isPend = r.status === 'pending_approval';
+          return `<tr>
+            <td>${r.employee?.first_name || ''} ${r.employee?.last_name || ''}</td>
+            <td>${fmtD(r.effective_date)}</td>
+            <td>Rs${fmt(oldM)}/mo</td>
+            <td>Rs${fmt(newM)}/mo</td>
+            <td style="color:${d >= 0 ? 'var(--grn)' : 'var(--red)'}">${d >= 0 ? '+' : ''}Rs${fmt(Math.abs(d))}</td>
+            <td style="color:${d >= 0 ? 'var(--grn)' : 'var(--red)'}">${r.increment_percentage || 0}%</td>
+            <td><span class="bx ${r.status === 'implemented' ? 'g' : r.status === 'rejected' ? 'r' : 'y'}">${r.status}</span></td>
+            <td style="display:flex;gap:4px">
+              ${isPend ? `<button class="btn sm grn" onclick="appRev(${r.id},'approve')">✓ Approve</button>
+                        <button class="btn sm red" onclick="appRev(${r.id},'reject')">✗ Reject</button>` : '-'}
+            </td>
+          </tr>`;
+        }).join('')}
+      </table></div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    function showRevModal() {
+      const empOpts = _emps.map(e => `<option value="${e.id}">${e.employee_id || e.id} — ${e.first_name} ${e.last_name}</option>`).join('');
+      $('emp-title').textContent = 'Salary Revision';
+      $('emp-tabs').style.display = 'none';
+      $('et0').innerHTML = `<div class="fg2">
+    <div class="fld"><label>Employee *</label><select id="rv-emp">${empOpts}</select></div>
+    <div class="fld"><label>Effective Date *</label><input type="date" id="rv-date" value="${new Date().toISOString().slice(0, 10)}"></div>
+    <div class="fld"><label>New Gross Monthly Salary (Rs) *</label><input type="number" id="rv-gross" placeholder="e.g. 30000" oninput="showSplit(this.value)"></div>
+    <div class="fld"><label>Reason * </label><input id="rv-reason" placeholder="e.g. Annual increment, Promotion"></div>
+  </div>
+  <div id="sal-split" style="display:none;margin-top:10px;background:var(--s2);border-radius:8px;padding:10px;font-size:11px;color:var(--t2)"></div>`;
+      $('et1').style.display = 'none'; $('et2').style.display = 'none';
+      $('emp-btn').setAttribute('onclick', 'saveRevision()');
+      $('emp-btn').textContent = 'Submit Revision';
+      om('m-emp');
+    }
+
+    async function saveRevision() {
+      const empId = $('rv-emp')?.value;
+      const monthly = parseFloat($('rv-gross')?.value || 0);
+      const date = $('rv-date')?.value;
+      const reason = $('rv-reason')?.value?.trim();
+      if (!empId) { toast('Select employee', 'er'); return; }
+      if (!monthly || monthly < 1) { toast('Enter valid salary amount', 'er'); return; }
+      if (!date) { toast('Enter effective date', 'er'); return; }
+      if (!reason) { toast('Reason is required', 'er'); return; }
+      try {
+        await api('/salary-revisions', {
+          method: 'POST', body: JSON.stringify({
+            employee_id: parseInt(empId),
+            new_ctc: Math.round(monthly * 12),  // API needs ANNUAL CTC
+            effective_date: date,
+            reason: reason
+          })
+        });
+        cm('m-emp');
+        toast(`Revision submitted! Rs${fmt(monthly)}/month (Annual CTC: Rs${fmt(Math.round(monthly * 12))})`);
+        revisions();
+      } catch (e) { toast(e.message || JSON.stringify(e.errors || 'Failed'), 'er'); }
+    }
+
+    async function appRev(id, action) {
+      if (action === 'reject') {
+        const reason = prompt('Rejection reason (required):');
+        if (!reason) return;
+        try {
+          await api('/salary-revisions/' + id + '/reject', { method: 'POST', body: JSON.stringify({ reason }) });
+          toast('Revision rejected!'); revisions();
+        } catch (e) { toast(e.message, 'er'); }
+      } else {
+        try {
+          await api('/salary-revisions/' + id + '/approve', { method: 'POST', body: JSON.stringify({ remarks: 'Approved' }) });
+          toast('Revision approved and implemented!'); revisions();
+        } catch (e) { toast(e.message || 'Failed', 'er'); }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // LOANS
+    // ═══════════════════════════════════════════════════
+    async function loans() {
+      setActs(`<button class="btn acc" onclick="showLoanModal()">+ Apply Loan</button>`);
+      loader();
+      try {
+        const [ty, ac] = await Promise.allSettled([
+          api('/loans/types?entity_id=' + ENTITY),
+          api('/loans?entity_id=' + ENTITY + '&per_page=30')
+        ]);
+        const types = ty.value?.data || [], active = ac.value?.data || [];
+        setPg(`
+      ${types.length ? `<div class="g${Math.min(types.length, 4)}" style="margin-bottom:16px">
+        ${types.map(t => `<div class="sc">
+          <div class="lbl">${t.name}</div>
+          <div class="val" style="font-size:20px">Rs${fmt(t.max_amount || 0)}</div>
+          <div class="sub">Max ${t.max_emi || 0} EMIs · ${t.interest_rate || 0}% p.a.</div>
+        </div>`).join('')}
+      </div>`: '<div class="wbox">No loan types configured. Add them in Masters.</div>'}
+      <div class="card"><div class="ch"><div class="ct">Loans (${active.length})</div></div>
+        ${active.length ? `<div class="tw"><table>
+          <tr><th>Loan #</th><th>Employee</th><th>Type</th><th>Amount</th><th>EMI</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr>
+          ${active.map(l => `<tr>
+            <td class="mono">${l.loan_number || l.id}</td>
+            <td>${l.employee?.first_name || ''} ${l.employee?.last_name || ''}</td>
+            <td>${l.loanType?.name || l.loan_type?.name || '-'}</td>
+            <td>Rs${fmt(l.loan_amount)}</td>
+            <td>Rs${fmt(l.emi_amount)}</td>
+            <td>Rs${fmt(l.outstanding_amount)}</td>
+            <td><span class="bx ${l.status === 'active' ? 'g' : l.status === 'pending' ? 'y' : l.status === 'closed' ? 'gr' : 'r'}">${l.status}</span></td>
+            <td>${l.status === 'pending' ? `<button class="btn sm grn" onclick="approveLoan(${l.id})">✓ Approve</button>` : '-'}</td>
+          </tr>`).join('')}
+        </table></div>`
+            : '<div class="empty" style="padding:30px"><p>No loans applied</p></div>'}
+      </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    async function showLoanModal() {
+      const empOpts = _emps.length ? _emps.map(e => `<option value="${e.id}">${e.employee_id || e.id} — ${e.first_name} ${e.last_name}</option>`).join('') : '<option value="">No employees</option>';
+      let typeOpts = '<option value="">Loading...</option>';
+      try {
+        const types = await api('/loans/types?entity_id=' + ENTITY);
+        typeOpts = types.data?.length ? types.data.map(t => `<option value="${t.id}">${t.name} (Max Rs${fmt(t.max_amount || 0)}, ${t.max_emi || 0} EMIs)</option>`).join('') : '<option value="">No loan types configured</option>';
+      } catch { }
+      $('emp-title').textContent = 'Apply Loan';
+      $('emp-tabs').style.display = 'none';
+      $('et0').innerHTML = `<div class="ibox">Loan created with status <strong>pending</strong>. It must be approved separately.</div>
+    <div class="fg2">
+      <div class="fld"><label>Employee *</label><select id="ln-emp">${empOpts}</select></div>
+      <div class="fld"><label>Loan Type *</label><select id="ln-type">${typeOpts}</select></div>
+      <div class="fld"><label>Loan Amount (Rs) *</label><input id="ln-amt" type="number" placeholder="e.g. 10000"></div>
+      <div class="fld"><label>No. of EMIs *</label><input id="ln-emi" type="number" placeholder="e.g. 3"></div>
+      <div class="fld"><label>First EMI Month (YYYY-MM) *</label><input id="ln-month" type="month" value="${new Date(Date.now() + 2592000000).toISOString().slice(0, 7)}"></div>
+      <div class="fld"><label>Purpose</label><input id="ln-purpose" placeholder="e.g. Medical, Personal" value="Personal"></div>
+    </div>`;
+      $('et1').style.display = 'none'; $('et2').style.display = 'none';
+      $('emp-btn').setAttribute('onclick', 'saveLoan()');
+      $('emp-btn').textContent = 'Apply Loan';
+      om('m-emp');
+    }
+
+    async function saveLoan() {
+      const empId = parseInt($('ln-emp')?.value);
+      const typeId = parseInt($('ln-type')?.value);
+      const amt = parseFloat($('ln-amt')?.value || 0);
+      const emis = parseInt($('ln-emi')?.value || 0);
+      const emiMonth = $('ln-month')?.value; // Already in YYYY-MM format
+      if (!empId || !typeId) { toast('Select employee and loan type', 'er'); return; }
+      if (!amt || amt < 1) { toast('Enter valid loan amount', 'er'); return; }
+      if (!emis || emis < 1) { toast('Enter number of EMIs', 'er'); return; }
+      if (!emiMonth) { toast('Select first EMI month', 'er'); return; }
+      try {
+        await api('/loans', {
+          method: 'POST', body: JSON.stringify({
+            employee_id: empId,
+            loan_type_id: typeId,
+            loan_amount: amt,
+            total_emis: emis,
+            first_emi_month: emiMonth, // Y-m format e.g. 2026-06
+            purpose: $('ln-purpose')?.value || 'Personal'
+          })
+        });
+        cm('m-emp'); toast('Loan application submitted! Status: Pending approval.'); loans();
+      } catch (e) { toast(e.message || JSON.stringify(e.errors || 'Failed'), 'er'); }
+    }
+
+    async function approveLoan(id) {
+      const disbDate = prompt('Disbursement date (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+      if (!disbDate) return;
+      try {
+        await api('/loans/' + id + '/approve', { method: 'POST', body: JSON.stringify({ disbursement_date: disbDate }) });
+        toast('Loan approved! EMI schedule generated.'); loans();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // REIMBURSEMENTS
+    // ═══════════════════════════════════════════════════
+    async function reimbursements() {
+      setActs(`<button class="btn acc" onclick="showReimbModal()">+ Submit Claim</button>`);
+      loader();
+      try {
+        // Try all claims first, fallback to mine
+        const d = await api('/reimbursements/all?entity_id=' + ENTITY + '&per_page=30').catch(() => api('/reimbursements/mine'));
+        const list = d.data || [];
+        setPg(`<div class="card"><div class="ch"><div class="ct">Reimbursement Claims</div></div>
+      ${list.length ? `<div class="tw"><table>
+        <tr><th>Claim #</th><th>Employee</th><th>Month</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+        ${list.map(r => `<tr>
+          <td class="mono">${r.claim_number || r.id}</td>
+          <td>${r.employee?.first_name || 'Me'} ${r.employee?.last_name || ''}</td>
+          <td>${M[(r.month || 1) - 1]} ${r.year || '-'}</td>
+          <td>Rs${fmt(r.total_claimed || r.claimed_amount || 0)}</td>
+          <td><span class="bx ${r.status === 'approved' ? 'g' : r.status === 'rejected' ? 'r' : 'y'}">${r.status || 'pending'}</span></td>
+          <td>${r.status === 'pending' ? `<button class="btn sm grn" onclick="approveReimb(${r.id})">✓ Approve</button>` : '-'}</td>
+        </tr>`).join('')}
+      </table></div>`
+            : '<div class="empty" style="padding:30px"><p>No reimbursement claims</p></div>'}
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">💳</div><p>${e.message}</p></div>`); }
+    }
+
+    async function showReimbModal() {
+      let typeOpts = '<option value="">Loading types...</option>';
+      try {
+        const types = await api('/reimbursements/types');
+        typeOpts = types.data?.length ? types.data.map(t => `<option value="${t.id}">${t.name}</option>`).join('') : '<option value="">No types configured</option>';
+      } catch { typeOpts = '<option value="1">General Expense</option>'; }
+      const now = new Date();
+      $('emp-title').textContent = 'Submit Reimbursement Claim';
+      $('emp-tabs').style.display = 'none';
+      $('et0').innerHTML = `<div class="ibox">Claim is submitted for the <strong>logged-in user's employee profile</strong>.</div>
+    <div class="fg2">
+      <div class="fld"><label>Year *</label><input id="rb-yr" type="number" value="${now.getFullYear()}"></div>
+      <div class="fld"><label>Month *</label><select id="rb-mo">${M.map((m, i) => `<option value="${i + 1}" ${i === now.getMonth() ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+      <div class="fld"><label>Expense Type *</label><select id="rb-type">${typeOpts}</select></div>
+      <div class="fld"><label>Expense Date *</label><input id="rb-date" type="date" value="${now.toISOString().slice(0, 10)}"></div>
+      <div class="fld"><label>Amount (Rs) *</label><input id="rb-amt" type="number" placeholder="e.g. 500"></div>
+      <div class="fld"><label>Description *</label><input id="rb-desc" placeholder="e.g. Travel to client site"></div>
+    </div>`;
+      $('et1').style.display = 'none'; $('et2').style.display = 'none';
+      $('emp-btn').setAttribute('onclick', 'saveReimb()');
+      $('emp-btn').textContent = 'Submit Claim';
+      om('m-emp');
+    }
+
+    async function saveReimb() {
+      const typeId = parseInt($('rb-type')?.value || 0);
+      const date = $('rb-date')?.value;
+      const amt = parseFloat($('rb-amt')?.value || 0);
+      const desc = $('rb-desc')?.value?.trim();
+      if (!date || !amt || !desc) { toast('Fill all required fields', 'er'); return; }
+      if (!typeId) { toast('Select expense type', 'er'); return; }
+      try {
+        await api('/reimbursements', {
+          method: 'POST', body: JSON.stringify({
+            year: parseInt($('rb-yr')?.value),
+            month: parseInt($('rb-mo')?.value),
+            items: [{ reimbursement_type_id: typeId, expense_date: date, description: desc, claimed_amount: amt }]
+          })
+        });
+        cm('m-emp'); toast('Reimbursement claim submitted!'); reimbursements();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    async function approveReimb(id) {
+      try {
+        await api('/reimbursements/' + id + '/approve', { method: 'POST', body: JSON.stringify({ remarks: 'Approved' }) });
+        toast('Claim approved!'); reimbursements();
+      } catch (e) { toast(e.message, 'er'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // STATUTORY
+    // ═══════════════════════════════════════════════════
+    async function statutory() {
+      loader();
+      try {
+        const d = await api('/statutory/compliance-dashboard?entity_id=' + ENTITY);
+        setPg(`
+      <div class="g4">
+        <div class="sc"><div class="lbl">Overdue</div><div class="val" style="color:${(d.overdue || []).length ? 'var(--red)' : 'var(--grn)'}">${(d.overdue || []).length}</div></div>
+        <div class="sc"><div class="lbl">Due This Month</div><div class="val">${(d.due_this_month || []).length}</div></div>
+        <div class="sc"><div class="lbl">Filed This Month</div><div class="val" style="color:var(--grn)">${(d.monthly_summary || []).length}</div></div>
+        <div class="sc"><div class="lbl">Annual Records</div><div class="val">${(d.annual_totals || []).length}</div></div>
+      </div>
+      <div class="g2">
+        <div class="card"><div class="ch"><div class="ct">⚠ Overdue Challans</div></div>
+          ${(d.overdue || []).length ? `<table>${d.overdue.map(c => `<tr><td>${c.type || c.challan_type || '-'}</td><td>Rs${fmt(c.amount || 0)}</td><td><span class="bx r">Overdue</span></td></tr>`).join('')}</table>`
+            : '<div class="empty" style="padding:20px"><p>✓ No overdue challans</p></div>'}
+        </div>
+        <div class="card"><div class="ch"><div class="ct">📅 Due This Month</div></div>
+          ${(d.due_this_month || []).length ? `<table>${d.due_this_month.map(c => `<tr><td>${c.type || c.challan_type || '-'}</td><td>Rs${fmt(c.amount || 0)}</td><td><span class="bx y">Due</span></td></tr>`).join('')}</table>`
+            : '<div class="empty" style="padding:20px"><p>✓ All clear</p></div>'}
+        </div>
+      </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">📋</div><p>${e.message}</p></div>`); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // TDS SLABS
+    // ═══════════════════════════════════════════════════
+    // async function tds() {
+    //   loader();
+    //   try {
+    //     const [s25, s24] = await Promise.all([
+    //       api('/statutory/tds-slabs?fy=2025&entity_id=' + ENTITY),
+    //       api('/statutory/tds-slabs?fy=2024&entity_id=' + ENTITY)
+    //     ]);
+    //     window._tdsData = { 2025: s25.data || [], 2024: s24.data || [] };
+    //     renderTDSFY(2025);
+    //     setPg(`<div class="tab-bar" id="tds-tabs">
+    //     <div class="tab on" onclick="tdsSwitch(2025,this)">FY 2025-26</div>
+    //     <div class="tab" onclick="tdsSwitch(2024,this)">FY 2024-25</div>
+    //   </div><div id="tds-panel">${buildTDSHtml(window._tdsData[2025], '2025-26')}</div>`);
+    //   } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    // }
+
+    async function tds() {
+      setActs('');
+      loader();
+      try {
+        const r = await api('/statutory/tds-slabs');
+        const slabs = r.data || r || [];
+        if (!slabs.length) { setPg('<div class="empty"><p>No TDS slabs configured.</p></div>'); return; }
+        // Group by financial year
+        const byFY = {};
+        slabs.forEach(s => { (byFY[s.financial_year] = byFY[s.financial_year] || []).push(s); });
+        const html = Object.entries(byFY).map(([fy, list]) => `
+      <div class="card">
+        <div class="ch"><div class="ct">FY ${fy}</div></div>
+        <div class="tw"><table>
+          <tr><th>Income From</th><th>Income To</th><th>Rate %</th><th>Surcharge %</th><th>Cess %</th></tr>
+          ${list.map(s => `<tr>
+            <td class="mono">₹${fmt(s.income_from)}</td>
+            <td class="mono">${s.income_to ? '₹' + fmt(s.income_to) : 'Above'}</td>
+            <td class="mono">${s.tax_rate}%</td>
+            <td class="mono">${s.surcharge_rate || 0}%</td>
+            <td class="mono">${s.cess_rate || 4}%</td>
+          </tr>`).join('')}
+        </table></div>
+      </div>`).join('');
+        setPg(html);
+      } catch (e) { setPg(`<div class="empty"><p>${e.message || 'Failed to load TDS slabs'}</p></div>`); }
+    }
+
+    function tdsSwitch(fy, el) {
+      document.querySelectorAll('#tds-tabs .tab').forEach(t => t.classList.remove('on')); el.classList.add('on');
+      const yr = fy === 2025 ? '2025-26' : '2024-25';
+      $('tds-panel').innerHTML = buildTDSHtml(window._tdsData?.[fy] || [], yr);
+    }
+
+    function renderTDSFY(fy) { } // placeholder
+
+    function buildTDSHtml(list, yr) {
+      const o = list.filter(s => s.regime === 'old'), n = list.filter(s => s.regime === 'new');
+      return `<div class="g2">
+    <div class="card"><div class="ch"><div class="ct">Old Regime — FY ${yr}</div><span class="bx gr">Legacy</span></div>
+      <table><tr><th>Income From</th><th>Income To</th><th>Rate</th></tr>
+      ${o.map(s => `<tr><td class="mono">Rs${fmt(s.income_from)}</td><td class="mono">${s.income_to ? 'Rs' + fmt(s.income_to) : 'Above'}</td><td><strong>${s.tax_rate}%</strong></td></tr>`).join('')}
+      </table></div>
+    <div class="card"><div class="ch"><div class="ct">New Regime — FY ${yr}</div><span class="bx g">Recommended</span></div>
+      <table><tr><th>Income From</th><th>Income To</th><th>Rate</th></tr>
+      ${n.map(s => `<tr><td class="mono">Rs${fmt(s.income_from)}</td><td class="mono">${s.income_to ? 'Rs' + fmt(s.income_to) : 'Above'}</td><td><strong>${s.tax_rate}%</strong></td></tr>`).join('')}
+      </table></div>
+  </div>`;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // HOLIDAYS
+    // ═══════════════════════════════════════════════════
+    let _calId = null;
+    async function holidays() {
+      setActs(`<button class="btn acc" onclick="addHoliday()">+ Add Holiday</button>`);
+      loader();
+      try {
+        const cals = await api('/master/holiday-calendars?entity_id=' + ENTITY + '&per_page=10');
+        const calList = cals.data || [];
+        if (!calList.length) {
+          setPg(`<div class="empty"><div class="ico">🗓️</div><p>No holiday calendar found.</p><br><button class="btn acc" onclick="createCalendar()">+ Create Holiday Calendar</button></div>`);
+          return;
+        }
+        _calId = calList[0].id;
+        const d = await api('/master/holiday-calendars/' + _calId + '/holidays');
+        const list = d.data || [];
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const typeClr = { national: 'g', regional: 'b', optional: 'y' };
+        setPg(`<div class="card">
+      <div class="ch">
+        <div class="ct">Holidays — ${calList[0].name} (${calList[0].year})</div>
+        <span style="font-size:11px;color:var(--t3)">${list.length} holidays</span>
+      </div>
+      ${list.length ? `<div class="tw"><table>
+        <tr><th>Holiday</th><th>Date</th><th>Day</th><th>Type</th></tr>
+        ${list.map(h => {
+          const dt = new Date(h.date + 'T00:00:00'); return `<tr>
+          <td><strong>${h.name}</strong></td>
+          <td>${h.date}</td>
+          <td style="color:var(--t2)">${days[dt.getDay()]}</td>
+          <td><span class="bx ${typeClr[h.type] || 'gr'}">${h.type}</span></td>
+        </tr>`;
+        }).join('')}
+      </table></div>`: '<div class="empty" style="padding:20px"><p>No holidays added yet</p></div>'}
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">🗓️</div><p>${e.message}</p></div>`); }
+    }
+
+    async function createCalendar() {
+      const name = prompt('Calendar name (e.g. India National 2026):'); if (!name) return;
+      const year = parseInt(prompt('Year:', new Date().getFullYear()) || new Date().getFullYear());
+      try {
+        const r = await api('/master/holiday-calendars', { method: 'POST', body: JSON.stringify({ entity_id: ENTITY, name, year, region: 'India' }) });
+        _calId = r.data?.id || 1; toast('Calendar created!'); holidays();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    async function addHoliday() {
+      if (!_calId) { toast('No calendar found. Create a calendar first.', 'er'); createCalendar(); return; }
+      const name = prompt('Holiday name (e.g. Diwali):'); if (!name) return;
+      const dt = prompt('Date (YYYY-MM-DD):'); if (!dt) return;
+      const type = prompt('Type (national/regional/optional):', 'national');
+      try {
+        await api('/master/holiday-calendars/' + _calId + '/holidays', { method: 'POST', body: JSON.stringify({ name, date: dt, type: type || 'national' }) });
+        toast('Holiday added!'); holidays();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // HELPDESK
+    // ═══════════════════════════════════════════════════
+    async function helpdesk() {
+      setActs(`<button class="btn acc" onclick="showTicketModal()">+ Raise Ticket</button>`);
+      loader();
+      try {
+        const [cats, ticks] = await Promise.allSettled([
+          api('/helpdesk/categories?entity_id=' + ENTITY),
+          api('/helpdesk/tickets?entity_id=' + ENTITY + '&per_page=30').catch(() => api('/helpdesk/tickets/mine'))
+        ]);
+        const cats2 = cats.value?.data || [], ticks2 = ticks.value?.data || [];
+        setPg(`<div class="g2">
+      <div class="card"><div class="ch"><div class="ct">Categories (${cats2.length})</div></div>
+        ${cats2.length ? `<table><tr><th>Category</th><th>Team</th><th>SLA</th></tr>
+          ${cats2.map(c => `<tr><td>${c.name}</td><td><span class="bx b">${c.assigned_team}</span></td><td>${c.sla_hours}h</td></tr>`).join('')}
+        </table>`: '<div class="empty" style="padding:20px"><p>No categories</p></div>'}
+      </div>
+      <div class="card"><div class="ch"><div class="ct">Tickets (${ticks2.length})</div></div>
+        ${ticks2.length ? `<table><tr><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th></tr>
+          ${ticks2.map(t => `<tr>
+            <td>${t.subject || '-'}</td>
+            <td>${t.category?.name || '-'}</td>
+            <td><span class="bx ${t.priority === 'high' ? 'r' : t.priority === 'medium' ? 'y' : 'gr'}">${t.priority || 'normal'}</span></td>
+            <td><span class="bx ${t.status === 'closed' ? 'gr' : t.status === 'resolved' ? 'g' : 'y'}">${t.status}</span></td>
+          </tr>`).join('')}
+        </table>`: '<div class="empty" style="padding:20px"><p>No tickets yet</p></div>'}
+      </div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">🎫</div><p>${e.message}</p></div>`); }
+    }
+
+    async function showTicketModal() {
+      let catOpts = '<option value="">Loading...</option>';
+      try {
+        const cats = await api('/helpdesk/categories?entity_id=' + ENTITY);
+        catOpts = cats.data?.length ? cats.data.map(c => `<option value="${c.id}">${c.name}</option>`).join('') : '<option value="">No categories</option>';
+      } catch { catOpts = '<option value="">Failed to load</option>'; }
+      $('emp-title').textContent = 'Raise Helpdesk Ticket';
+      $('emp-tabs').style.display = 'none';
+      $('et0').innerHTML = `<div class="ibox">Ticket is raised from your logged-in user account.</div>
+    <div class="fg2">
+      <div class="fld"><label>Category *</label><select id="tk-cat">${catOpts}</select></div>
+      <div class="fld"><label>Priority</label><select id="tk-pri"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+      <div class="fld full"><label>Subject *</label><input id="tk-sub" placeholder="Brief description of your issue"></div>
+      <div class="fld full"><label>Description * (required)</label><textarea id="tk-desc" rows="4" style="background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:8px;color:var(--txt);font-family:inherit;font-size:12px;resize:vertical;width:100%" placeholder="Describe your issue in detail..."></textarea></div>
+    </div>`;
+      $('et1').style.display = 'none'; $('et2').style.display = 'none';
+      $('emp-btn').setAttribute('onclick', 'saveTicket()');
+      $('emp-btn').textContent = 'Raise Ticket';
+      om('m-emp');
+    }
+
+    async function saveTicket() {
+      const catId = parseInt($('tk-cat')?.value || 0);
+      const subj = ($('tk-sub')?.value || '').trim();
+      const desc = ($('tk-desc')?.value || '').trim();
+      if (!catId) { toast('Select category', 'er'); return; }
+      if (!subj) { toast('Subject is required', 'er'); return; }
+      if (!desc) { toast('Description is required', 'er'); return; }
+      try {
+        await api('/helpdesk/tickets', { method: 'POST', body: JSON.stringify({ category_id: catId, subject: subj, description: desc, priority: $('tk-pri')?.value || 'medium' }) });
+        cm('m-emp'); toast('Ticket raised!'); helpdesk();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // REPORTS
+    // ═══════════════════════════════════════════════════
+    async function reports() {
+      setPg(`<div class="g3">
+    ${[['Leave Summary', 'Monthly leave by employee. Matches Leave Statement format.', 'lvRpt'],
+        ['Attendance Monthly', 'Present/Absent/WFH summary.', 'attRpt'],
+        ['Payroll Register', 'Earnings, deductions, net pay. Like SalProcessSheet.', 'payRpt'],
+        ['Headcount Report', 'Active/resigned dept-wise breakdown.', 'hcRpt'],
+        ['Bank Transfer List', 'Account nos, IFSC, net salary.', 'bankRpt'],
+        ['Salary Cost Report', 'Total payroll cost by department.', 'costRpt']
+        ].map(([t, d, fn]) => `<div class="card" style="cursor:pointer" onclick="${fn}()">
+      <div style="font-size:28px;margin-bottom:8px">📊</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">${t}</div>
+      <div style="font-size:12px;color:var(--t3)">${d}</div>
+    </div>`).join('')}
+  </div><div id="rout"></div>`);
+    }
+
+    function xls(tid, nm) {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet($(tid)), 'Report');
+      XLSX.writeFile(wb, nm + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+      toast('Excel downloaded!');
+    }
+
+    async function lvRpt() {
+      $('rout').innerHTML = '<div class="loader"><span class="sp"></span>Generating...</div>';
+      try {
+        const d = await api('/leave/applications?entity_id=' + ENTITY + '&per_page=200');
+        const list = d.data || [];
+        const byE = {};
+        list.forEach(a => {
+          const n = `${a.employee?.first_name || ''} ${a.employee?.last_name || ''}`.trim();
+          if (!byE[n]) byE[n] = {};
+          const c = a.leaveType?.code || a.leave_type?.code || '?';
+          byE[n][c] = (byE[n][c] || 0) + (a.days || a.total_days || 1);
+        });
+        const codes = [...new Set(list.map(a => a.leaveType?.code || a.leave_type?.code || '?'))].sort();
+        $('rout').innerHTML = `<div class="card"><div class="ch"><div class="ct">Leave Summary Report</div><button class="btn sm acc" onclick="xls('rpt','Leave_Summary')">⬇ Export Excel</button></div>
+      <div class="tw"><table id="rpt">
+        <tr><th>Employee</th>${codes.map(c => `<th>${c}</th>`).join('')}<th>Total</th></tr>
+        ${Object.entries(byE).map(([n, d]) => { const t = Object.values(d).reduce((s, v) => s + v, 0); return `<tr><td>${n}</td>${codes.map(c => `<td>${d[c] || ''}</td>`).join('')}<td><strong>${t}</strong></td></tr>`; }).join('')}
+      </table></div></div>`;
+      } catch (e) { $('rout').innerHTML = `<div class="empty"><p>${e.message}</p></div>`; }
+    }
+
+    async function payRpt() {
+      $('rout').innerHTML = '<div class="loader"><span class="sp"></span>Generating...</div>';
+      try {
+        const d = await api('/employees?entity_id=' + ENTITY + '&per_page=200');
+        const list = d.data || [];
+        const tot = list.reduce((s, e) => s + Number(e.currentSalary?.gross_monthly || 0), 0);
+        $('rout').innerHTML = `<div class="card"><div class="ch"><div class="ct">Payroll Register</div><button class="btn sm acc" onclick="xls('rpt','Payroll_Register')">⬇ Export Excel</button></div>
+      <div class="tw"><table id="rpt">
+        <tr><th>Emp ID</th><th>Employee</th><th>Designation</th><th>Gross</th><th>Basic</th><th>HRA</th><th>Spec Allw</th><th>PT</th><th>Net Pay</th></tr>
+        ${list.map(e => { const g = Number(e.currentSalary?.gross_monthly || 0); return `<tr><td class="mono">${e.employee_id || e.id}</td><td>${e.first_name} ${e.last_name}</td><td>${e.designation?.name || '-'}</td><td>Rs${fmt(g)}</td><td>Rs${fmt(Math.round(g * .7))}</td><td>Rs${fmt(Math.round(g * .28))}</td><td>Rs${fmt(Math.round(g * .02))}</td><td>${g > 0 ? 'Rs200' : '-'}</td><td><strong>Rs${fmt(g > 0 ? g - 200 : 0)}</strong></td></tr>`; }).join('')}
+        <tr style="font-weight:700"><td colspan="3">TOTAL</td><td>Rs${fmt(tot)}</td><td>Rs${fmt(Math.round(tot * .7))}</td><td>Rs${fmt(Math.round(tot * .28))}</td><td>Rs${fmt(Math.round(tot * .02))}</td><td>Rs${fmt(list.filter(e => Number(e.currentSalary?.gross_monthly || 0) > 0).length * 200)}</td><td>Rs${fmt(tot - list.filter(e => Number(e.currentSalary?.gross_monthly || 0) > 0).length * 200)}</td></tr>
+      </table></div></div>`;
+      } catch (e) { $('rout').innerHTML = `<div class="empty"><p>${e.message}</p></div>`; }
+    }
+
+    async function hcRpt() {
+      $('rout').innerHTML = '<div class="loader"><span class="sp"></span>Generating...</div>';
+      try {
+        const d = await api('/employees?entity_id=' + ENTITY + '&per_page=200');
+        const list = d.data || [];
+        const byD = {};
+        list.forEach(e => { const dp = e.department?.name || 'Unassigned'; if (!byD[dp]) byD[dp] = { active: 0, other: 0 }; byD[dp][e.employee_status === 'active' ? 'active' : 'other']++; });
+        $('rout').innerHTML = `<div class="card"><div class="ch"><div class="ct">Headcount Report</div><button class="btn sm acc" onclick="xls('rpt','Headcount')">⬇ Export Excel</button></div>
+      <div class="tw"><table id="rpt"><tr><th>Department</th><th>Active</th><th>Resigned/Left</th><th>Total</th></tr>
+      ${Object.entries(byD).map(([n, d]) => `<tr><td>${n}</td><td style="color:var(--grn)">${d.active}</td><td style="color:var(--red)">${d.other}</td><td><strong>${d.active + d.other}</strong></td></tr>`).join('')}
+      <tr style="font-weight:700"><td>TOTAL</td><td>${list.filter(e => e.employee_status === 'active').length}</td><td>${list.filter(e => e.employee_status !== 'active').length}</td><td>${list.length}</td></tr>
+      </table></div></div>`;
+      } catch (e) { $('rout').innerHTML = `<div class="empty"><p>${e.message}</p></div>`; }
+    }
+
+    async function bankRpt() {
+      $('rout').innerHTML = '<div class="loader"><span class="sp"></span>Generating...</div>';
+      try {
+        const d = await api('/employees?entity_id=' + ENTITY + '&per_page=200');
+        const list = d.data || [];
+        $('rout').innerHTML = `<div class="card"><div class="ch"><div class="ct">Bank Transfer List</div><button class="btn sm acc" onclick="xls('rpt','Bank_Transfer')">⬇ Export Excel</button></div>
+      <div class="tw"><table id="rpt"><tr><th>Emp ID</th><th>Name</th><th>Bank</th><th>Account No</th><th>IFSC</th><th>Net Salary</th></tr>
+      ${list.map(e => { const g = Number(e.currentSalary?.gross_monthly || 0); const bk = e.bankDetails?.[0] || e.bank_detail; return `<tr><td class="mono">${e.employee_id || e.id}</td><td>${e.first_name} ${e.last_name}</td><td>${bk?.bank_name || '-'}</td><td class="mono">${bk?.account_number || '-'}</td><td class="mono">${bk?.ifsc_code || '-'}</td><td>Rs${fmt(g > 0 ? g - 200 : 0)}</td></tr>`; }).join('')}
+      </table></div></div>`;
+      } catch (e) { $('rout').innerHTML = `<div class="empty"><p>${e.message}</p></div>`; }
+    }
+
+    async function attRpt() {
+      $('rout').innerHTML = '<div class="loader"><span class="sp"></span>Generating...</div>';
+      const now = new Date();
+      try {
+        const d = await api(`/attendance/monthly?entity_id=${ENTITY}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
+        const grouped = d.data || {};
+        const rows = [];
+        Object.values(grouped).forEach(recs => {
+          if (Array.isArray(recs)) recs.forEach(r => rows.push(r));
+        });
+        $('rout').innerHTML = `<div class="card"><div class="ch"><div class="ct">Attendance — ${M[now.getMonth()]} ${now.getFullYear()}</div><button class="btn sm acc" onclick="xls('rpt','Attendance_Monthly')">⬇ Export Excel</button></div>
+      <div class="tw"><table id="rpt"><tr><th>Emp ID</th><th>Name</th><th>Date</th><th>Status</th><th>In Time</th><th>Out Time</th><th>Remarks</th></tr>
+      ${rows.map(a => `<tr><td class="mono">${a.employee?.employee_id || '-'}</td><td>${a.employee?.first_name || ''} ${a.employee?.last_name || ''}</td><td>${fmtD(a.attendance_date)}</td><td><span class="bx ${a.status === 'present' ? 'g' : a.status === 'absent' ? 'r' : 'y'}">${a.status}</span></td><td>${a.check_in || '-'}</td><td>${a.check_out || '-'}</td><td style="color:var(--t3)">${a.remarks || '-'}</td></tr>`).join('')}
+      </table></div></div>`;
+      } catch (e) { $('rout').innerHTML = `<div class="empty"><p>${e.message}</p></div>`; }
+    }
+
+    async function costRpt() {
+      $('rout').innerHTML = '<div class="loader"><span class="sp"></span>Generating...</div>';
+      try {
+        const d = await api('/employees?entity_id=' + ENTITY + '&per_page=200');
+        const list = d.data || [];
+        const byD = {};
+        list.forEach(e => { const dp = e.department?.name || 'Unassigned'; if (!byD[dp]) byD[dp] = { count: 0, total: 0 }; byD[dp].count++; byD[dp].total += Number(e.currentSalary?.gross_monthly || 0); });
+        $('rout').innerHTML = `<div class="card"><div class="ch"><div class="ct">Salary Cost by Department</div><button class="btn sm acc" onclick="xls('rpt','Salary_Cost')">⬇ Export Excel</button></div>
+      <div class="tw"><table id="rpt"><tr><th>Department</th><th>Employees</th><th>Total Gross</th><th>Total PT</th><th>Total Net</th></tr>
+      ${Object.entries(byD).map(([n, d]) => `<tr><td>${n}</td><td>${d.count}</td><td>Rs${fmt(d.total)}</td><td>Rs${fmt(d.count * 200)}</td><td>Rs${fmt(d.total - d.count * 200)}</td></tr>`).join('')}
+      </table></div></div>`;
+      } catch (e) { $('rout').innerHTML = `<div class="empty"><p>${e.message}</p></div>`; }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // MASTERS
+    // ═══════════════════════════════════════════════════
+    async function masters() {
+      setActs(`<button class="btn acc" onclick="createCompany()">+ Add Company</button><button class="btn" onclick="createEntity()" style="margin-left:6px">+ Add Entity</button>`);
+      loader();
+      try {
+        const [comps, ents] = await Promise.allSettled([
+          api('/master/companies?per_page=50'),
+          api('/master/entities?per_page=50')
+        ]);
+        const companies = comps.value?.data || [], entities = ents.value?.data || [];
+        setPg(`<div class="g2">
+      <div class="card"><div class="ch"><div class="ct">Companies / Firms (${companies.length})</div><button class="btn sm acc" onclick="createCompany()">+ Add</button></div>
+        ${companies.length ? `<table><tr><th>Name</th><th>Short Name</th><th>PAN</th><th>Email</th></tr>
+          ${companies.map(c => `<tr><td><strong>${c.name}</strong></td><td class="mono">${c.short_name || '-'}</td><td class="mono">${c.pan || '-'}</td><td>${c.email || '-'}</td></tr>`).join('')}
+        </table>`: '<div class="empty" style="padding:20px"><p>No companies yet</p><button class="btn acc sm" onclick="createCompany()">+ Add Company</button></div>'}
+      </div>
+      <div class="card"><div class="ch"><div class="ct">Entities / Branches (${entities.length})</div><button class="btn sm acc" onclick="createEntity()">+ Add</button></div>
+        ${entities.length ? `<table><tr><th>Entity</th><th>Company</th><th>State</th><th>Payroll Cycle</th></tr>
+          ${entities.map(e => `<tr><td><strong>${e.name}</strong></td><td>${e.company?.name || '-'}</td><td>${e.state || '-'}</td><td><span class="bx b">${e.payroll_cycle || '-'}</span></td></tr>`).join('')}
+        </table>`: '<div class="empty" style="padding:20px"><p>No entities yet</p></div>'}
+      </div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    async function createCompany() {
+      const name = prompt('Company name (e.g. Rutul Shah & Co LLP):'); if (!name) return;
+      const short = prompt('Short name (e.g. RSC):'); if (!short) return;
+      const pan = prompt('PAN (optional):', '') || undefined;
+      const email = prompt('Email (optional):', '') || undefined;
+      try {
+        await api('/master/companies', { method: 'POST', body: JSON.stringify({ name, short_name: short, pan: pan || undefined, email: email || undefined, is_active: true }) });
+        toast('Company created!'); masters();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    async function createEntity() {
+      // Need company_id first
+      let companyId = 1;
+      try {
+        const comps = await api('/master/companies?per_page=50');
+        const list = comps.data || [];
+        if (!list.length) { toast('Create a company first', 'er'); return; }
+        const opts = list.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+        const sel = parseInt(prompt('Select company number:\n' + opts, '1'));
+        companyId = list[(sel - 1) || 0]?.id || 1;
+      } catch { }
+      const name = prompt('Entity name (e.g. RSC Ahmedabad):'); if (!name) return;
+      const short = prompt('Short name (e.g. RSCA):'); if (!short) return;
+      const state = prompt('State:', 'Gujarat');
+      try {
+        await api('/master/entities', { method: 'POST', body: JSON.stringify({ company_id: companyId, name, short_name: short, state, payroll_cycle: 'monthly', payroll_cutoff_day: 25, is_active: true }) });
+        toast('Entity created!'); masters();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // DEPARTMENTS & DESIGNATIONS
+    // ═══════════════════════════════════════════════════
+    async function depts() {
+      setActs(`<button class="btn acc" onclick="addDept()">+ Add Department</button><button class="btn" onclick="addDesig()" style="margin-left:6px">+ Add Designation</button>`);
+      loader();
+      try {
+        const [d, des] = await Promise.allSettled([
+          api('/master/departments?entity_id=' + ENTITY + '&per_page=100'),
+          api('/master/designations?entity_id=' + ENTITY + '&per_page=100')
+        ]);
+        const deptList = d.value?.data || [], desigList = des.value?.data || [];
+        setPg(`<div class="g2">
+      <div class="card"><div class="ch"><div class="ct">Departments (${deptList.length})</div></div>
+        ${deptList.length ? `<table><tr><th>Name</th><th>Code</th><th>Active</th></tr>
+          ${deptList.map(d => `<tr><td>${d.name}</td><td class="mono">${d.code || '-'}</td><td>${d.is_active !== false ? '<span class="bx g">Yes</span>' : '<span class="bx r">No</span>'}</td></tr>`).join('')}
+        </table>`: '<div class="empty" style="padding:20px"><p>No departments yet</p><button class="btn acc sm" onclick="addDept()">+ Add</button></div>'}
+      </div>
+      <div class="card"><div class="ch"><div class="ct">Designations (${desigList.length})</div></div>
+        ${desigList.length ? `<table><tr><th>Name</th><th>Level</th></tr>
+          ${desigList.map(d => `<tr><td>${d.name}</td><td style="color:var(--t3)">${d.level || '-'}</td></tr>`).join('')}
+        </table>`: '<div class="empty" style="padding:20px"><p>No designations yet</p><button class="btn acc sm" onclick="addDesig()">+ Add</button></div>'}
+      </div>
+    </div>`);
+      } catch (e) { setPg(`<div class="empty"><div class="ico">⚠️</div><p>${e.message}</p></div>`); }
+    }
+
+    async function addDept() {
+      const name = prompt('Department name (e.g. Engineering, Accounts, Strategy):'); if (!name) return;
+      const code = prompt('Short code (e.g. ENG, ACC, STR) - required:');
+      if (!code) { toast('Code is required', 'er'); return; }
+      try {
+        await api('/master/departments', { method: 'POST', body: JSON.stringify({ entity_id: ENTITY, name, code: code.toUpperCase() }) });
+        toast('Department added!'); await prefetch(); depts();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    async function addDesig() {
+      const name = prompt('Designation name (e.g. Executive, Manager, AVP, Director):'); if (!name) return;
+      try {
+        await api('/master/designations', { method: 'POST', body: JSON.stringify({ entity_id: ENTITY, name }) });
+        toast('Designation added!'); await prefetch(); depts();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // TEMPLATE DOWNLOADS
+    // ═══════════════════════════════════════════════════
+    async function dlTemplate(type) {
+      const wb = XLSX.utils.book_new();
+      let ws, name;
+      if (type === 'employee') {
+        ws = XLSX.utils.aoa_to_sheet([
+          ['NewEmpID', 'EmployeeName', 'Department', 'DesignationFinal', 'Gender', 'BirthDate', 'JoinDate', 'MobileNumber', 'PAN', 'BankName', 'AccountNumber', 'IFSCCode', 'UANNo', 'Firm'],
+          ['201718001', 'Jaykumar Janakbhai Dave', 'Strategy', 'AVP', 'Male', '07-10-1981', '19-12-2017', '9825308928', 'EAAPD6619C', 'Union Bank of India', '391802010405839', 'UBIN0539180', 'NO UAN', 'Rutul Shah & Co LLP'],
+          ['201820001', 'Parth Baldevbhai Patel', 'Accounts Payable', 'Executive', 'Male', '18-11-1995', '20-11-2018', '9974717041', 'DLDPP7837R', 'IDFC FIRST BANK', '10065980603', 'IDFB0040303', '', 'Ashil Shah & Associates']
+        ]);
+        name = 'Employee_Master_Template';
+      } else if (type === 'attendance') {
+        const today = new Date().toISOString().slice(0, 10);
+        const header = [['EmpID', 'EmployeeName', 'Date', 'Status', 'InTime', 'OutTime', 'Remarks']];
+        const empRows = _emps.slice(0, 10).map(e => [e.employee_id || e.id, e.first_name + ' ' + e.last_name, today, 'Present', '09:30', '18:30', '']);
+        ws = XLSX.utils.aoa_to_sheet(header.concat(empRows.length ? empRows : [['EMP001', 'Employee Name', today, 'Present', '09:30', '18:30', '']]));
+        name = 'Attendance_Template_' + today;
+      } else if (type === 'punch') {
+        ws = XLSX.utils.aoa_to_sheet([
+          ['EMP ID', 'Name', 'Date', 'Leave Type', 'Team Leader', 'Reason Type', 'Reason'],
+          ['201718001', 'Jaykumar Dave', new Date().toISOString().slice(0, 10), 'CL', 'Manager Name', 'Personal', 'Personal work']
+        ]);
+        name = 'Punch_Exceptions_Template';
+      } else if (type === 'leave') {
+        const today = new Date().toISOString().slice(0, 10);
+        const header = [['EmpID', 'EmployeeName', 'FromDate', 'ToDate', 'LeaveType', 'Reason']];
+        const empRows = _emps.slice(0, 3).map(e => [e.employee_id || e.id, e.first_name + ' ' + e.last_name, today, today, 'CL', 'Personal work']);
+        ws = XLSX.utils.aoa_to_sheet(header.concat(empRows.length ? empRows : [['EMP001', 'Employee Name', today, today, 'CL', 'Personal']]));
+        name = 'Leave_Import_Template';
+      } else if (type === 'salary') {
+        const header = [['EmpID', 'EmployeeName', 'GrossSalary', 'BasicPay', 'HRA', 'SpecialAllowance', 'LOPDays', 'NetPaidDays']];
+        const empRows = _emps.slice(0, 10).map(e => { const g = Number(e.currentSalary?.gross_monthly || 0); return [e.employee_id || e.id, e.first_name + ' ' + e.last_name, g, Math.round(g * .7), Math.round(g * .28), Math.round(g * .02), 0, 26]; });
+        ws = XLSX.utils.aoa_to_sheet(header.concat(empRows.length ? empRows : [['EMP001', 'Employee Name', 25000, 17500, 7000, 500, 0, 26]]));
+        name = 'Salary_Template';
+      }
+      XLSX.utils.book_append_sheet(wb, ws, 'Template');
+      XLSX.writeFile(wb, name + '.xlsx');
+      toast('Template downloaded!');
+    }
+
+    // Modal reset helper
+    function resetEmpModal() {
+      $('emp-title').textContent = 'Add Employee';
+      $('emp-tabs').style.display = '';
+      $('emp-btn').setAttribute('onclick', 'saveEmployee()');
+      $('emp-btn').textContent = 'Add Employee';
+    }
+
+    // ════════ DEDICATED MODAL FUNCTIONS ════════
+
+    function showRevSplit(g) {
+      g = parseFloat(g) || 0;
+      const el = document.getElementById('rev-split2'); if (!el) return;
+      if (!g) { el.style.display = 'none'; return; }
+      el.textContent = 'Basic: ₹' + fmt(Math.round(g * .7)) + ' + HRA: ₹' + fmt(Math.round(g * .28)) + ' + Spec Allw: ₹' + fmt(Math.round(g * .02)) + ' | Net: ₹' + fmt(g - 200) + '/month';
+      el.style.display = '';
+    }
+
+    function openRevModal() {
+      // Populate employee dropdown
+      const opts = _emps.map(e => '<option value="' + e.id + '">' + (e.employee_id || e.id) + ' — ' + e.first_name + ' ' + e.last_name + '</option>').join('');
+      const el = document.getElementById('rv-emp2');
+      if (el) el.innerHTML = '<option value="">Select employee</option>' + opts;
+      const dateEl = document.getElementById('rv-date2');
+      if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+      const g2 = document.getElementById('rv-gross2'); if (g2) g2.value = '';
+      const r2 = document.getElementById('rv-reason2'); if (r2) r2.value = '';
+      const rs = document.getElementById('rev-split2'); if (rs) rs.style.display = 'none';
+      om('m-rev');
+    }
+
+    async function saveRevision2() {
+      const empId = document.getElementById('rv-emp2')?.value;
+      const monthly = parseFloat(document.getElementById('rv-gross2')?.value || 0);
+      const date = document.getElementById('rv-date2')?.value;
+      const reason = (document.getElementById('rv-reason2')?.value || '').trim();
+      if (!empId) { toast('Select employee', 'er'); return; }
+      if (!monthly || monthly < 1) { toast('Enter valid salary', 'er'); return; }
+      if (!date) { toast('Enter effective date', 'er'); return; }
+      if (!reason) { toast('Reason is required', 'er'); return; }
+      try {
+        await api('/salary-revisions', {
+          method: 'POST', body: JSON.stringify({
+            employee_id: parseInt(empId),
+            new_ctc: Math.round(monthly * 12),
+            effective_date: date,
+            reason: reason
+          })
+        });
+        cm('m-rev');
+        toast('Revision submitted! ₹' + fmt(monthly) + '/month (Annual CTC: ₹' + fmt(Math.round(monthly * 12)) + ')');
+        revisions();
+      } catch (e) { toast(e.message || JSON.stringify(e.errors || 'Failed'), 'er'); }
+    }
+
+    async function openLoanModal() {
+      // Populate employees
+      const empOpts = _emps.map(e => '<option value="' + e.id + '">' + (e.employee_id || e.id) + ' — ' + e.first_name + ' ' + e.last_name + '</option>').join('');
+      const empEl = document.getElementById('ln-emp');
+      if (empEl) empEl.innerHTML = '<option value="">Select employee</option>' + empOpts;
+      // Load loan types
+      const typeEl = document.getElementById('ln-type');
+      if (typeEl) typeEl.innerHTML = '<option value="">Loading...</option>';
+      try {
+        const types = await api('/loans/types?entity_id=' + ENTITY);
+        if (typeEl) typeEl.innerHTML = types.data?.length
+          ? types.data.map(t => '<option value="' + t.id + '">' + t.name + ' (Max ₹' + fmt(t.max_amount || 0) + ', ' + (t.max_emi || 0) + ' EMIs)</option>').join('')
+          : '<option value="">No loan types configured</option>';
+      } catch { if (typeEl) typeEl.innerHTML = '<option value="">Failed to load types</option>'; }
+      // Set next month as default
+      const nextM = new Date(); nextM.setMonth(nextM.getMonth() + 1);
+      const mnEl = document.getElementById('ln-month');
+      if (mnEl) mnEl.value = nextM.getFullYear() + '-' + String(nextM.getMonth() + 1).padStart(2, '0');
+      const amtEl = document.getElementById('ln-amt'); if (amtEl) amtEl.value = '';
+      const emiEl = document.getElementById('ln-emi'); if (emiEl) emiEl.value = '';
+      const purEl = document.getElementById('ln-purpose'); if (purEl) purEl.value = 'Personal';
+      om('m-loan');
+    }
+
+    async function saveLoan() {
+      const empId = parseInt(document.getElementById('ln-emp')?.value || 0);
+      const typeId = parseInt(document.getElementById('ln-type')?.value || 0);
+      const amt = parseFloat(document.getElementById('ln-amt')?.value || 0);
+      const emis = parseInt(document.getElementById('ln-emi')?.value || 0);
+      const emiMonth = document.getElementById('ln-month')?.value;
+      const purpose = document.getElementById('ln-purpose')?.value || 'Personal';
+      if (!empId || !typeId) { toast('Select employee and loan type', 'er'); return; }
+      if (!amt || amt < 1) { toast('Enter valid loan amount', 'er'); return; }
+      if (!emis || emis < 1) { toast('Enter number of EMIs', 'er'); return; }
+      if (!emiMonth) { toast('Select first EMI month', 'er'); return; }
+      try {
+        await api('/loans', {
+          method: 'POST', body: JSON.stringify({
+            employee_id: empId, loan_type_id: typeId, loan_amount: amt,
+            total_emis: emis, first_emi_month: emiMonth, purpose: purpose
+          })
+        });
+        cm('m-loan');
+        toast('Loan application submitted! Status: Pending approval.');
+        loans();
+      } catch (e) { toast(e.message || JSON.stringify(e.errors || 'Failed'), 'er'); }
+    }
+
+    async function openReimbModal() {
+      const now = new Date();
+      const yrEl = document.getElementById('rb-yr'); if (yrEl) yrEl.value = now.getFullYear();
+      const moEl = document.getElementById('rb-mo');
+      if (moEl) moEl.innerHTML = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => '<option value="' + (i + 1) + '"' + (i === now.getMonth() ? ' selected' : '') + '>' + m + '</option>').join('');
+      const dtEl = document.getElementById('rb-date'); if (dtEl) dtEl.value = now.toISOString().slice(0, 10);
+      const amtEl = document.getElementById('rb-amt'); if (amtEl) amtEl.value = '';
+      const descEl = document.getElementById('rb-desc'); if (descEl) descEl.value = '';
+      // Load reimbursement types
+      const typeEl = document.getElementById('rb-type');
+      if (typeEl) typeEl.innerHTML = '<option value="">Loading types...</option>';
+      try {
+        const types = await api('/reimbursements/types');
+        if (typeEl) typeEl.innerHTML = types.data?.length
+          ? types.data.map(t => '<option value="' + t.id + '">' + t.name + '</option>').join('')
+          : '<option value="1">General Expense</option>';
+      } catch { if (typeEl) typeEl.innerHTML = '<option value="1">General Expense</option>'; }
+      om('m-reimb');
+    }
+
+    async function saveReimb() {
+      const typeId = parseInt(document.getElementById('rb-type')?.value || 0);
+      const date = document.getElementById('rb-date')?.value;
+      const amt = parseFloat(document.getElementById('rb-amt')?.value || 0);
+      const desc = (document.getElementById('rb-desc')?.value || '').trim();
+      if (!typeId) { toast('Select expense type', 'er'); return; }
+      if (!date || !amt || !desc) { toast('Fill all required fields', 'er'); return; }
+      try {
+        await api('/reimbursements', {
+          method: 'POST', body: JSON.stringify({
+            year: parseInt(document.getElementById('rb-yr')?.value),
+            month: parseInt(document.getElementById('rb-mo')?.value),
+            items: [{ reimbursement_type_id: typeId, expense_date: date, description: desc, claimed_amount: amt }]
+          })
+        });
+        cm('m-reimb'); toast('Reimbursement claim submitted!'); reimbursements();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    async function openTicketModal() {
+      const catEl = document.getElementById('tk-cat');
+      if (catEl) catEl.innerHTML = '<option value="">Loading categories...</option>';
+      try {
+        const cats = await api('/helpdesk/categories?entity_id=' + ENTITY);
+        if (catEl) catEl.innerHTML = cats.data?.length
+          ? cats.data.map(c => '<option value="' + c.id + '">' + c.name + '</option>').join('')
+          : '<option value="">No categories configured</option>';
+      } catch { if (catEl) catEl.innerHTML = '<option value="">Failed to load</option>'; }
+      const subEl = document.getElementById('tk-sub'); if (subEl) subEl.value = '';
+      const descEl = document.getElementById('tk-desc'); if (descEl) descEl.value = '';
+      om('m-ticket');
+    }
+
+    async function saveTicket() {
+      const catId = parseInt(document.getElementById('tk-cat')?.value || 0);
+      const subj = (document.getElementById('tk-sub')?.value || '').trim();
+      const desc = (document.getElementById('tk-desc')?.value || '').trim();
+      if (!catId) { toast('Select category', 'er'); return; }
+      if (!subj) { toast('Subject is required', 'er'); return; }
+      if (!desc) { toast('Description is required (API requirement)', 'er'); return; }
+      try {
+        await api('/helpdesk/tickets', {
+          method: 'POST', body: JSON.stringify({
+            category_id: catId, subject: subj, description: desc,
+            priority: document.getElementById('tk-pri')?.value || 'medium'
+          })
+        });
+        cm('m-ticket'); toast('Ticket raised successfully!'); helpdesk();
+      } catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ════════ BIOMETRIC XLS PARSER ════════
+    // Parses biometric device XLS files (12th_Floor.xls, Khokhra.xls, etc.)
+    // Reads: Att. Stat. sheet (monthly summary) + Exception Stat. sheet (daily records)
+    // Matches employees by Bio ID field set in their HRMS profile
+
+    function parseBiometricXLS(buf) {
+      const wb = XLSX.read(buf, { type: 'array' });
+
+      // Validate required sheet exists
+      if (!wb.Sheets['Att. Stat.']) throw new Error("Sheet 'Att. Stat.' not found. Is this a biometric device export?");
+
+      // ── Parse Att. Stat. sheet (monthly summary) ──
+      // Row 0: title, Row 1: date range, Row 2: headers, Row 3: sub-headers, Row 4+: data
+      // Columns: 0=ID, 1=Name, 2=Dept, 3=WorkNorm, 4=WorkReal, 5=LateTimes, 6=LateMin,
+      //          7=LeaveEarlyTimes, 8=LeaveEarlyMin, 9=OTWorkday, 10=OTHoliday,
+      //          11=AttDays(Nor/Real), 12=OutDay, 13=AbsentDay, 14=AFLDay
+      const attRaw = XLSX.utils.sheet_to_json(wb.Sheets['Att. Stat.'], { header: 1, defval: null });
+
+      let period = 'Unknown';
+      try { period = String(attRaw[1][1] || '').trim(); } catch { }
+
+      const summary = [];
+      for (let i = 4; i < attRaw.length; i++) {
+        const row = attRaw[i];
+        if (!row || !row[0] || isNaN(Number(row[0]))) continue;
+        const bioId = String(row[0]).trim();
+        const name = String(row[1] || '').trim();
+        const dept = String(row[2] || '').trim();
+        const attDays = String(row[11] || '0/0');
+        const parts = attDays.split('/');
+        const attNorm = parseInt(parts[0]) || 0;
+        const attReal = parseInt(parts[1]) || 0;
+        const absent = parseInt(row[13]) || 0;
+        const lateTimes = parseInt(row[5]) || 0;
+        const lateMin = parseInt(row[6]) || 0;
+        if (bioId && name) summary.push({ bioId, name, dept, attNorm, attReal, absent, lateTimes, lateMin });
+      }
+
+      // ── Parse Exception Stat. sheet (daily records) ──
+      // Row 0: title, Row 1: date, Row 2: headers, Row 3: sub-headers, Row 4+: data
+      // Columns: 0=ID, 1=Name, 2=Dept, 3=Date, 4=OnDuty, 5=OffDuty, 6=On2, 7=Off2,
+      //          8=LateMin, 9=LeaveEarlyMin, 10=AbsenceMin, 11=TotalMin
+      const dailyRecords = [];
+      if (wb.Sheets['Exception Stat.']) {
+        const excRaw = XLSX.utils.sheet_to_json(wb.Sheets['Exception Stat.'], { header: 1, defval: null });
+        for (let i = 4; i < excRaw.length; i++) {
+          const row = excRaw[i];
+          if (!row || !row[0] || isNaN(Number(row[0]))) continue;
+          const bioId = String(row[0]).trim();
+          let date = null;
+          if (row[3]) {
+            if (typeof row[3] === 'number') date = exDate(row[3]);
+            else date = String(row[3]).slice(0, 10);
+          }
+          if (!bioId || !date) continue;
+          const onDuty = row[4] ? String(row[4]).trim() : null;
+          const offDuty = row[5] ? String(row[5]).trim() : null;
+          const lateMin = parseInt(row[8]) || 0;
+          const absMin = parseInt(row[10]) || 0;
+          // absMin>=480 means full-day absent; otherwise present (possibly late)
+          const status = absMin >= 480 ? 'absent' : 'present';
+          dailyRecords.push({ bioId, date, onDuty, offDuty, lateMin, absMin, status });
+        }
+      }
+
+      return {
+        records: dailyRecords,
+        summary: summary,
+        totalEmployees: summary.length,
+        period: period.slice(0, 21)
+      };
+    }
+
+    // ════════ UPDATE ATTENDANCE UPLOAD FUNCTIONS ════════
+
+    function attTab(i, el) {
+      document.querySelectorAll('#att-tabs .tab').forEach(t => t.classList.remove('on')); el.classList.add('on');
+      document.getElementById('att-t0').style.display = i === 0 ? '' : 'none';
+      document.getElementById('att-t1').style.display = i === 1 ? '' : 'none';
+      document.getElementById('upatt-prev').innerHTML = '';
+      document.getElementById('upatt-btn').style.display = 'none';
+    }
+
+    async function prevAttFile(inp, mode) {
+      const f = inp.files[0]; if (!f) return;
+      const prev = document.getElementById('upatt-prev');
+      prev.innerHTML = '<div class="loader"><span class="sp"></span>Reading file...</div>';
+      try {
+        const buf = await f.arrayBuffer();
+        if (mode === 0) {
+          // Standard daily attendance sheet
+          const wb = XLSX.read(buf);
+          const shName = (document.getElementById('upatt-sheet')?.value || '').trim() || wb.SheetNames[0];
+          const sn = wb.SheetNames.includes(shName) ? shName : wb.SheetNames[0];
+          const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
+          const rows = raw.map(r => { const n = {}; Object.keys(r).forEach(k => n[k.trim()] = r[k]); return n; });
+          _attData = rows; _attMode = 'daily';
+          const sClr = { Present: 'g', Absent: 'r', WFH: 'b', 'Half Day': 'y', 'On Leave': 'y', present: 'g', absent: 'r', work_from_home: 'b' };
+          prev.innerHTML = '<div style="color:var(--grn);font-size:13px;font-weight:600;margin-bottom:10px">✓ ' + rows.length + ' records | Sheet: <strong>' + sn + '</strong></div>' +
+            '<div style="overflow-x:auto;border:1.5px solid var(--b1);border-radius:8px;max-height:200px;overflow-y:auto"><table>' +
+            '<tr><th>Emp ID</th><th>Name</th><th>Date</th><th>Status</th><th>In</th><th>Out</th></tr>' +
+            rows.slice(0, 10).map(r => '<tr>' +
+              '<td class="mono">' + (r['EmpID'] || r['EMP ID'] || '-') + '</td>' +
+              '<td>' + (r['EmployeeName'] || r['Name'] || '-') + '</td>' +
+              '<td>' + (exDate(r['Date']) || String(r['Date'] || '').slice(0, 10) || '-') + '</td>' +
+              '<td><span class="bx ' + (sClr[r['Status']] || 'gr') + '">' + (r['Status'] || '-') + '</span></td>' +
+              '<td>' + (r['InTime'] || '-') + '</td><td>' + (r['OutTime'] || '-') + '</td>' +
+              '</tr>').join('') + '</table></div>';
+          document.getElementById('upatt-btn').style.display = '';
+        } else {
+          // Biometric XLS
+          const result = parseBiometricXLS(buf);
+          _attData = result.records; _attMode = 'biometric';
+          prev.innerHTML = '<div style="color:var(--grn);font-size:13px;font-weight:600;margin-bottom:12px">✓ Biometric file parsed successfully</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">' +
+            '<div style="background:var(--grn2);border:1.5px solid #86efac;border-radius:8px;padding:12px;text-align:center"><div style="font-size:24px;font-weight:700;color:var(--grn)">' + result.totalEmployees + '</div><div style="font-size:12px;color:var(--t3)">Employees</div></div>' +
+            '<div style="background:var(--acc2);border:1.5px solid #bfdbfe;border-radius:8px;padding:12px;text-align:center"><div style="font-size:13px;font-weight:700;color:var(--acc)">' + result.period + '</div><div style="font-size:12px;color:var(--t3)">Period</div></div>' +
+            '<div style="background:var(--yel2);border:1.5px solid #fde68a;border-radius:8px;padding:12px;text-align:center"><div style="font-size:24px;font-weight:700;color:var(--yel)">' + result.records.length + '</div><div style="font-size:12px;color:var(--t3)">Daily Records</div></div>' +
+            '</div>' +
+            '<div style="overflow-x:auto;border:1.5px solid var(--b1);border-radius:8px;max-height:200px;overflow-y:auto"><table>' +
+            '<tr><th>Bio ID</th><th>Name</th><th>Att. Days (Real/Norm)</th><th>Absent</th><th>Late Times</th></tr>' +
+            result.summary.slice(0, 12).map(s => '<tr>' +
+              '<td class="mono">' + s.bioId + '</td>' +
+              '<td><strong>' + s.name + '</strong></td>' +
+              '<td><strong>' + s.attReal + '</strong>/' + s.attNorm + '</td>' +
+              '<td style="color:var(--red)">' + s.absent + '</td>' +
+              '<td style="color:var(--yel)">' + s.lateTimes + (s.lateMin ? ' (' + s.lateMin + 'min)' : '') + '</td>' +
+              '</tr>').join('') + '</table></div>' +
+            '<div style="background:var(--yel2);border:1.5px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-top:12px">' +
+            'Employees matched by <strong>Bio ID</strong> field in HRMS profile. Set the Bio ID on each employee record to enable matching. Unmatched IDs will be skipped.' +
+            '</div>';
+          document.getElementById('upatt-btn').style.display = '';
+        }
+      } catch (e) { prev.innerHTML = '<div style="color:var(--red);background:var(--red2);border:1.5px solid #fca5a5;border-radius:8px;padding:12px;font-size:13px">Error: ' + e.message + '</div>'; }
+    }
+
+    async function importAttendance() {
+      if (!_attData.length) { toast('No data to import', 'er'); return; }
+      const btn = document.getElementById('upatt-btn');
+      if (btn) { btn.textContent = 'Importing...'; btn.disabled = true; }
+
+      const sMap = { Present: 'present', Absent: 'absent', WFH: 'work_from_home', 'Work From Home': 'work_from_home', 'Half Day': 'half_day', 'On Leave': 'leave', present: 'present', absent: 'absent', wfh: 'work_from_home' };
+      let ok = 0, skip = 0;
+
+      if (_attMode === 'biometric') {
+        // Match by bio_id field on employee profile
+        const bioMap = {};
+        _emps.forEach(e => { if (e.bio_id) bioMap[String(e.bio_id).trim()] = e; });
+        // Also try matching by name similarity
+        const nameMap = {};
+        _emps.forEach(e => nameMap[(e.first_name + ' ' + e.last_name).toLowerCase().trim()] = e);
+
+        for (const rec of _attData) {
+          const emp = bioMap[rec.bioId];
+          if (!emp || !rec.date) { skip++; continue; }
+          try {
+            await api('/attendance/mark', {
+              method: 'POST', body: JSON.stringify({
+                employee_id: emp.id,
+                attendance_date: rec.date,
+                status: rec.status,
+                check_in: rec.onDuty || null,
+                check_out: rec.offDuty || null,
+                remarks: rec.lateMin > 0 ? ('Late by ' + rec.lateMin + ' min') : null
+              })
+            }); ok++;
+          } catch { skip++; }
+        }
+      } else {
+        for (const row of _attData) {
+          const empId = row['EmpID'] || row['EMP ID'];
+          const dateStr = exDate(row['Date']) || String(row['Date'] || '').slice(0, 10);
+          const status = sMap[row['Status']] || 'present';
+          if (!empId || !dateStr) { skip++; continue; }
+          const emp = _emps.find(e => String(e.employee_id) === String(empId) || String(e.id) === String(empId));
+          if (!emp) { skip++; continue; }
+          try {
+            await api('/attendance/mark', {
+              method: 'POST', body: JSON.stringify({
+                employee_id: emp.id, attendance_date: dateStr, status,
+                check_in: row['InTime'] || null, check_out: row['OutTime'] || null
+              })
+            }); ok++;
+          } catch { skip++; }
+        }
+      }
+
+      if (btn) { btn.textContent = 'Import Records'; btn.disabled = false; }
+      cm('m-upatt');
+      toast('Imported ' + ok + ' records. ' + skip + ' skipped.', skip > ok ? 'er' : 'ok');
+      attendance();
+    }
+
+    // ════════ UPDATE LOANS PAGE TO USE DEDICATED MODAL ════════
+    // Override loans page to use new modal
+    const _origLoans = typeof loans === 'function' ? loans : null;
+    async function loansNew() {
+      setActs('<button class="btn acc" onclick="openLoanModal()">+ Apply Loan</button>');
+      loader();
+      try {
+        const [ty, ac] = await Promise.allSettled([api('/loans/types?entity_id=' + ENTITY), api('/loans?entity_id=' + ENTITY + '&per_page=30')]);
+        const types = ty.value?.data || [], active = ac.value?.data || [];
+        setPg(
+          (types.length ? '<div class="g' + Math.min(types.length, 4) + '" style="margin-bottom:20px">' + types.map(t => '<div class="sc"><div class="lbl">' + t.name + '</div><div class="val" style="font-size:22px">₹' + fmt(t.max_amount || 0) + '</div><div class="sub">Max ' + (t.max_emi || 0) + ' EMIs · ' + (t.interest_rate || 0) + '% p.a.</div></div>').join('') + '</div>' : '<div style="background:var(--yel2);border:1.5px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:12px;color:#92400e;margin-bottom:16px">No loan types configured. Add them in Masters.</div>') +
+          '<div class="card"><div class="ch"><div class="ct">Loans (' + active.length + ')</div></div>' +
+          (active.length ? '<div class="tw"><table><tr><th>Loan #</th><th>Employee</th><th>Type</th><th>Amount</th><th>EMI</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr>' +
+            active.map(l => '<tr><td class="mono">' + (l.loan_number || l.id) + '</td><td><strong>' + (l.employee?.first_name || '') + ' ' + (l.employee?.last_name || '') + '</strong></td><td>' + (l.loanType?.name || l.loan_type?.name || '-') + '</td><td>₹' + fmt(l.loan_amount) + '</td><td>₹' + fmt(l.emi_amount) + '</td><td>₹' + fmt(l.outstanding_amount) + '</td><td><span class="bx ' + (l.status === 'active' ? 'g' : l.status === 'pending' ? 'y' : l.status === 'closed' ? 'gr' : 'r') + '">' + l.status + '</span></td><td>' + (l.status === 'pending' ? '<button class="btn xs grn" onclick="approveLoan(' + l.id + ')">✓ Approve</button>' : '—') + '</td></tr>').join('') + '</table></div>' :
+            '<div class="empty" style="padding:30px"><p>No active loans</p></div>') +
+          '</div>');
+      } catch (e) { setPg('<div class="empty"><span class="ico">⚠️</span><p>' + e.message + '</p></div>'); }
+    }
+    window["loans"] = loansNew;
+
+    async function approveLoan(id) {
+      const d = prompt('Disbursement date (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+      if (!d) return;
+      try { await api('/loans/' + id + '/approve', { method: 'POST', body: JSON.stringify({ disbursement_date: d }) }); toast('Loan approved!'); loans(); }
+      catch (e) { toast(e.message || 'Failed', 'er'); }
+    }
+
+    // ════════ UPDATE REIMBURSEMENTS PAGE ════════
+    async function reimbursementsNew() {
+      setActs('<button class="btn acc" onclick="openReimbModal()">+ Submit Claim</button>');
+      loader();
+      try {
+        const d = await api('/reimbursements/all?entity_id=' + ENTITY + '&per_page=30').catch(() => api('/reimbursements/mine'));
+        const list = d.data || [];
+        setPg('<div class="card"><div class="ch"><div class="ct">Reimbursement Claims</div></div>' +
+          (list.length ? '<div class="tw"><table><tr><th>Claim #</th><th>Employee</th><th>Month</th><th>Amount</th><th>Status</th><th>Actions</th></tr>' +
+            list.map(r => '<tr><td class="mono">' + (r.claim_number || r.id) + '</td><td><strong>' + (r.employee?.first_name || 'Me') + ' ' + (r.employee?.last_name || '') + '</strong></td><td>' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(r.month || 1) - 1] + ' ' + (r.year || '-') + '</td><td>₹' + fmt(r.total_claimed || r.claimed_amount || 0) + '</td><td><span class="bx ' + (r.status === 'approved' ? 'g' : r.status === 'rejected' ? 'r' : 'y') + '">' + (r.status || 'pending') + '</span></td><td>' + (r.status === 'pending' ? '<button class="btn xs grn" onclick="approveReimb(' + r.id + ')">✓ Approve</button>' : '—') + '</td></tr>').join('') + '</table></div>' :
+            '<div class="empty" style="padding:30px"><p>No reimbursement claims</p></div>') +
+          '</div>');
+      } catch (e) { setPg('<div class="empty"><span class="ico">💳</span><p>' + e.message + '</p></div>'); }
+    }
+    window["reimbursements"] = reimbursementsNew;
+
+    async function approveReimb(id) {
+      try { await api('/reimbursements/' + id + '/approve', { method: 'POST', body: JSON.stringify({ remarks: 'Approved' }) }); toast('Claim approved!'); reimbursements(); }
+      catch (e) { toast(e.message, 'er'); }
+    }
+
+    // ════════ UPDATE HELPDESK PAGE ════════
+    async function helpdeskNew() {
+      setActs('<button class="btn acc" onclick="openTicketModal()">+ Raise Ticket</button>');
+      loader();
+      try {
+        const [cats, ticks] = await Promise.allSettled([api('/helpdesk/categories?entity_id=' + ENTITY), api('/helpdesk/tickets?entity_id=' + ENTITY + '&per_page=30').catch(() => api('/helpdesk/tickets/mine'))]);
+        const cats2 = cats.value?.data || [], ticks2 = ticks.value?.data || [];
+        setPg('<div class="g2">' +
+          '<div class="card"><div class="ch"><div class="ct">Categories (' + cats2.length + ')</div></div>' +
+          (cats2.length ? '<div class="tw"><table><tr><th>Category</th><th>Team</th><th>SLA</th></tr>' + cats2.map(c => '<tr><td><strong>' + c.name + '</strong></td><td><span class="bx b">' + c.assigned_team + '</span></td><td>' + c.sla_hours + 'h</td></tr>').join('') + '</table></div>' :
+            '<div class="empty" style="padding:20px"><p>No categories configured</p></div>') +
+          '</div>' +
+          '<div class="card"><div class="ch"><div class="ct">Tickets (' + ticks2.length + ')</div></div>' +
+          (ticks2.length ? '<div class="tw"><table><tr><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th></tr>' + ticks2.map(t => '<tr><td>' + t.subject + '</td><td>' + (t.category?.name || '-') + '</td><td><span class="bx ' + (t.priority === 'high' || t.priority === 'urgent' ? 'r' : t.priority === 'medium' ? 'y' : 'gr') + '">' + t.priority + '</span></td><td><span class="bx ' + (t.status === 'closed' ? 'gr' : t.status === 'resolved' ? 'g' : 'y') + '">' + t.status + '</span></td></tr>').join('') + '</table></div>' :
+            '<div class="empty" style="padding:20px"><p>No tickets yet</p></div>') +
+          '</div></div>');
+      } catch (e) { setPg('<div class="empty"><span class="ico">🎫</span><p>' + e.message + '</p></div>'); }
+    }
+    window["helpdesk"] = helpdeskNew;
+
+    // ════════ UPDATE REVISIONS PAGE ════════
+    async function revisionsNew() {
+      setActs('<button class="btn acc" onclick="openRevModal()">+ Raise Revision</button>');
+      loader();
+      try {
+        const d = await api('/salary-revisions?entity_id=' + ENTITY); const list = d.data || [];
+        if (!list.length) { setPg('<div class="empty"><span class="ico">📈</span><p>No salary revisions yet.</p><button class="btn acc" onclick="openRevModal()">+ Raise First Revision</button></div>'); return; }
+        setPg('<div class="card"><div class="ch"><div class="ct">Salary Revisions</div></div>' +
+          '<div class="tw"><table><tr><th>Employee</th><th>Effective Date</th><th>Old Monthly</th><th>New Monthly</th><th>Change</th><th>%</th><th>Status</th><th>Actions</th></tr>' +
+          list.map(r => {
+            const oldM = Math.round(Number(r.old_ctc || 0) / 12); const newM = Math.round(Number(r.new_ctc || 0) / 12);
+            const diff = newM - oldM; const isPend = r.status === 'pending_approval';
+            return '<tr>' +
+              '<td><strong>' + (r.employee?.first_name || '') + ' ' + (r.employee?.last_name || '') + '</strong></td>' +
+              '<td>' + fmtD(r.effective_date) + '</td>' +
+              '<td>₹' + fmt(oldM) + '/mo</td><td>₹' + fmt(newM) + '/mo</td>' +
+              '<td style="color:' + (diff >= 0 ? 'var(--grn)' : 'var(--red)') + '">' + (diff >= 0 ? '+' : '') + '₹' + fmt(Math.abs(diff)) + '</td>' +
+              '<td style="color:' + (diff >= 0 ? 'var(--grn)' : 'var(--red)') + '">' + (r.increment_percentage || 0) + '%</td>' +
+              '<td><span class="bx ' + (r.status === 'implemented' ? 'g' : r.status === 'rejected' ? 'r' : 'y') + '">' + r.status + '</span></td>' +
+              '<td style="display:flex;gap:4px">' +
+              (isPend ? '<button class="btn xs grn" onclick="appRev(' + r.id + ',&quot;approve&quot;)">Approve</button> <button class="btn xs red" onclick="appRev(' + r.id + ',&quot;reject&quot;)">Reject</button>' : '—') +
+              '</td></tr>';
+          }).join('') + '</table></div></div>');
+      } catch (e) { setPg('<div class="empty"><span class="ico">⚠️</span><p>' + e.message + '</p></div>'); }
+    }
+    window["revisions"] = revisionsNew;
+
+    async function appRev(id, action) {
+      if (action === 'reject') {
+        const reason = prompt('Rejection reason (required):'); if (!reason) return;
+        try { await api('/salary-revisions/' + id + '/reject', { method: 'POST', body: JSON.stringify({ reason }) }); toast('Revision rejected!'); revisions(); }
+        catch (e) { toast(e.message, 'er'); }
+      } else {
+        try { await api('/salary-revisions/' + id + '/approve', { method: 'POST', body: JSON.stringify({ remarks: 'Approved' }) }); toast('Revision approved!'); revisions(); }
+        catch (e) { toast(e.message || 'Failed', 'er'); }
+      }
+    }
+
+    // ════════ ADD ATT UPLOAD TAB ELEMENTS ════════
+    // Add tab UI for attendance upload modal if not present
+    (function () {
+      const m = document.getElementById('m-upatt');
+      if (!m) return;
+      // Check if tab bar exists
+      if (!document.getElementById('att-tabs')) {
+        const oldContent = m.querySelector('.mo')?.innerHTML || '';
+        // Already has tab structure from new modal
+      }
+    })();
+
+    // ════════ BACKEND FIX NOTE ════════
+    // The employee view "education relationship" error is a BACKEND issue.
+    // Fix it by running this PowerShell command on your machine:
+    // cd "D:\Client Master\Automation\Payroll\hrms-payroll-platform\hrms-payroll"
+    // $f="app\Http\Controllers\HR\EmployeeController.php"
+    // $c=(Get-Content $f -Raw) -replace "'education', 'experience',",""
+    // [IO.File]::WriteAllText("$PWD\$f",$c,[Text.UTF8Encoding]::new($false))
+    // php artisan optimize:clear
+
+  </script>
+
+  <!-- ══ DEDICATED LOAN MODAL ══ -->
+  <div class="ov" id="m-loan">
+    <div class="mo">
+      <div class="mh">
+        <div class="mt">Apply Loan</div><button class="mc" onclick="cm('m-loan')">✕</button>
+      </div>
+      <div class="ibox">Loan is created with status <strong>Pending</strong> and must be approved separately.</div>
+      <div class="fg2">
+        <div class="fld full"><label>Employee *</label><select id="ln-emp">
+            <option value="">Select employee</option>
+          </select></div>
+        <div class="fld full"><label>Loan Type *</label><select id="ln-type">
+            <option value="">Select type</option>
+          </select></div>
+        <div class="fld"><label>Loan Amount (₹) *</label><input id="ln-amt" type="number" placeholder="e.g. 10000">
+        </div>
+        <div class="fld"><label>No. of EMIs *</label><input id="ln-emi" type="number" placeholder="e.g. 3"></div>
+        <div class="fld full"><label>First EMI Month (YYYY-MM) *</label><input id="ln-month" type="month"></div>
+        <div class="fld full"><label>Purpose</label><input id="ln-purpose" value="Personal"
+            placeholder="e.g. Medical, Personal"></div>
+      </div>
+      <div class="mf"><button class="btn" onclick="cm('m-loan')">Cancel</button><button class="btn acc"
+          onclick="saveLoan()">Apply Loan</button></div>
+    </div>
+  </div>
+
+  <!-- ══ DEDICATED REIMBURSEMENT MODAL ══ -->
+  <div class="ov" id="m-reimb">
+    <div class="mo">
+      <div class="mh">
+        <div class="mt">Submit Reimbursement Claim</div><button class="mc" onclick="cm('m-reimb')">✕</button>
+      </div>
+      <div class="ibox">Claim is submitted for the logged-in user's employee profile.</div>
+      <div class="fg2">
+        <div class="fld"><label>Year *</label><input id="rb-yr" type="number"></div>
+        <div class="fld"><label>Month *</label><select id="rb-mo"></select></div>
+        <div class="fld full"><label>Expense Type *</label><select id="rb-type">
+            <option value="">Select type</option>
+          </select></div>
+        <div class="fld"><label>Expense Date *</label><input id="rb-date" type="date"></div>
+        <div class="fld"><label>Amount (₹) *</label><input id="rb-amt" type="number" placeholder="e.g. 500"></div>
+        <div class="fld full"><label>Description *</label><input id="rb-desc" placeholder="e.g. Travel to client site">
+        </div>
+      </div>
+      <div class="mf"><button class="btn" onclick="cm('m-reimb')">Cancel</button><button class="btn acc"
+          onclick="saveReimb()">Submit Claim</button></div>
+    </div>
+  </div>
+
+  <!-- ══ DEDICATED HELPDESK TICKET MODAL ══ -->
+  <div class="ov" id="m-ticket">
+    <div class="mo">
+      <div class="mh">
+        <div class="mt">Raise Helpdesk Ticket</div><button class="mc" onclick="cm('m-ticket')">✕</button>
+      </div>
+      <div class="ibox">Ticket is raised from your logged-in user account.</div>
+      <div class="fg2">
+        <div class="fld"><label>Category *</label><select id="tk-cat">
+            <option value="">Select category</option>
+          </select></div>
+        <div class="fld"><label>Priority</label><select id="tk-pri">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select></div>
+        <div class="fld full"><label>Subject *</label><input id="tk-sub" placeholder="Brief description of your issue">
+        </div>
+        <div class="fld full"><label>Description * (required)</label>
+          <textarea id="tk-desc" rows="4"
+            style="background:#f9fafb;border:1.5px solid var(--b1);border-radius:8px;padding:9px 12px;color:var(--txt);font-family:inherit;font-size:13px;outline:none;width:100%;resize:vertical"
+            placeholder="Describe your issue in detail..."></textarea>
+        </div>
+      </div>
+      <div class="mf"><button class="btn" onclick="cm('m-ticket')">Cancel</button><button class="btn acc"
+          onclick="saveTicket()">Raise Ticket</button></div>
+    </div>
+  </div>
+
+  <!-- ══ DEDICATED SALARY REVISION MODAL ══ -->
+  <div class="ov" id="m-rev">
+    <div class="mo">
+      <div class="mh">
+        <div class="mt">Raise Salary Revision</div><button class="mc" onclick="cm('m-rev')">✕</button>
+      </div>
+      <div class="fg2">
+        <div class="fld full"><label>Employee *</label><select id="rv-emp2">
+            <option value="">Select employee</option>
+          </select></div>
+        <div class="fld"><label>New Gross Monthly (₹) *</label><input type="number" id="rv-gross2"
+            placeholder="e.g. 30000" oninput="showRevSplit(this.value)"></div>
+        <div class="fld"><label>Effective Date *</label><input type="date" id="rv-date2"></div>
+        <div class="fld full"><label>Reason *</label><input id="rv-reason2"
+            placeholder="e.g. Annual increment, Promotion"></div>
+      </div>
+      <div id="rev-split2"
+        style="display:none;margin-top:12px;background:var(--acc2);border:1.5px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af">
+      </div>
+      <div class="mf"><button class="btn" onclick="cm('m-rev')">Cancel</button><button class="btn acc"
+          onclick="saveRevision2()">Submit Revision</button></div>
+    </div>
+  </div>
+</body>
+
+</html>

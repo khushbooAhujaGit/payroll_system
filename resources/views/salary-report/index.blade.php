@@ -1,0 +1,409 @@
+@extends('layouts.app')
+@section('title', 'Salary Report')
+
+@section('page_actions')
+  <a href="{{ route('payroll') }}" class="btn">← Payroll</a>
+  @if($month && count($rows))
+  <form method="POST" action="{{ route('salary.report.download') }}" style="display:inline">
+    @csrf
+    <input type="hidden" name="month" value="{{ $month }}">
+    <input type="hidden" name="entity_id" value="{{ $entityId }}">
+    <button type="submit" class="btn acc">📥 Download Excel</button>
+  </form>
+  @endif
+@endsection
+
+@section('content')
+
+{{-- Month picker form --}}
+<div class="card" style="margin-bottom:16px">
+  <div class="ch"><div class="ct">Generate Salary Report</div></div>
+  <form method="GET" action="{{ route('salary.report') }}"
+    style="display:flex;gap:10px;align-items:flex-end;padding:4px 0 8px;flex-wrap:wrap">
+    <div class="fld" style="min-width:180px">
+      <label>Month *</label>
+      <input type="month" name="month" value="{{ $month ?? now()->format('Y-m') }}" required>
+    </div>
+    <div class="fld" style="min-width:200px">
+      <label>Firm</label>
+      <select name="entity_id">
+        <option value="0" {{ $entityId == 0 ? 'selected' : '' }}>All Firms</option>
+        @foreach($entities as $ent)
+          <option value="{{ $ent->id }}" {{ $ent->id == $entityId ? 'selected' : '' }}>
+            {{ $ent->short_name ?? $ent->name }}
+          </option>
+        @endforeach
+      </select>
+    </div>
+    <button type="submit" class="btn acc">Preview →</button>
+  </form>
+</div>
+
+@if($month && count($rows))
+
+{{-- Summary Cards --}}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px">
+  @php
+    $cards = [
+      ['Headcount',       $summary['headcount'],           null,         '👥'],
+      ['Gross Payable',   '₹'.number_format($summary['payable_gross'],0),      'var(--acc)', '💰'],
+      ['Total Incentive', '₹'.number_format($summary['incentive'],0),          'var(--grn)', '🎁'],
+      ['Reimbursement',  '₹'.number_format($summary['reimbursement'],0),       'var(--grn)', '🧾'],
+      ['Employee PF',     '₹'.number_format($summary['employee_pf'],0),         null,        '🏦'],
+      ['Prof. Tax',       '₹'.number_format($summary['professional_tax'],0),    null,        '📋'],
+      ['Advance/EMI',     '₹'.number_format($summary['advance_salary'],0),      null,        '💳'],
+      ['TDS',             '₹'.number_format($summary['tds'],0),                 null,        '📑'],
+      ['Total Deduction', '₹'.number_format($summary['total_deduction'],0),    'var(--red)', '➖'],
+      ['Net Pay',         '₹'.number_format($summary['net_pay'],0),            'var(--grn)', '✅'],
+      ['CTC (Total)',     '₹'.number_format($summary['ctc'],0),                 null,        '📊'],
+    ];
+  @endphp
+  @foreach($cards as [$label,$val,$color,$ico])
+  <div class="sc">
+    <div class="lbl">{{ $ico }} {{ $label }}</div>
+    <div class="val" style="font-size:13px;{{ $color ? 'color:'.$color : '' }}">{{ $val }}</div>
+  </div>
+  @endforeach
+</div>
+
+{{-- Status Banner --}}
+@php $lockLabel = \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y'); @endphp
+@if($isLocked)
+{{-- Snapshot exists — user is viewing live data (new instance); can re-lock to replace snapshot --}}
+<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <span style="font-size:18px">🔄</span>
+  <div style="flex:1;min-width:220px">
+    <div style="font-weight:600;color:#9a3412;font-size:13px">
+      Live View — Saved snapshot exists ({{ $snapshotCount }} employees · {{ \Carbon\Carbon::parse($lockedAt)->format('d M Y, h:i A') }})
+    </div>
+    <div style="font-size:11px;color:#c2410c;margin-top:2px">
+      You are viewing <strong>live / updated data</strong>. The saved snapshot for {{ $lockLabel }} is separate.
+      Re-lock to replace it with the current data shown here.
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <form method="POST" action="{{ route('salary.report.lock') }}" style="display:inline">
+      @csrf
+      <input type="hidden" name="month" value="{{ $month }}">
+      <input type="hidden" name="entity_id" value="{{ $entityId }}">
+      <button type="button" class="btn sm" style="background:#fed7aa;color:#9a3412;font-weight:600"
+        onclick="swConfirm(this.closest('form'),
+          'Re-lock {{ $lockLabel }}?',
+          'This replaces the previous saved snapshot with the current live data for {{ count($rows) }} employees.',
+          'question', 'Yes, re-lock', '#d97706')">
+        🔒 Save / Re-lock
+      </button>
+    </form>
+    <form method="POST" action="{{ route('salary.report.delete') }}" style="display:inline">
+      @csrf
+      <input type="hidden" name="month" value="{{ $month }}">
+      <button type="button" class="btn sm" style="background:#fee2e2;color:#dc2626"
+        onclick="swConfirm(this.closest('form'),
+          'Delete Snapshot?',
+          'This permanently removes the saved {{ $lockLabel }} report. The data cannot be recovered.',
+          'warning', 'Yes, delete it', '#dc2626')">
+        🗑 Delete Snapshot
+      </button>
+    </form>
+  </div>
+</div>
+@else
+{{-- No snapshot — plain live data --}}
+<div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <span style="font-size:16px">⚠️</span>
+  <div style="flex:1;min-width:200px;font-size:12px;color:#854d0e">
+    <strong>Live data</strong> — this report recalculates every time. Save / Lock it to create a frozen snapshot that won't change when salaries, loans, or leave records are updated.
+  </div>
+  <form method="POST" action="{{ route('salary.report.lock') }}" style="display:inline">
+    @csrf
+    <input type="hidden" name="month" value="{{ $month }}">
+    <input type="hidden" name="entity_id" value="{{ $entityId }}">
+    <button type="button" class="btn sm acc"
+      onclick="swConfirm(this.closest('form'),
+        'Save report for {{ $lockLabel }}?',
+        'This freezes {{ count($rows) }} employee rows into a snapshot. Future changes to salaries or leave data will not affect it.',
+        'question', 'Yes, save & lock', '#166534')">
+      🔒 Save / Lock Report
+    </button>
+  </form>
+</div>
+@endif
+
+{{-- Preview Table --}}
+<div class="card" style="overflow-x:auto">
+  <div class="ch">
+    <div class="ct">Salary Sheet — {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y') }} · {{ $entityId == 0 ? 'All Firms' : ($entities->firstWhere('id', $entityId)?->short_name ?? $entities->firstWhere('id', $entityId)?->name ?? '') }}
+      @if($isLocked)<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:2px 6px;font-size:10px;margin-left:8px">🔄 LIVE (snapshot saved)</span>@endif
+    </div>
+    <div style="font-size:11px;color:var(--t3)">{{ count($rows) }} employees · Scroll right for full details</div>
+  </div>
+  <table style="font-size:11px;min-width:2800px">
+    <thead>
+      <tr>
+        <th>Emp ID</th>
+        <th>Employee</th>
+        <th>Designation</th>
+        <th style="text-align:right">Gross</th>
+        <th>Month</th>
+        <th style="text-align:center">Mo Days</th>
+        <th style="text-align:center">W/Off+H</th>
+        <th style="text-align:center">Work Days</th>
+        <th style="text-align:center">LOP</th>
+        <th style="text-align:center">Net Paid</th>
+        <th style="text-align:right">Payable Gross</th>
+        <th style="text-align:right">Basic</th>
+        <th style="text-align:right">HRA</th>
+        <th style="text-align:right">Spl Allow</th>
+        <th style="text-align:right">Incentive</th>
+        <th style="text-align:right">Reimbursement</th>
+        <th style="text-align:right">Emp PF</th>
+        <th style="text-align:right">PT</th>
+        <th style="text-align:right">Advance</th>
+        <th style="text-align:right">TDS</th>
+        <th style="text-align:right;background:var(--red2);color:var(--red)">Total Ded.</th>
+        <th style="text-align:right;background:var(--grn2);color:var(--grn);font-weight:700">Net Pay</th>
+        <th style="text-align:right">Empl PF</th>
+        <th style="text-align:right">CTC</th>
+        <th style="text-align:right">Diwali Bonus</th>
+        <th style="text-align:right">CTC+Bonus</th>
+        <th>Firm</th>
+        <th style="text-align:center">PF App.</th>
+        <th>UAN No.</th>
+        <th style="text-align:center">CL Bal.</th>
+        <th style="text-align:center">SL Bal.</th>
+        <th style="text-align:center">CP Used</th>
+        <th style="text-align:center">LOP (Lv)</th>
+        <th style="text-align:center">LOP (Att)</th>
+        <th>Account No.</th>
+        <th>IFSC</th>
+        <th>PAN</th>
+        <th>Email</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @foreach($rows as $r)
+      <tr>
+        <td class="mono">{{ $r['emp_id'] }}</td>
+        <td>{{ $r['name'] }}</td>
+        <td style="color:var(--t2)">{{ $r['designation'] }}</td>
+        <td style="text-align:right">{{ number_format($r['gross_salary'],0) }}</td>
+        <td>{{ $r['month'] }}</td>
+        <td style="text-align:center">{{ $r['month_days'] }}</td>
+        <td style="text-align:center">{{ $r['weekoff_holidays'] }}</td>
+        <td style="text-align:center">{{ $r['working_days'] }}</td>
+        <td style="text-align:center;color:{{ $r['total_lop'] > 0 ? 'var(--red)' : 'var(--t3)' }};font-weight:{{ $r['total_lop'] > 0 ? '600' : '400' }}">
+          {{ $r['total_lop'] ?: '—' }}
+        </td>
+        <td style="text-align:center">{{ $r['net_paid_days'] }}</td>
+        <td style="text-align:right">{{ number_format($r['payable_gross'],0) }}</td>
+        <td style="text-align:right">{{ number_format($r['basic_pay'],0) }}</td>
+        <td style="text-align:right">{{ number_format($r['hra'],0) }}</td>
+        <td style="text-align:right">{{ number_format($r['special_allowance'],0) }}</td>
+        <td style="text-align:right;color:{{ $r['incentive'] > 0 ? 'var(--grn)' : 'var(--t3)' }}">
+          {{ $r['incentive'] > 0 ? number_format($r['incentive'],0) : '—' }}
+        </td>
+        <td style="text-align:right;color:{{ ($r['reimbursement'] ?? 0) > 0 ? 'var(--grn)' : 'var(--t3)' }}">
+          {{ ($r['reimbursement'] ?? 0) > 0 ? number_format($r['reimbursement'],0) : '—' }}
+        </td>
+        <td style="text-align:right">{{ $r['employee_pf'] > 0 ? number_format($r['employee_pf'],0) : '—' }}</td>
+        <td style="text-align:right">{{ $r['professional_tax'] > 0 ? number_format($r['professional_tax'],0) : '—' }}</td>
+        <td style="text-align:right;color:{{ $r['advance_salary'] > 0 ? 'var(--yel)' : 'var(--t3)' }}">
+          {{ $r['advance_salary'] > 0 ? number_format($r['advance_salary'],0) : '—' }}
+        </td>
+        <td style="text-align:right;color:{{ $r['tds'] > 0 ? 'var(--acc)' : 'var(--t3)' }}">
+          {{ $r['tds'] > 0 ? number_format($r['tds'],0) : '—' }}
+        </td>
+        <td style="text-align:right;background:var(--red2);color:var(--red);font-weight:600">
+          {{ number_format($r['total_deduction'],0) }}
+        </td>
+        <td style="text-align:right;background:var(--grn2);color:var(--grn);font-weight:700">
+          {{ number_format($r['net_pay'],0) }}
+        </td>
+        <td style="text-align:right;color:var(--t2)">{{ $r['employer_pf'] > 0 ? number_format($r['employer_pf'],0) : '—' }}</td>
+        <td style="text-align:right">{{ number_format($r['ctc'],0) }}</td>
+        <td style="text-align:right;color:{{ $r['bonus_diwali'] > 0 ? 'var(--yel)' : 'var(--t3)' }}">
+          {{ $r['bonus_diwali'] > 0 ? number_format($r['bonus_diwali'],0) : '—' }}
+        </td>
+        <td style="text-align:right">{{ number_format($r['ctc_with_diwali'],0) }}</td>
+        <td style="font-size:10px;color:var(--t2)">{{ Str::limit($r['firm'],16) }}</td>
+        <td style="text-align:center">
+          <span class="bx" style="font-size:9px;color:{{ $r['pf_applicability']==='Yes'?'var(--grn)':'var(--t3)' }}">
+            {{ $r['pf_applicability'] }}
+          </span>
+        </td>
+        <td class="mono" style="font-size:10px;color:var(--t2)">{{ $r['uan_number'] ?: '—' }}</td>
+        <td style="text-align:center;color:{{ ($r['closing_cl'] ?? 0) > 0 ? 'var(--grn)' : 'var(--t3)' }}">
+          {{ number_format($r['closing_cl'] ?? 0, 1) }}
+        </td>
+        <td style="text-align:center;color:{{ ($r['closing_sl'] ?? 0) > 0 ? 'var(--grn)' : 'var(--t3)' }}">
+          {{ number_format($r['closing_sl'] ?? 0, 1) }}
+        </td>
+        <td style="text-align:center;color:var(--t2)">{{ number_format($r['current_cp'] ?? 0, 1) }}</td>
+        <td style="text-align:center;color:{{ ($r['current_lop'] ?? 0) > 0 ? 'var(--red)' : 'var(--t3)' }}">
+          {{ ($r['current_lop'] ?? 0) ?: '—' }}
+        </td>
+        <td style="text-align:center;color:{{ ($r['att_lop'] ?? 0) > 0 ? 'var(--red)' : 'var(--t3)' }}">
+          {{ ($r['att_lop'] ?? 0) ?: '—' }}
+        </td>
+        <td class="mono" style="font-size:10px;color:var(--t2)">{{ $r['account_number'] ?: '—' }}</td>
+        <td class="mono" style="font-size:10px;color:var(--t2)">{{ $r['ifsc_code'] ?: '—' }}</td>
+        <td class="mono" style="font-size:10px;color:var(--t2)">{{ $r['pan_number'] ?: '—' }}</td>
+        <td style="font-size:10px;color:var(--t2)">{{ $r['rsc_mail_id'] ?: '—' }}</td>
+        <td style="text-align:center;white-space:nowrap">
+          <button class="btn sm" style="font-size:10px;{{ $r['has_override'] ? 'background:var(--acc2);color:var(--acc);' : '' }}"
+            onclick="openSalaryOverride(
+              {{ $r['employee_db_id'] }},
+              '{{ addslashes($r['name']) }}',
+              '{{ $month }}',
+              {{ $r['gross_salary'] }},
+              {{ $r['total_lop'] }}, {{ $r['incentive'] }}, {{ $r['tds'] }},
+              {{ $r['computed_lop'] }}, {{ $r['computed_incentive'] }}, {{ $r['computed_tds'] }},
+              {{ $r['has_override'] ? 'true' : 'false' }}
+            )">
+            {{ $r['has_override'] ? '✏ Overridden' : 'Edit' }}
+          </button>
+        </td>
+      </tr>
+      @endforeach
+    </tbody>
+    {{-- Total row --}}
+    <tfoot>
+      <tr style="background:var(--s2);font-weight:700;font-size:11px">
+        <td colspan="3" style="text-align:right;color:var(--t2)">TOTAL ({{ count($rows) }} employees)</td>
+        <td style="text-align:right">{{ number_format($summary['gross_salary'],0) }}</td>
+        <td colspan="6"></td>
+        <td style="text-align:right">{{ number_format($summary['payable_gross'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['basic_pay'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['hra'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['special_allowance'],0) }}</td>
+        <td style="text-align:right;color:var(--grn)">{{ number_format($summary['incentive'],0) }}</td>
+        <td style="text-align:right;color:var(--grn)">{{ number_format($summary['reimbursement'] ?? 0, 0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['employee_pf'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['professional_tax'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['advance_salary'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['tds'],0) }}</td>
+        <td style="text-align:right;color:var(--red)">{{ number_format($summary['total_deduction'],0) }}</td>
+        <td style="text-align:right;color:var(--grn)">{{ number_format($summary['net_pay'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['employer_pf'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['ctc'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['bonus_diwali'],0) }}</td>
+        <td style="text-align:right">{{ number_format($summary['ctc_with_diwali'],0) }}</td>
+        <td colspan="13"></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+@elseif($month)
+<div class="card">
+  <div class="empty">
+    <div class="ico">🧾</div>
+    <p>No employees with salary data found for {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y') }}.</p>
+    <p style="font-size:12px;color:var(--t3)">Make sure employees have a salary set in Salary Details.</p>
+  </div>
+</div>
+@else
+<div class="card">
+  <div class="empty">
+    <div class="ico">📊</div>
+    <p>Select a month above to generate the salary report.</p>
+  </div>
+</div>
+@endif
+
+{{-- ── Salary Override Modal ──────────────────────────────────────────── --}}
+<div class="modal" id="salary-override-modal">
+  <div class="mb" style="max-width:520px">
+    <div class="mh">
+      <span class="mt">Edit Salary Row — <span id="sor-emp-name"></span></span>
+      <button class="mc" onclick="cm('salary-override-modal')">✕</button>
+    </div>
+
+    <div style="background:#fef3c7;border:1px solid #d97706;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400e;line-height:1.5">
+      <strong>Gross Salary</strong> creates a permanent salary revision — all derived columns (Basic, HRA, PF, Net Pay) recalculate automatically.
+      <strong>LOP / Incentive / TDS</strong> are monthly overrides for this report only. Leave any field blank to keep the computed value.
+    </div>
+
+    <form method="POST" action="{{ route('salary.report.override') }}">
+      @csrf
+      <input type="hidden" name="employee_id" id="sor-emp-id">
+      <input type="hidden" name="year_month"  id="sor-month">
+      <input type="hidden" name="orig_lop"       id="sor-orig-lop">
+      <input type="hidden" name="orig_incentive" id="sor-orig-incentive">
+      <input type="hidden" name="orig_tds"       id="sor-orig-tds">
+
+      <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:14px">
+        <thead>
+          <tr style="background:var(--s2)">
+            <th style="padding:6px 10px;text-align:left">Field</th>
+            <th style="padding:6px 10px;text-align:right;color:var(--t3)">Current Value</th>
+            <th style="padding:6px 10px;text-align:right">New Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:6px 10px;font-weight:600">Gross Salary (₹)</td>
+            <td style="text-align:right;color:var(--t3);font-weight:600" id="sor-show-gross">—</td>
+            <td style="padding:4px 10px"><input type="number" name="gross_salary" id="sor-gross" min="0" step="1"
+              style="width:110px;text-align:right" placeholder="unchanged"></td>
+          </tr>
+          <tr><td style="padding:6px 10px;padding-left:20px;color:var(--t3);font-size:11px" colspan="3">↳ Permanent revision — affects this and all future months. Loan / Advance managed from the Loans tab.</td></tr>
+          <tr><td style="padding:6px 10px">LOP Days</td>
+            <td style="text-align:right;color:var(--t3)" id="sor-show-lop">—</td>
+            <td style="padding:4px 10px"><input type="number" name="lop" id="sor-lop" min="0" max="31" step="1"
+              style="width:90px;text-align:right" placeholder="auto"></td></tr>
+          <tr><td style="padding:6px 10px">Incentive (₹)</td>
+            <td style="text-align:right;color:var(--t3)" id="sor-show-inc">—</td>
+            <td style="padding:4px 10px"><input type="number" name="incentive" id="sor-inc" min="0" step="0.01"
+              style="width:90px;text-align:right" placeholder="auto"></td></tr>
+          <tr><td style="padding:6px 10px">TDS (₹)</td>
+            <td style="text-align:right;color:var(--t3)" id="sor-show-tds">—</td>
+            <td style="padding:4px 10px"><input type="number" name="tds" id="sor-tds" min="0" step="0.01"
+              style="width:90px;text-align:right" placeholder="auto"></td></tr>
+        </tbody>
+      </table>
+
+      <div class="fld" style="margin-bottom:12px">
+        <label>Reason / Notes</label>
+        <input type="text" name="notes" id="sor-notes" placeholder="e.g. Manual LOP correction" maxlength="500">
+      </div>
+
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('salary-override-modal')">Cancel</button>
+        <button type="submit" class="btn acc">Save Override</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openSalaryOverride(empId, empName, month,
+                            grossSalary,
+                            curLop, curInc, curTds,
+                            origLop, origInc, origTds,
+                            hasOverride) {
+  document.getElementById('sor-emp-id').value  = empId;
+  document.getElementById('sor-month').value   = month;
+  document.getElementById('sor-emp-name').textContent = empName;
+
+  document.getElementById('sor-orig-lop').value       = origLop;
+  document.getElementById('sor-orig-incentive').value = origInc;
+  document.getElementById('sor-orig-tds').value       = origTds;
+
+  document.getElementById('sor-show-gross').textContent = '₹' + Number(grossSalary).toLocaleString('en-IN');
+  document.getElementById('sor-show-lop').textContent   = origLop;
+  document.getElementById('sor-show-inc').textContent   = '₹' + Number(origInc).toLocaleString('en-IN');
+  document.getElementById('sor-show-tds').textContent   = '₹' + Number(origTds).toLocaleString('en-IN');
+
+  document.getElementById('sor-gross').value = '';
+  document.getElementById('sor-lop').value = hasOverride && curLop !== origLop ? curLop : '';
+  document.getElementById('sor-inc').value = hasOverride && curInc !== origInc ? curInc : '';
+  document.getElementById('sor-tds').value = hasOverride && curTds !== origTds ? curTds : '';
+  document.getElementById('sor-notes').value = '';
+
+  om('salary-override-modal');
+}
+</script>
+
+@endsection
