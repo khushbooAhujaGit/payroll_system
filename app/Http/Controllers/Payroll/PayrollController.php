@@ -16,7 +16,7 @@ class PayrollController extends Controller
 {
     public function periods(Request $request): JsonResponse
     {
-        $periods = PayrollPeriod::where('entity_id', $request->entity_id)
+        $periods = PayrollPeriod::where('company_id', $request->company_id)
             ->withCount('runs')
             ->orderByDesc('year')->orderByDesc('month')
             ->paginate(24);
@@ -27,7 +27,7 @@ class PayrollController extends Controller
     {
         $this->authorize('payroll.run');
         $validated = $request->validate([
-            'entity_id'   => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'year'        => 'required|integer|min:2000|max:2100',
             'month'       => 'required|integer|min:1|max:12',
             'period_from' => 'required|date',
@@ -35,7 +35,7 @@ class PayrollController extends Controller
             'attendance_lock_date' => 'required|date',
             'payment_date'=> 'nullable|date',
         ]);
-        $exists = PayrollPeriod::where('entity_id', $validated['entity_id'])
+        $exists = PayrollPeriod::where('company_id', $validated['company_id'])
             ->where('year', $validated['year'])->where('month', $validated['month'])->exists();
         if ($exists) return response()->json(['message' => 'Period already exists.'], 422);
         $period = PayrollPeriod::create(array_merge($validated, ['status' => 'open']));
@@ -54,7 +54,7 @@ class PayrollController extends Controller
         if ($period->is_locked) return response()->json(['message' => 'Period is locked.'], 422);
         $run = PayrollRun::create([
             'payroll_period_id' => $period->id,
-            'entity_id'         => $period->entity_id,
+            'company_id' => $period->company_id,
             'run_type'          => $validated['run_type'],
             'run_name'          => $validated['run_name'] ?? ucfirst($validated['run_type']),
             'status'            => 'draft',
@@ -81,7 +81,7 @@ class PayrollController extends Controller
     public function salarySheet(Request $request, PayrollRun $run): JsonResponse
     {
         $records = PayrollEmployeeRecord::where('payroll_run_id', $run->id)
-            ->with(['employee:id,employee_id,first_name,last_name,department_id', 'employee.department:id,name'])
+            ->with(['employee:id,employee_id,first_name,middle_name,last_name,department_id', 'employee.department:id,name'])
             ->when($request->employee_id, fn($q) => $q->where('employee_id', $request->employee_id))
             ->paginate(50);
         return response()->json($records);

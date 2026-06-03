@@ -22,7 +22,7 @@ class LoanController extends Controller
 
     public function loanTypes(Request $request): JsonResponse
     {
-        $types = LoanType::where('entity_id', $request->entity_id)
+        $types = LoanType::where('company_id', $request->company_id)
             ->where('is_active', true)
             ->get();
 
@@ -32,7 +32,7 @@ class LoanController extends Controller
     public function storeLoanType(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'entity_id'    => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'         => 'required|string|max:100',
             'code'         => 'required|string|max:20',
             'max_amount'   => 'nullable|numeric|min:0',
@@ -50,8 +50,8 @@ class LoanController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $loans = EmployeeLoan::with(['employee:id,employee_id,first_name,last_name', 'loanType'])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        $loans = EmployeeLoan::with(['employee:id,employee_id,first_name,middle_name,last_name', 'loanType'])
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->employee_id, fn($q) => $q->where('employee_id', $request->employee_id))
             ->orderByDesc('created_at')
@@ -63,7 +63,7 @@ class LoanController extends Controller
     public function show(EmployeeLoan $loan): JsonResponse
     {
         $loan->load([
-            'employee:id,employee_id,first_name,last_name,mobile',
+            'employee:id,employee_id,first_name,middle_name,last_name,mobile',
             'loanType',
             'installments' => fn($q) => $q->orderBy('installment_number'),
         ]);
@@ -239,14 +239,14 @@ class LoanController extends Controller
     {
         $request->validate([
             'file'      => 'required|file|mimes:xlsx,xls|max:10240',
-            'entity_id' => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
         ]);
 
         $result = $this->excelImportService->import(
             $request->file('file'),
             'loan',
             LoanImporter::class,
-            ['entity_id' => $request->entity_id]
+            ['company_id' => $request->company_id]
         );
 
         return response()->json($result);

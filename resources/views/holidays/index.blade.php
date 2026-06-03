@@ -8,17 +8,20 @@
 
 @section('content')
 
-  {{-- Calendar selector --}}
+  {{-- ── Filter bar ──────────────────────────────────────────────────────── --}}
   <form method="GET" action="{{ route('holidays') }}" class="card"
-    style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end">
-    <div class="fld" style="min-width:200px">
-      <label>Calendar</label>
-      <select name="calendar_id" onchange="this.form.submit()">
-        @foreach($calendars as $cal)
-          <option value="{{ $cal->id }}" {{ $calendarId == $cal->id ? 'selected' : '' }}>{{ $cal->name }}</option>
+    style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+
+    <div class="fld" style="min-width:180px">
+      <label>Company</label>
+      <select name="company_id" onchange="this.form.submit()">
+        <option value="">All Companies</option>
+        @foreach($companies as $co)
+          <option value="{{ $co->id }}" {{ $companyFilter == $co->id ? 'selected' : '' }}>{{ $co->name }}</option>
         @endforeach
       </select>
     </div>
+
     <div class="fld" style="min-width:100px">
       <label>Year</label>
       <select name="year" onchange="this.form.submit()">
@@ -27,56 +30,99 @@
         @endfor
       </select>
     </div>
-    <input type="hidden" name="calendar_id" value="{{ $calendarId }}">
+
+    <button type="submit" class="btn acc">Filter</button>
+    <a href="{{ route('holidays', ['year' => $year]) }}" class="btn">Reset</a>
   </form>
 
+  {{-- ── Date-wise Holiday Table ─────────────────────────────────────────── --}}
   <div class="card">
     <div class="ch">
       <div class="ct">Holidays — {{ $year }}</div>
-      <span style="font-size:12px;color:var(--t3)">{{ $holidays->count() }} holidays</span>
+      <span style="font-size:12px;color:var(--t3)">{{ $allHolidays->count() }} total · {{ $byDate->count() }} unique dates</span>
     </div>
-    @if($holidays->isNotEmpty())
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Day</th>
-            <th>Name</th>
-            <th>Type</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach($holidays as $h)
+
+    @if($byDate->isNotEmpty())
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
             <tr>
-              <td>{{ \Carbon\Carbon::parse($h->date)->format('d M Y') }}</td>
-              <td style="color:var(--t3)">{{ \Carbon\Carbon::parse($h->date)->format('l') }}</td>
-              <td>{{ $h->name }}</td>
-              <td>
-                @php $types = ['national' => 'var(--acc)', 'regional' => 'var(--grn)', 'optional' => 'var(--yel)']; @endphp
-                <span class="bx" style="color:{{ $types[$h->type] ?? 'var(--t3)' }}">{{ ucfirst($h->type) }}</span>
-              </td>
-              <td>
-                <form method="POST" action="{{ route('holidays.destroy', $h) }}">
-                  @csrf
-                  @method('DELETE')
-                  <button type="button" class="btn sm" style="background:var(--red2);color:var(--red)"
-                    onclick="swConfirm(this.closest('form'), 'Delete Holiday?', 'This holiday will be permanently removed.', 'warning', 'Yes, delete', '#dc2626')">Delete</button>
-                </form>
-              </td>
+              <th>Date</th>
+              <th>Day</th>
+              <th>Holiday Name</th>
+              <th>Type</th>
+              @if($activeCompanies->count() > 1)
+                <th>Company</th>
+              @endif
+              <th></th>
             </tr>
-          @endforeach
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @foreach($byDate as $dateStr => $holidaysOnDate)
+              @php
+                $isFirst = true;
+                $rowspan = $holidaysOnDate->count();
+                $carbon  = \Carbon\Carbon::parse($dateStr);
+                $isWeekend = in_array($carbon->dayOfWeek, [0, 6]);
+              @endphp
+              @foreach($holidaysOnDate as $h)
+                <tr style="{{ $isWeekend ? 'background:rgba(var(--acc-rgb,66,114,196),.04)' : '' }}">
+                  @if($isFirst)
+                    <td rowspan="{{ $rowspan }}" style="white-space:nowrap;font-weight:600;vertical-align:top;padding-top:10px">
+                      {{ $carbon->format('d M Y') }}
+                    </td>
+                    <td rowspan="{{ $rowspan }}" style="color:var(--t3);white-space:nowrap;vertical-align:top;padding-top:10px">
+                      {{ $carbon->format('l') }}
+                    </td>
+                  @endif
+
+                  <td>{{ $h->name }}</td>
+
+                  <td>
+                    @php
+                      $typeColors = [
+                        'national' => ['bg'=>'#dbeafe','color'=>'#1d4ed8'],
+                        'regional' => ['bg'=>'#dcfce7','color'=>'#15803d'],
+                        'optional' => ['bg'=>'#fef9c3','color'=>'#a16207'],
+                        'company'  => ['bg'=>'#f3e8ff','color'=>'#7e22ce'],
+                      ];
+                      $tc = $typeColors[$h->type] ?? ['bg'=>'#f3f4f6','color'=>'#374151'];
+                    @endphp
+                    <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;
+                                 background:{{ $tc['bg'] }};color:{{ $tc['color'] }}">
+                      {{ ucfirst($h->type) }}
+                    </span>
+                  </td>
+
+                  @if($activeCompanies->count() > 1)
+                    <td style="font-size:12px;color:var(--t3)">{{ $h->company_name }}</td>
+                  @endif
+
+                  <td>
+                    <form method="POST" action="{{ route('holidays.destroy', $h) }}" style="display:inline">
+                      @csrf @method('DELETE')
+                      <button type="button" class="btn sm" style="color:var(--red)"
+                        onclick="swConfirm(this.closest('form'), 'Delete Holiday?',
+                          'Remove {{ addslashes($h->name) }} from {{ addslashes($h->company_name) }}?',
+                          'warning', 'Yes, delete', '#dc2626')">Del</button>
+                    </form>
+                  </td>
+                </tr>
+                @php $isFirst = false; @endphp
+              @endforeach
+            @endforeach
+          </tbody>
+        </table>
+      </div>
     @else
       <div class="empty">
         <div class="ico">🗓️</div>
-        <p>No holidays for this year. Add one.</p>
+        <p>No holidays found for {{ $year }}{{ $companyFilter ? ' for this company' : '' }}. Add one or bulk upload.</p>
       </div>
     @endif
   </div>
 
-  {{-- Add Holiday Modal --}}
+  {{-- ── Add Holiday Modal ───────────────────────────────────────────────── --}}
   <div class="modal" id="holiday-modal">
     <div class="mb">
       <div class="mh">
@@ -85,27 +131,42 @@
       </div>
       <form method="POST" action="{{ route('holidays.store') }}">
         @csrf
-        <input type="hidden" name="calendar_id" value="{{ $calendarId }}">
         <div class="fg2">
-          <div class="fld">
-            <label>Date *</label>
-            <input type="date" name="date" required>
+          <div class="fld full">
+            <label class="req">Company</label>
+            <select name="company_id" required @error('company_id') class="inp-err" @enderror>
+              <option value="">Select Company</option>
+              @foreach($companies as $co)
+                <option value="{{ $co->id }}" {{ old('company_id', $companyFilter) == $co->id ? 'selected' : '' }}>
+                  {{ $co->name }}
+                </option>
+              @endforeach
+            </select>
+            @error('company_id') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>Type *</label>
+            <label class="req">Date</label>
+            <input type="date" name="date" required value="{{ old('date') }}"
+              @error('date') class="inp-err" @enderror>
+            @error('date') <div class="ferr">{{ $message }}</div> @enderror
+          </div>
+          <div class="fld">
+            <label class="req">Type</label>
             <select name="type" required>
-              <option value="national">National</option>
-              <option value="regional">Regional</option>
-              <option value="optional">Optional</option>
+              @foreach(['national'=>'National','regional'=>'Regional','optional'=>'Optional','company'=>'Company'] as $val => $label)
+                <option value="{{ $val }}" {{ old('type') === $val ? 'selected' : '' }}>{{ $label }}</option>
+              @endforeach
             </select>
           </div>
           <div class="fld full">
-            <label>Holiday Name *</label>
-            <input type="text" name="name" required placeholder="e.g. Republic Day">
+            <label class="req">Holiday Name</label>
+            <input type="text" name="name" required placeholder="e.g. Republic Day"
+              value="{{ old('name') }}" @error('name') class="inp-err" @enderror>
+            @error('name') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld full">
             <label>Description</label>
-            <input type="text" name="description" placeholder="Optional">
+            <input type="text" name="description" placeholder="Optional" value="{{ old('description') }}">
           </div>
         </div>
         <div class="mf">
@@ -119,6 +180,7 @@
   @if($errors->any())
     <script>document.addEventListener('DOMContentLoaded', () => om('holiday-modal'))</script>
   @endif
+
 @endsection
 
 @include('partials.upload-modal', [
@@ -126,6 +188,6 @@
     'uploadTitle'   => 'Bulk Upload Holidays',
     'uploadRoute'   => 'holidays.import',
     'templateRoute' => 'holidays.template',
-    'uploadHint'    => 'Template columns: Date (YYYY-MM-DD), Name, Type (national/regional/optional). One row per holiday.',
-    'uploadFields'  => ['calendar_id' => $calendarId],
+    'uploadHint'    => 'Template columns: Company, Date (YYYY-MM-DD), Name, Type (national/regional/optional/company). One row per holiday per company.',
+    'uploadFields'  => [],
 ])

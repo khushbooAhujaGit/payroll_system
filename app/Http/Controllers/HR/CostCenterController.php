@@ -10,7 +10,7 @@ class CostCenterController extends MasterCrudController
 {
     protected string $model = \App\Models\CostCenter::class;
     protected array  $rules = [
-        'entity_id' => 'required|exists:entities,id',
+        'company_id' => 'required|exists:companies,id',
         'name'      => 'required|string|max:100',
         'code'      => 'required|string|max:20',
         'type'      => 'required|in:department,project,location,other',

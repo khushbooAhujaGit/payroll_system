@@ -12,6 +12,7 @@ use App\Models\LeavePolicy;
 use App\Models\LeaveTrackerRecord;
 use App\Models\LeaveType;
 use App\Services\ExcelImportService;
+use App\Services\LeaveBalanceSyncService;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -29,24 +30,24 @@ class WebLeaveController extends Controller
  
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         // Leave applications (workflow-based)
         $applications = LeaveApplication::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
             'leaveType:id,name,code',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        ->whereHas('employee', fn($q) => $q)
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->orderByDesc('applied_at')
         ->paginate(25)->withQueryString();
 
-        $pending = LeaveApplication::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        $pending = LeaveApplication::whereHas('employee', fn($q) => $q)
             ->where('status', 'pending')->count();
 
         // Tracker entity employee IDs (for subquery)
-        $entityEmployeeIds = Employee::where('entity_id', $entityId)->pluck('id');
+        $entityEmployeeIds = Employee::pluck('id');
 
         // Base tracker filter closure (reused for count + grouped query)
         $trackerFilter = function ($q) use ($entityEmployeeIds, $request) {
@@ -80,16 +81,20 @@ class WebLeaveController extends Controller
             ->paginate(30, ['*'], 'tracker_page')
             ->withQueryString();
 
-        $leaveTypes = LeaveType::whereNull('entity_id')->orWhere('entity_id', $entityId)
+        $leaveTypes = LeaveType::whereNull('company_id')->orWhere('company_id', $companyId)
             ->where('is_active', true)->orderBy('code')->get();
 
-        $employees  = Employee::where('entity_id', $entityId)->where('employee_status', 'active')
+        $employees  = Employee::currentlyEmployed()
             ->orderBy('first_name')->get();
 
-        $trackerLeaveTypes = LeaveTrackerRecord::distinct()->pluck('leave_type')->sort()->values();
+        $trackerLeaveTypes = LeaveTrackerRecord::distinct()->pluck('leave_type')
+            ->map(fn($t) => strtoupper(trim($t)))
+            ->unique()
+            ->sort()
+            ->values();
 
         return view('leave.index', compact(
-            'applications', 'pending', 'leaveTypes', 'employees', 'entityId',
+            'applications', 'pending', 'leaveTypes', 'employees', 'companyId',
             'trackerGroups', 'trackerTotal', 'trackerLeaveTypes'
         ));
     }
@@ -164,7 +169,7 @@ class WebLeaveController extends Controller
 
     public function trackerImport(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,xlsm|max:20480',
@@ -176,7 +181,7 @@ class WebLeaveController extends Controller
             'leave_tracker',
             LeaveTrackerImporter::class,
             [
-                'entity_id'    => $entityId,
+                'company_id' => $companyId,
                 'sheet_name'   => 'Mark Leave',
                 'uploaded_by'  => auth()->id(),
                 'source_file'  => $request->file('file')->getClientOriginalName(),
@@ -184,14 +189,116 @@ class WebLeaveController extends Controller
             ]
         );
 
-        return $this->handleImportResult($result, 'leave', 'leave record');
+        $redirect = $this->handleImportResult($result, 'leave', 'leave record');
+
+        // Add confirmation that leave balances were auto-synced
+        if ($result['success'] ?? false) {
+            $redirect = $redirect->with('info', '✓ Leave balances automatically synced for all imported employees.');
+        }
+
+        return $redirect;
     }
+
+    /**
+     * Manually sync leave_balances for all employees
+     * Useful when automatic sync didn't work or for batch updates
+     */
+    public function syncLeaveBalances(Request $request)
+    {
+        try {
+            // Get all employees with leave records
+            $empIds = LeaveTrackerRecord::whereNotNull('employee_id')
+                ->distinct()
+                ->pluck('employee_id')
+                ->all();
+
+            if (empty($empIds)) {
+                return redirect()->route('leave.tracker')->with('warning', 'No leave records found to sync.');
+            }
+
+            // Run the sync
+            $synced = (new LeaveBalanceSyncService())->sync($empIds);
+
+            return redirect()->route('leave.tracker')->with('success', "✓ Leave balances synced successfully! Updated {$synced} leave balance entries for " . count($empIds) . " employees.");
+        } catch (\Exception $e) {
+            return redirect()->route('leave.tracker')->with('error', 'Sync failed: ' . $e->getMessage());
+        }
+    }
+
+    public function exportApplications(Request $request)
+    {
+        $companyId = $this->resolveCompanyId($request);
+
+        $applications = LeaveApplication::with(['employee:id,first_name,middle_name,last_name,employee_id', 'leaveType:id,name,code'])
+            ->whereHas('employee', fn($q) => $q)
+            ->when($request->status, fn($q) => $q->where('status', $request->status))
+            ->orderByDesc('applied_at')
+            ->get();
+
+        $headers = [
+            'Application #', 'Employee ID', 'Employee Name', 'Leave Type',
+            'From Date', 'To Date', 'Days', 'Half Day', 'Status', 'Reason', 'Applied At',
+        ];
+
+        $rows = $applications->map(fn($a) => [
+            $a->application_number,
+            $a->employee?->employee_id,
+            $a->employee?->full_name,
+            $a->leaveType?->code ?? $a->leaveType?->name,
+            $a->from_date?->format('d-m-Y'),
+            $a->to_date?->format('d-m-Y'),
+            (float) $a->days,
+            $a->is_half_day ? 'Yes' : 'No',
+            $a->status,
+            $a->reason,
+            $a->applied_at?->format('d-m-Y H:i'),
+        ]);
+
+        return $this->streamXlsx('leave_applications', $headers, $rows);
+    }
+
+
+    public function exportTracker(Request $request)
+    {
+        $records = LeaveTrackerRecord::with('employee:id,first_name,middle_name,last_name,employee_id')
+            ->when($request->emp_id, fn($q) => $q->where(fn($sq) =>
+                $sq->where('sheet_emp_id', 'like', "%{$request->emp_id}%")
+                   ->orWhereHas('employee', fn($eq) =>
+                       $eq->where('first_name', 'like', "%{$request->emp_id}%")
+                          ->orWhere('last_name', 'like', "%{$request->emp_id}%")
+                   )
+            ))
+            ->when($request->leave_type, fn($q) => $q->whereRaw('UPPER(leave_type) = ?', [strtoupper($request->leave_type)]))
+            ->when($request->month, fn($q) => $q->whereRaw("DATE_FORMAT(leave_date, '%Y-%m') = ?", [$request->month]))
+            ->orderByDesc('leave_date')
+            ->get();
+
+        $headers = [
+            'Leave Ref ID', 'EMP Code', 'Employee Name', 'Leave Date',
+            'Leave Type', 'Team Leader', 'Reason Type', 'Reason',
+        ];
+
+        $rows = $records->map(fn($r) => [
+            $r->leave_ref_id,
+            $r->sheet_emp_id,
+            $r->employee ? ($r->employee->full_name) : $r->employee_name,
+            $r->leave_date?->format('d-m-Y'),
+            $r->leave_type,
+            $r->team_leader_name,
+            $r->reason_type,
+            $r->reason,
+        ]);
+
+        return $this->streamXlsx('leave_tracker', $headers, $rows);
+    }
+
 
     public function trackerTemplate()
     {
         return $this->excelImportService->generateTemplate(LeaveTrackerImporter::class);
     }
 
+    
     // ─────────────────────────────────────────────────────────────────────────
     // Leave Tracker records listing (dedicated page)
     // ─────────────────────────────────────────────────────────────────────────
@@ -232,7 +339,7 @@ class WebLeaveController extends Controller
             'leave_ref_id'     => $refId,
             'employee_id'      => $employee?->id,
             'sheet_emp_id'     => $validated['sheet_emp_id'],
-            'employee_name'    => $validated['employee_name'] ?? ($employee ? $employee->first_name . ' ' . $employee->last_name : null),
+            'employee_name'    => $validated['employee_name'] ?? ($employee ? $employee->full_name : null),
             'leave_date'       => $validated['leave_date'],
             'leave_type'       => strtoupper($validated['leave_type']),
             'team_leader_name' => $validated['team_leader_name'] ?? null,
@@ -282,18 +389,43 @@ class WebLeaveController extends Controller
     public function trackerDestroy(LeaveTrackerRecord $record)
     {
         $record->delete();
-        return redirect()->route('leave.tracker', ['view' => 'daily'])->with('success', 'Leave record deleted.');
+        return redirect()->back()->with('success', 'Leave record deleted.');
+    }
+
+    /**
+     * Bulk-delete all day records belonging to one leave spell
+     * (same employee + leave_type + date range).
+     */
+    public function trackerBulkDestroy(Request $request)
+    {
+        $v = $request->validate([
+            'sheet_emp_id' => 'required|string',
+            'leave_type'   => 'required|string|max:20',
+            'date_from'    => 'required|date',
+            'date_to'      => 'required|date|after_or_equal:date_from',
+        ]);
+
+        LeaveTrackerRecord::where('sheet_emp_id', $v['sheet_emp_id'])
+            ->where('leave_type', $v['leave_type'])
+            ->whereBetween('leave_date', [$v['date_from'], $v['date_to']])
+            ->delete();
+
+        return redirect()->back()->with('success', 'Leave spell deleted.');
     }
 
     public function trackerRecords(Request $request)
     {
         $view = $request->get('view', 'spells'); // 'spells' | 'daily'
 
-        $leaveTypes   = LeaveTrackerRecord::distinct()->pluck('leave_type')->sort()->values();
+        $leaveTypes   = LeaveTrackerRecord::distinct()->pluck('leave_type')
+            ->map(fn($t) => strtoupper(trim($t)))
+            ->unique()
+            ->sort()
+            ->values();
         $totalRecords = LeaveTrackerRecord::count();
 
         // Shared filter applied to both views — only active (non-superseded) records
-        $baseQuery = LeaveTrackerRecord::with('employee:id,employee_id,first_name,last_name')
+        $baseQuery = LeaveTrackerRecord::with('employee:id,employee_id,first_name,middle_name,last_name')
             ->where('is_active', true)
             ->when($request->emp_id, fn($q) => $q->where(function ($sq) use ($request) {
                 $sq->where('sheet_emp_id', $request->emp_id)
@@ -411,28 +543,28 @@ class WebLeaveController extends Controller
 
     public function policies(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $policies = LeavePolicy::with('leaveType:id,code,name')
-            ->where(fn($q) => $q->whereNull('entity_id')->orWhere('entity_id', $entityId))
+            ->where(fn($q) => $q->whereNull('company_id')->orWhere('company_id', $companyId))
             ->orderBy('name')
             ->get();
 
         $leaveTypes = LeaveType::where('is_active', true)
-            ->whereNull('entity_id')
-            ->orWhere('entity_id', $entityId)
+            ->whereNull('company_id')
+            ->orWhere('company_id', $companyId)
             ->orderBy('code')
             ->get();
 
         $accrualTypes = ['annual' => 'Annual', 'monthly' => 'Monthly', 'quarterly' => 'Quarterly'];
         $prorationsTypes = ['none' => 'None', 'joining_month' => 'Joining Month', 'full_month' => 'Full Month'];
 
-        return view('leave.policies', compact('policies', 'leaveTypes', 'accrualTypes', 'prorationsTypes', 'entityId'));
+        return view('leave.policies', compact('policies', 'leaveTypes', 'accrualTypes', 'prorationsTypes', 'companyId'));
     }
 
     public function storePolicy(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
         $validated = $request->validate([
             'leave_type_id'   => 'required|exists:leave_types,id',
             'name'            => 'required|string|max:100',
@@ -445,7 +577,7 @@ class WebLeaveController extends Controller
         ]);
 
         LeavePolicy::create(array_merge($validated, [
-            'entity_id'       => $entityId,
+            'company_id' => $companyId,
             'accrual_on_day'  => 1,
             'min_balance_to_apply'    => 0,
             'allow_negative_balance'  => false,

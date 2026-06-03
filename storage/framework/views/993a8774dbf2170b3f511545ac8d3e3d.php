@@ -6,7 +6,7 @@
   <form method="POST" action="<?php echo e(route('salary.report.download')); ?>" style="display:inline">
     <?php echo csrf_field(); ?>
     <input type="hidden" name="month" value="<?php echo e($month); ?>">
-    <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
+    <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
     <button type="submit" class="btn acc">📥 Download Excel</button>
   </form>
   <?php endif; ?>
@@ -25,10 +25,10 @@
     </div>
     <div class="fld" style="min-width:200px">
       <label>Firm</label>
-      <select name="entity_id">
-        <option value="0" <?php echo e($entityId == 0 ? 'selected' : ''); ?>>All Firms</option>
-        <?php $__currentLoopData = $entities; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ent): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-          <option value="<?php echo e($ent->id); ?>" <?php echo e($ent->id == $entityId ? 'selected' : ''); ?>>
+      <select name="company_id">
+        <option value="0" <?php echo e($companyId == 0 ? 'selected' : ''); ?>>All Firms</option>
+        <?php $__currentLoopData = $companies; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ent): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+          <option value="<?php echo e($ent->id); ?>" <?php echo e($ent->id == $companyId ? 'selected' : ''); ?>>
             <?php echo e($ent->short_name ?? $ent->name); ?>
 
           </option>
@@ -85,7 +85,7 @@
     <form method="POST" action="<?php echo e(route('salary.report.lock')); ?>" style="display:inline">
       <?php echo csrf_field(); ?>
       <input type="hidden" name="month" value="<?php echo e($month); ?>">
-      <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
+      <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
       <button type="button" class="btn sm" style="background:#fed7aa;color:#9a3412;font-weight:600"
         onclick="swConfirm(this.closest('form'),
           'Re-lock <?php echo e($lockLabel); ?>?',
@@ -117,7 +117,7 @@
   <form method="POST" action="<?php echo e(route('salary.report.lock')); ?>" style="display:inline">
     <?php echo csrf_field(); ?>
     <input type="hidden" name="month" value="<?php echo e($month); ?>">
-    <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
+    <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
     <button type="button" class="btn sm acc"
       onclick="swConfirm(this.closest('form'),
         'Save report for <?php echo e($lockLabel); ?>?',
@@ -132,7 +132,7 @@
 
 <div class="card" style="overflow-x:auto">
   <div class="ch">
-    <div class="ct">Salary Sheet — <?php echo e(\Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y')); ?> · <?php echo e($entityId == 0 ? 'All Firms' : ($entities->firstWhere('id', $entityId)?->short_name ?? $entities->firstWhere('id', $entityId)?->name ?? '')); ?>
+    <div class="ct">Salary Sheet — <?php echo e(\Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y')); ?> · <?php echo e($companyId == 0 ? 'All Firms' : ($companies->firstWhere('id', $companyId)?->short_name ?? $companies->firstWhere('id', $companyId)?->name ?? '')); ?>
 
       <?php if($isLocked): ?><span style="background:#fff3cd;color:#856404;border-radius:4px;padding:2px 6px;font-size:10px;margin-left:8px">🔄 LIVE (snapshot saved)</span><?php endif; ?>
     </div>

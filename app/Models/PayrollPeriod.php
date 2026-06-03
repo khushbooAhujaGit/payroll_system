@@ -17,7 +17,7 @@ use Carbon\Carbon;
 class PayrollPeriod extends Model
 {
     protected $fillable = [
-        'entity_id','year','month','period_from','period_to',
+        'company_id','year','month','period_from','period_to',
         'attendance_lock_date','payroll_run_date','payment_date',
         'status','is_locked','locked_at','locked_by',
     ];
@@ -30,7 +30,7 @@ class PayrollPeriod extends Model
         'locked_at'             => 'datetime',
     ];
 
-    public function entity(): BelongsTo   { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo   { return $this->belongsTo(Company::class); }
     public function lockedBy(): BelongsTo { return $this->belongsTo(User::class, 'locked_by'); }
     public function runs(): HasMany       { return $this->hasMany(PayrollRun::class); }
     public function regularRun(): HasOne  { return $this->hasOne(PayrollRun::class)->where('run_type', 'regular'); }

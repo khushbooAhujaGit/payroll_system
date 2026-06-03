@@ -16,9 +16,9 @@ use Carbon\Carbon;
 
 class Contractor extends Model
 {
-    protected $fillable = ['entity_id','name','contractor_id','pan','gstin','mobile','email','address','bank_account_number','bank_name','ifsc_code','contractor_type','is_active'];
+    protected $fillable = ['company_id','name','contractor_id','pan','gstin','mobile','email','address','bank_account_number','bank_name','ifsc_code','contractor_type','is_active'];
     protected $casts    = ['is_active' => 'boolean'];
 
-    public function entity(): BelongsTo  { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo  { return $this->belongsTo(Company::class); }
     public function invoices(): HasMany  { return $this->hasMany(ContractorInvoice::class); }
 }

@@ -22,10 +22,10 @@ class WebBioIdController extends Controller
      */
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
-        $bioIds = EmployeeBioId::with('employee:id,employee_id,first_name,last_name,entity_id')
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        $bioIds = EmployeeBioId::with('employee:id,employee_id,first_name,middle_name,last_name,company_id')
+            ->whereHas('employee', fn($q) => $q)
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($sq) use ($request) {
                     $sq->where('bio_id_full', 'like', "%{$request->search}%")
@@ -43,13 +43,13 @@ class WebBioIdController extends Controller
             ->withQueryString();
 
         $machines = EmployeeBioId::distinct()->pluck('machine_name')->sort()->values();
-        $totalBioIds = EmployeeBioId::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))->count();
+        $totalBioIds = EmployeeBioId::whereHas('employee', fn($q) => $q)->count();
         $unmatchedCount = 0; // bio IDs exist in raw punches but not in employee_bio_ids
 
-        $employees = Employee::where('entity_id', $entityId)
-            ->where('employee_status', 'active')
+        $employees = Employee::query()
+            ->currentlyEmployed()
             ->orderBy('employee_id')
-            ->get(['id', 'employee_id', 'first_name', 'last_name']);
+            ->get(['id', 'employee_id', 'first_name', 'middle_name', 'last_name']);
 
         return view('bio-ids.index', compact('bioIds', 'machines', 'totalBioIds', 'employees'));
     }
@@ -61,7 +61,7 @@ class WebBioIdController extends Controller
 
     public function import(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
@@ -71,7 +71,7 @@ class WebBioIdController extends Controller
             $request->file('file'),
             'bio_id',
             BioIdImporter::class,
-            ['entity_id' => $entityId]
+            ['company_id' => $companyId]
         );
 
         return $this->handleImportResult($result, 'bio_ids', 'Bio ID mapping');
@@ -79,7 +79,7 @@ class WebBioIdController extends Controller
 
     public function store(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',

@@ -15,7 +15,7 @@ abstract class MasterCrudController extends Controller
     public function index(Request $request): JsonResponse
     {
         $q = $this->model::query()
-            ->when(method_exists($this->model, 'scopeForEntity'), fn($q) => $q->forEntity($request->entity_id))
+            ->when(method_exists($this->model, 'scopeForEntity'), fn($q) => $q->forEntity($request->company_id))
             ->when(!empty($this->relations), fn($q) => $q->with($this->relations))
             ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"));
 

@@ -6,7 +6,7 @@
   <form method="POST" action="{{ route('salary.report.download') }}" style="display:inline">
     @csrf
     <input type="hidden" name="month" value="{{ $month }}">
-    <input type="hidden" name="entity_id" value="{{ $entityId }}">
+    <input type="hidden" name="company_id" value="{{ $companyId }}">
     <button type="submit" class="btn acc">📥 Download 🔒 Excel</button>
   </form>
   @php $deleteLabel = \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y'); @endphp

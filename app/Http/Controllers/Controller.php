@@ -10,38 +10,83 @@ abstract class Controller
     use AuthorizesRequests;
 
     /**
-     * Resolve the current entity ID for the logged-in user.
+     * Resolve the current company ID for the logged-in user.
      *
      * Priority:
-     *   1. The entity the user's own employee record belongs to.
-     *   2. An explicit entity_id from the current request (used by admin pages
-     *      that show an entity selector).
-     *   3. The first entity that has at least one active employee in the DB.
-     *   4. Hard fallback: entity primary key 1.
-     *
-     * Pass the request object only when the page has an entity selector.
+     *   1. The company the user's own employee record belongs to.
+     *   2. An explicit company_id from the current request (admin selector).
+     *   3. The first company that has at least one employee in the DB.
+     *   4. Hard fallback: 1.
      */
-    protected function resolveEntityId(?\Illuminate\Http\Request $request = null): int
+    protected function resolveCompanyId(?\Illuminate\Http\Request $request = null): int
     {
-        // 1. User's own employee entity
-        $userEntityId = auth()->user()?->employee?->entity_id;
-        if ($userEntityId) {
-            return (int) $userEntityId;
+        // 1. User's own employee company
+        $userCompanyId = auth()->user()?->employee?->company_id;
+        if ($userCompanyId) {
+            return (int) $userCompanyId;
         }
 
-        // 2. Explicit request param (admin entity selector)
-        if ($request?->filled('entity_id')) {
-            return (int) $request->get('entity_id');
+        // 2. Explicit request param
+        if ($request?->filled('company_id')) {
+            return (int) $request->get('company_id');
         }
 
-        // 3. First entity that has active employees
-        $firstWithEmployees = Employee::where('employee_status', 'active')
-            ->whereNotNull('entity_id')
-            ->value('entity_id');
-        if ($firstWithEmployees) {
-            return (int) $firstWithEmployees;
+        // 3. First company that has employees
+        $first = Employee::whereNotNull('company_id')->value('company_id');
+        if ($first) {
+            return (int) $first;
         }
 
         return 1;
+    }
+
+    /**
+     * @deprecated  Use resolveCompanyId() — kept only to avoid breaking any
+     *              external calls during transition. Will be removed.
+     */
+    protected function resolveEntityId(?\Illuminate\Http\Request $request = null): int
+    {
+        return $this->resolveCompanyId($request);
+    }
+
+    /** Stream an array/collection of rows as an xlsx download. */
+    protected function streamXlsx(string $filename, array $headers, iterable $rows): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $ws          = $spreadsheet->getActiveSheet();
+
+        foreach ($headers as $i => $h) {
+            $ws->setCellValue([$i + 1, 1], $h);
+            $ws->getStyle([$i + 1, 1])->getFont()->setBold(true);
+        }
+
+        $ri = 2;
+        foreach ($rows as $row) {
+            $row = array_values((array) $row);
+            foreach ($row as $ci => $val) {
+                $cell = $ws->getCell([$ci + 1, $ri]);
+                if (is_string($val) && $val !== '' && preg_match('/^\d+$/', $val)) {
+                    $cell->setValueExplicit(
+                        $val,
+                        \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                    );
+                } else {
+                    $cell->setValue($val ?? '');
+                }
+            }
+            $ri++;
+        }
+
+        foreach (range(1, count($headers)) as $col) {
+            $ws->getColumnDimensionByColumn($col)->setAutoSize(true);
+        }
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $date   = now()->format('Y-m-d');
+        return response()->streamDownload(
+            fn() => $writer->save('php://output'),
+            "{$filename}_{$date}.xlsx",
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        );
     }
 }

@@ -37,7 +37,7 @@ class ExcelImportService
 
         $filePath = $file->store("uploads/excel/{$module}", 'local');
         $log = ExcelUploadLog::create([
-            'entity_id' => $meta['entity_id'] ?? null,
+            'company_id' => $meta['company_id'] ?? null,
             'user_id' => auth()->id(),
             'module' => $module,
             'file_name' => $file->getClientOriginalName(),
@@ -66,7 +66,7 @@ class ExcelImportService
                 $sheet = $spreadsheet->getActiveSheet();
             }
 
-            $rows = $sheet->toArray(null, true, true, true);
+            $rows = $this->readSheetCells($sheet);
 
             if (empty($rows)) {
                 throw new \RuntimeException('The uploaded file is empty.');
@@ -215,26 +215,70 @@ class ExcelImportService
         return $this->buildResult($log, true);
     }
 
-    public function generateTemplate(string $importerClass): \Symfony\Component\HttpFoundation\StreamedResponse
+    /**
+     * Generate a downloadable import template.
+     *
+     * @param array $dropdowns  column-header → [option1, option2, ...] map.
+     *                          Columns listed here get an Excel dropdown (data validation).
+     *                          The validation is WARNING style — users can still type new
+     *                          values not in the list (new firms / depts / designations
+     *                          will be created automatically on import).
+     */
+    public function generateTemplate(string $importerClass, array $dropdowns = []): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $importer = new $importerClass([]);
-        $headers = $importer->getTemplateHeaders();
-        $sampleRows = $importer->getSampleRows();
+        $importer    = new $importerClass([]);
+        $headers     = $importer->getTemplateHeaders();
+        $sampleRows  = $importer->getSampleRows();
         $validations = $importer->getColumnValidations();
 
         $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
+
+        // ── "Lists" sheet — hidden sheet that holds dropdown values ─────────────
+        // Excel data-validation formula references must point to a named range or
+        // a sheet range; inline comma-separated lists break for >255 chars.
+        $listSheet = $spreadsheet->createSheet(0);
+        $listSheet->setTitle('Lists');
+        $listSheet->getSheetState();   // ensure sheet is created
+
+        // Write each dropdown column's values into a separate column on the Lists sheet
+        $listColMap = []; // header → "Lists!$X$2:$X$N"
+        $listCol    = 1;
+        foreach ($dropdowns as $header => $options) {
+            if (empty($options)) continue;
+            $colLetter = Coordinate::stringFromColumnIndex($listCol);
+            // Header label in row 1
+            $listSheet->getCell("{$colLetter}1")->setValue($header);
+            foreach ($options as $i => $opt) {
+                $listSheet->getCell("{$colLetter}" . ($i + 2))->setValue($opt);
+            }
+            $lastRow          = count($options) + 1;
+            $listColMap[$header] = "Lists!\${$colLetter}\$2:\${$colLetter}\${$lastRow}";
+            $listCol++;
+        }
+
+        // Hide the Lists sheet so it doesn't clutter the template
+        $listSheet->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
+
+        // ── "Data" sheet ─────────────────────────────────────────────────────────
+        $sheet = $spreadsheet->createSheet(1);
         $sheet->setTitle('Data');
+        $spreadsheet->setActiveSheetIndex(1);
 
         $col = 1;
         foreach ($headers as $header) {
             $colLetter = Coordinate::stringFromColumnIndex($col);
-            $sheet->getCell($colLetter . '1')->setValue($header);
+            $sheet->getCell("{$colLetter}1")->setValue($header);
             $sheet->getColumnDimension($colLetter)->setAutoSize(true);
-            $sheet->getStyle($colLetter . '1')->applyFromArray([
+            $sheet->getStyle("{$colLetter}1")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF4472C4']],
             ]);
+
+            // Add dropdown validation if this column has list data
+            if (isset($listColMap[$header])) {
+                $this->applyDropdownValidation($sheet, $colLetter, $listColMap[$header], $header);
+            }
+
             $col++;
         }
 
@@ -246,7 +290,8 @@ class ExcelImportService
             }
         }
 
-        $infoSheet = $spreadsheet->createSheet();
+        // ── "Instructions" sheet ─────────────────────────────────────────────────
+        $infoSheet = $spreadsheet->createSheet(2);
         $infoSheet->setTitle('Instructions');
         $infoSheet->setCellValue('A1', 'Column');
         $infoSheet->setCellValue('B1', 'Required');
@@ -261,20 +306,54 @@ class ExcelImportService
             $infoSheet->setCellValue("D{$row}", $info['example'] ?? '');
             $row++;
         }
-
         foreach (['A', 'B', 'C', 'D'] as $col) {
             $infoSheet->getColumnDimension($col)->setAutoSize(true);
         }
 
-        $writer = new Xlsx($spreadsheet);
+        // Activate the Data sheet for the user
+        $spreadsheet->setActiveSheetIndex(1);
+
+        $writer   = new Xlsx($spreadsheet);
         $filename = strtolower(class_basename($importerClass)) . '_template.xlsx';
 
         return response()->streamDownload(function () use ($writer) {
             $writer->save('php://output');
         }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
+    }
+
+    /**
+     * Apply a WARNING-style dropdown to a whole column (rows 2–1000).
+     * WARNING style: shows the dropdown arrow and a caution message, but
+     * still ALLOWS the user to type any value not in the list — so new
+     * firms / departments / designations can be entered freely.
+     */
+    protected function applyDropdownValidation(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        string $colLetter,
+        string $listFormula,
+        string $columnLabel
+    ): void {
+        $validation = new \PhpOffice\PhpSpreadsheet\Cell\DataValidation();
+        $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+        $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_WARNING);
+        $validation->setAllowBlank(true);
+        $validation->setShowInputMessage(true);
+        $validation->setShowErrorMessage(true);
+        $validation->setShowDropDown(false);   // false = show the dropdown arrow in Excel
+        $validation->setPromptTitle('Select or type');
+        $validation->setPrompt("Choose an existing {$columnLabel} from the list, or type a new one to create it.");
+        $validation->setErrorTitle('New value');
+        $validation->setError("This {$columnLabel} is not in the existing list. It will be created automatically on import.");
+        $validation->setFormula1($listFormula);
+
+        // Apply to rows 2–1000
+        $sheet->setDataValidation(
+            "{$colLetter}2:{$colLetter}1000",
+            $validation
+        );
     }
 
     public function export(array $data, array $headers, string $filename): \Symfony\Component\HttpFoundation\StreamedResponse
@@ -311,6 +390,68 @@ class ExcelImportService
         }, $filename . '.xlsx', [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
+    }
+
+    /**
+     * Read all cells from a worksheet, indexed as $rows[rowNum][colLetter].
+     *
+     * Key behaviour vs toArray(null,true,true,true):
+     *   • Date-formatted cells → returned as 'YYYY-MM-DD' string (unambiguous, locale-safe)
+     *   • Formula cells        → cached/pre-computed value (no re-evaluation, avoids Calculation\Exception)
+     *   • Unresolved formulas  → null (formula strings starting with '=' are suppressed)
+     *   • Everything else      → raw cell value unchanged
+     *
+     * This prevents PhpSpreadsheet from applying Excel's number-format code (e.g. 'mm-dd-yy')
+     * to date serials, which would produce locale-dependent strings like "12-19-17" that
+     * parseDate() cannot reliably decode.
+     */
+    protected function readSheetCells(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): array
+    {
+        $highestRow = $sheet->getHighestDataRow();
+        $highestCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString(
+            $sheet->getHighestDataColumn()
+        );
+
+        $rows = [];
+        for ($r = 1; $r <= $highestRow; $r++) {
+            $rowData = [];
+            for ($c = 1; $c <= $highestCol; $c++) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                $coord     = $colLetter . $r;
+
+                if (!$sheet->cellExists($coord)) {
+                    $rowData[$colLetter] = null;
+                    continue;
+                }
+
+                $xlCell = $sheet->getCell($coord);
+
+                // Use cached value for formula cells to avoid re-evaluation exceptions
+                $value = ($xlCell->getDataType() === \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_FORMULA)
+                    ? $xlCell->getOldCalculatedValue()
+                    : $xlCell->getValue();
+
+                // Date-formatted numeric cell → convert to unambiguous Y-m-d string
+                if (is_numeric($value) && \PhpOffice\PhpSpreadsheet\Shared\Date::isDateTime($xlCell)) {
+                    try {
+                        $value = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $value)
+                            ->format('Y-m-d');
+                    } catch (\Throwable) {
+                        // leave as numeric — parseDate handles serial fallback
+                    }
+                }
+
+                // Suppress unresolved formula strings
+                if (is_string($value) && str_starts_with(ltrim($value), '=')) {
+                    $value = null;
+                }
+
+                $rowData[$colLetter] = $value;
+            }
+            $rows[$r] = $rowData;
+        }
+
+        return $rows;
     }
 
     protected function isRowEmpty(array $row): bool

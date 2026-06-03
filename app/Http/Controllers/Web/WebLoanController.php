@@ -22,27 +22,27 @@ class WebLoanController extends Controller
 
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $loans = EmployeeLoan::with([
-                'employee:id,employee_id,first_name,last_name',
+                'employee:id,employee_id,first_name,middle_name,last_name',
                 'loanType',
                 'installments',
             ])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+            ->whereHas('employee', fn($q) => $q)
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->orderByDesc('created_at')
             ->paginate(25)->withQueryString();
 
-        $loanTypes = LoanType::where('entity_id', $entityId)->where('is_active', true)->get();
-        $employees = Employee::where('entity_id', $entityId)->where('employee_status', 'active')
+        $loanTypes = LoanType::where('company_id', $companyId)->where('is_active', true)->get();
+        $employees = Employee::currentlyEmployed()
             ->orderBy('first_name')->get();
 
         $stats = [
-            'total'   => EmployeeLoan::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))->count(),
-            'active'  => EmployeeLoan::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))->where('status', 'active')->count(),
-            'pending' => EmployeeLoan::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))->where('status', 'pending')->count(),
-            'outstanding' => EmployeeLoan::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))->where('status', 'active')->sum('outstanding_amount'),
+            'total'   => EmployeeLoan::whereHas('employee', fn($q) => $q)->count(),
+            'active'  => EmployeeLoan::whereHas('employee', fn($q) => $q)->where('status', 'active')->count(),
+            'pending' => EmployeeLoan::whereHas('employee', fn($q) => $q)->where('status', 'pending')->count(),
+            'outstanding' => EmployeeLoan::whereHas('employee', fn($q) => $q)->where('status', 'active')->sum('outstanding_amount'),
         ];
 
         // Load current salary for percent-based loans so we can derive estimated EMI count
@@ -57,12 +57,12 @@ class WebLoanController extends Controller
                 ->keyBy('employee_id');
         }
 
-        return view('loans.index', compact('loans', 'loanTypes', 'employees', 'stats', 'entityId', 'salaryMap'));
+        return view('loans.index', compact('loans', 'loanTypes', 'employees', 'stats', 'companyId', 'salaryMap'));
     }
 
     public function store(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'employee_id'       => 'required|exists:employees,id',
@@ -101,8 +101,8 @@ class WebLoanController extends Controller
         }
 
         // Auto-resolve Salary Advance loan type for this entity
-        $loanType = LoanType::where('entity_id', $entityId)->where('code', 'SA')->first()
-            ?? LoanType::where('entity_id', $entityId)->first();
+        $loanType = LoanType::where('company_id', $companyId)->where('code', 'SA')->first()
+            ?? LoanType::where('company_id', $companyId)->first();
 
         if (!$loanType) {
             return redirect()->back()->withErrors(['loan_amount' => 'No loan type configured for this entity. Please contact admin.']);
@@ -293,7 +293,7 @@ class WebLoanController extends Controller
 
     public function schedule(EmployeeLoan $loan)
     {
-        $loan->load(['employee:id,employee_id,first_name,last_name', 'installments' => fn($q) => $q->orderBy('installment_number')]);
+        $loan->load(['employee:id,employee_id,first_name,middle_name,last_name', 'installments' => fn($q) => $q->orderBy('installment_number')]);
         return response()->json([
             'loan'         => [
                 'id'                 => $loan->id,
@@ -301,7 +301,7 @@ class WebLoanController extends Controller
                 'loan_amount'        => $loan->loan_amount,
                 'outstanding_amount' => $loan->outstanding_amount,
                 'status'             => $loan->status,
-                'employee_name'      => $loan->employee?->first_name . ' ' . $loan->employee?->last_name,
+                'employee_name'      => $loan->employee?->full_name,
             ],
             'installments' => $loan->installments->map(fn($i) => [
                 'installment_number' => $i->installment_number,
@@ -321,7 +321,7 @@ class WebLoanController extends Controller
 
     public function import(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
@@ -331,7 +331,7 @@ class WebLoanController extends Controller
             $request->file('file'),
             'loan',
             LoanImporter::class,
-            ['entity_id' => $entityId]
+            ['company_id' => $companyId]
         );
 
         return $this->handleImportResult($result, 'loans', 'loan');

@@ -4,8 +4,9 @@
   <button class="btn acc" onclick="om('emp-modal')">+ Add Employee</button>
   <button class="btn" onclick="om('upload-modal')">📤 Bulk Upload</button>
   <button class="btn" onclick="om('bioid-upload-modal')">🔖 Upload Bio IDs</button>
+  <a href="<?php echo e(route('employees.export') . '?' . http_build_query(request()->only('search','department_id','status'))); ?>" class="btn">⬇ Export</a>
 <?php $__env->stopSection(); ?>
-
+ 
 <?php $__env->startSection('content'); ?>
 
   
@@ -28,22 +29,70 @@
       <label>Status</label>
       <select name="status">
         <option value="">All</option>
-        <option value="active" <?php echo e(request('status') === 'active' ? 'selected' : ''); ?>>Active</option>
-        <option value="inactive" <?php echo e(request('status') === 'inactive' ? 'selected' : ''); ?>>Inactive</option>
-        <option value="on_notice" <?php echo e(request('status') === 'on_notice' ? 'selected' : ''); ?>>On Notice</option>
+        <option value="active"     <?php echo e(request('status') === 'active'     ? 'selected' : ''); ?>>Active</option>
+        <option value="inactive"   <?php echo e(request('status') === 'inactive'   ? 'selected' : ''); ?>>Inactive</option>
+        <option value="on_notice"  <?php echo e(request('status') === 'on_notice'  ? 'selected' : ''); ?>>On Notice</option>
+        <option value="absconding" <?php echo e(request('status') === 'absconding' ? 'selected' : ''); ?>>Absconding</option>
+        <option value="suspended"  <?php echo e(request('status') === 'suspended'  ? 'selected' : ''); ?>>Suspended</option>
+        <option value="on_leave"   <?php echo e(request('status') === 'on_leave'   ? 'selected' : ''); ?>>On Leave</option>
       </select>
     </div>
     <button type="submit" class="btn acc">Filter</button>
     <a href="<?php echo e(route('employees')); ?>" class="btn">Reset</a>
   </form>
 
+  
+  <form id="bulk-form" method="POST" action="<?php echo e(route('employees.bulk_destroy')); ?>" style="display:none">
+    <?php echo csrf_field(); ?>
+    <input type="hidden" name="action"     id="bulk-action"     value="archive">
+    <input type="hidden" name="select_all" id="bulk-select-all" value="0">
+    
+    <input type="hidden" name="search"        value="<?php echo e(request('search')); ?>">
+    <input type="hidden" name="department_id" value="<?php echo e(request('department_id')); ?>">
+    <input type="hidden" name="status"        value="<?php echo e(request('status')); ?>">
+    <div id="bulk-id-inputs"></div>
+  </form>
+
+  
+  <div id="sel-bar" style="display:none;
+       background:var(--s2);border:1px solid var(--b1);border-radius:8px;
+       padding:12px 16px;margin-bottom:12px;
+       display:none;align-items:center;gap:12px;flex-wrap:wrap">
+    <span id="sel-summary" style="font-size:13px;font-weight:600;color:var(--t1)"></span>
+
+    
+    <span id="sel-all-banner" style="display:none;font-size:12px;color:var(--t3)">
+      &nbsp;·&nbsp;
+      <a href="#" onclick="selectAllPages(); return false"
+         style="color:var(--acc);text-decoration:underline">
+        Select all <?php echo e($employees->total()); ?> employees matching this filter
+      </a>
+    </span>
+    <span id="sel-all-active" style="display:none;font-size:12px;font-weight:600;color:var(--acc)">
+      &nbsp;·&nbsp; All <?php echo e($employees->total()); ?> employees selected
+      <a href="#" onclick="clearAllPages(); return false"
+         style="color:var(--red);margin-left:6px;text-decoration:underline">Clear</a>
+    </span>
+
+    <span style="flex:1"></span>
+    <button class="btn" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:12px"
+      onclick="submitBulk('archive')">📦 Archive</button>
+    <button class="btn" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-size:12px"
+      onclick="submitBulk('delete')">🗑 Permanently Delete</button>
+  </div>
+
   <div class="card">
     <?php if($employees->isNotEmpty()): ?>
       <table id="emp-tbl">
         <thead>
           <tr>
+            <th style="width:36px;text-align:center">
+              <input type="checkbox" id="chk-all" title="Select all on this page"
+                style="width:15px;height:15px;cursor:pointer" onchange="toggleAll(this)">
+            </th>
             <th>Emp ID</th>
             <th>Name</th>
+            <th>Company</th>
             <th>Department</th>
             <th>Designation</th>
             <th>Status</th>
@@ -54,18 +103,28 @@
         <tbody>
           <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
             <tr>
+              <td style="text-align:center">
+                <input type="checkbox" class="emp-chk" value="<?php echo e($emp->id); ?>"
+                  style="width:15px;height:15px;cursor:pointer" onchange="updateBulkBar()">
+              </td>
               <td class="mono"><?php echo e($emp->employee_id); ?></td>
-              <td><?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?></td>
+              <td><?php echo e($emp->full_name); ?></td>
+              <td><?php echo e($emp->company->name); ?></td>
               <td><?php echo e($emp->department?->name ?? '—'); ?></td>
               <td><?php echo e($emp->designation?->name ?? '—'); ?></td>
-              <td><span class="bx <?php echo e($emp->employee_status === 'active' ? 'g' : 'gr'); ?>"><?php echo e($emp->employee_status); ?></span></td>
+              <td><span class="bx <?php echo e(match($emp->employee_status) {
+                'active'     => 'g',
+                'on_notice'  => 'y',
+                'suspended'  => 'y',
+                default      => 'gr'
+              }); ?>"><?php echo e(str_replace('_', ' ', $emp->employee_status)); ?></span></td>
               <td><?php echo e($emp->date_of_joining?->format('d M Y') ?? '—'); ?></td>
               <td>
                 <button class="btn sm" onclick="openEditEmp(<?php echo e($emp->id); ?>)">Edit</button>
                 <form method="POST" action="<?php echo e(route('employees.destroy', $emp)); ?>" style="display:inline">
                   <?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?>
                   <button type="button" class="btn sm" style="color:var(--red)"
-                    onclick="swConfirm(this.closest('form'), 'Delete Employee?', 'This employee record will be permanently deleted. This cannot be undone.', 'warning', 'Yes, delete', '#dc2626')">Del</button>
+                    onclick="swConfirm(this.closest('form'), 'Delete Employee?', 'This employee record will be soft-deleted.', 'warning', 'Yes, delete', '#dc2626')">Del</button>
                 </form>
               </td>
             </tr>
@@ -90,8 +149,38 @@
       </div>
       <form method="POST" action="<?php echo e(route('employees.store')); ?>">
         <?php echo csrf_field(); ?>
-        <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
         <input type="hidden" name="employee_status" value="active">
+
+        
+        <div style="margin:14px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
+          Company / Firm
+        </div>
+        <div class="fg2">
+          <div class="fld">
+            <label class="req">Company</label>
+            <select name="company_id" id="add-company" required onchange="onCompanyChange(this.value)" <?php $__errorArgs = ['company_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+              <option value="">Select Company</option>
+              <?php $__currentLoopData = $companies; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $co): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                <option value="<?php echo e($co->id); ?>"><?php echo e($co->name); ?></option>
+              <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+            </select>
+            <?php $__errorArgs = ['company_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
+          </div>
+        </div>
 
         
         <div style="margin:14px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
@@ -320,7 +409,7 @@ unset($__errorArgs, $__bag); ?>>
               <option value="">Select Manager</option>
               <?php $__currentLoopData = $managers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mgr): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <option value="<?php echo e($mgr->id); ?>" <?php echo e(old('reporting_manager_id') == $mgr->id ? 'selected' : ''); ?>>
-                  <?php echo e($mgr->employee_id); ?> — <?php echo e($mgr->first_name); ?> <?php echo e($mgr->last_name); ?>
+                  <?php echo e($mgr->employee_id); ?> — <?php echo e($mgr->full_name); ?>
 
                 </option>
               <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
@@ -330,6 +419,11 @@ unset($__errorArgs, $__bag); ?>>
             <label>Probation Period (months)</label>
             <input type="number" name="probation_period_months" min="0" max="24"
               value="<?php echo e(old('probation_period_months', 6)); ?>" placeholder="6">
+          </div>
+          <div class="fld">
+            <label>Employee ID <span style="font-size:10px;color:var(--t3);font-weight:400">(auto-generated if blank)</span></label>
+            <input type="text" name="employee_id" value="<?php echo e(old('employee_id', $suggestedEmpId)); ?>"
+              placeholder="<?php echo e($suggestedEmpId ?: 'e.g. 202618053'); ?>" maxlength="20">
           </div>
         </div>
 
@@ -345,35 +439,8 @@ unset($__errorArgs, $__bag); ?>>
               PF Applicable
             </label>
           </div>
-          <div class="fld">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" name="is_esic_applicable" value="1"
-                <?php echo e(old('is_esic_applicable') ? 'checked' : ''); ?> style="width:16px;height:16px">
-              ESIC Applicable
-            </label>
-          </div>
-          <div class="fld">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" name="is_pt_applicable" value="1"
-                <?php echo e(old('is_pt_applicable', '1') ? 'checked' : ''); ?> style="width:16px;height:16px">
-              PT Applicable
-            </label>
-          </div>
-          <div class="fld">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" name="is_tds_applicable" value="1"
-                <?php echo e(old('is_tds_applicable') ? 'checked' : ''); ?> style="width:16px;height:16px">
-              TDS Applicable
-            </label>
-          </div>
-          <div class="fld">
-            <label>TDS Regime</label>
-            <select name="tds_regime">
-              <option value="new" <?php echo e(old('tds_regime', 'new') === 'new' ? 'selected' : ''); ?>>New Regime</option>
-              <option value="old" <?php echo e(old('tds_regime') === 'old'        ? 'selected' : ''); ?>>Old Regime</option>
-            </select>
-          </div>
         </div>
+        
 
         
         <div style="margin:18px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
@@ -381,15 +448,47 @@ unset($__errorArgs, $__bag); ?>>
         </div>
         <div class="fg2">
           <div class="fld">
-            <label>PAN Number</label>
-            <input type="text" name="pan_number" value="<?php echo e(old('pan_number')); ?>"
+            <label class="req">PAN Number</label>
+            <input type="text" name="pan_number" value="<?php echo e(old('pan_number')); ?>" required
               placeholder="ABCDE1234F" maxlength="10" style="text-transform:uppercase"
-              oninput="this.value=this.value.toUpperCase()">
+              oninput="this.value=this.value.toUpperCase()"
+              <?php $__errorArgs = ['pan_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['pan_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Aadhaar Number</label>
-            <input type="text" name="aadhaar_number" value="<?php echo e(old('aadhaar_number')); ?>"
-              placeholder="12-digit number" maxlength="12" pattern="\d{12}">
+            <label class="req">Aadhaar Number</label>
+            <input type="text" name="aadhaar_number" value="<?php echo e(old('aadhaar_number')); ?>" required
+              placeholder="12-digit number" maxlength="12" pattern="\d{12}"
+              <?php $__errorArgs = ['aadhaar_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['aadhaar_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
             <label>UAN Number</label>
@@ -404,23 +503,88 @@ unset($__errorArgs, $__bag); ?>>
         </div>
         <div class="fg2">
           <div class="fld">
-            <label>Bank Name</label>
-            <input type="text" name="bank_name" value="<?php echo e(old('bank_name')); ?>" placeholder="e.g. HDFC Bank">
+            <label class="req">Bank Name</label>
+            <input type="text" name="bank_name" value="<?php echo e(old('bank_name')); ?>" required
+              placeholder="e.g. HDFC Bank"
+              <?php $__errorArgs = ['bank_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['bank_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Account Number</label>
-            <input type="text" name="account_number" value="<?php echo e(old('account_number')); ?>">
+            <label class="req">Account Number</label>
+            <input type="text" name="account_number" value="<?php echo e(old('account_number')); ?>" required
+              <?php $__errorArgs = ['account_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['account_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>IFSC Code</label>
-            <input type="text" name="ifsc_code" value="<?php echo e(old('ifsc_code')); ?>"
+            <label class="req">IFSC Code</label>
+            <input type="text" name="ifsc_code" value="<?php echo e(old('ifsc_code')); ?>" required
               placeholder="HDFC0001234" maxlength="11" style="text-transform:uppercase"
-              oninput="this.value=this.value.toUpperCase()">
+              oninput="this.value=this.value.toUpperCase()"
+              <?php $__errorArgs = ['ifsc_code'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['ifsc_code'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Account Holder Name</label>
-            <input type="text" name="account_holder_name" value="<?php echo e(old('account_holder_name')); ?>"
-              placeholder="As per bank records">
+            <label class="req">Account Holder Name</label>
+            <input type="text" name="account_holder_name" value="<?php echo e(old('account_holder_name')); ?>" required
+              placeholder="As per bank records"
+              <?php $__errorArgs = ['account_holder_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['account_holder_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
         </div>
 
@@ -601,9 +765,13 @@ unset($__errorArgs, $__bag); ?>>
               <select name="reporting_manager_id" id="e-manager">
                 <option value="">Select Manager</option>
                 <?php $__currentLoopData = $managers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mgr): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                  <option value="<?php echo e($mgr->id); ?>"><?php echo e($mgr->employee_id); ?> — <?php echo e($mgr->first_name); ?> <?php echo e($mgr->last_name); ?></option>
+                  <option value="<?php echo e($mgr->id); ?>"><?php echo e($mgr->employee_id); ?> — <?php echo e($mgr->full_name); ?></option>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
               </select>
+            </div>
+            <div class="fld">
+              <label>Date of Joining</label>
+              <input type="date" name="date_of_joining" id="e-doj">
             </div>
             <div class="fld">
               <label>Date of Leaving</label>
@@ -779,7 +947,9 @@ unset($__errorArgs, $__bag); ?>>
       setVal('e-desig',         d.designation_id);
       setVal('e-branch',        d.branch_id);
       setVal('e-manager',       d.reporting_manager_id);
-      setVal('e-dol',           d.date_of_leaving);
+      setVal('e-doj', d.date_of_joining);
+      // Auto-fill date_of_leaving from tracker when not set on the employee record
+      setVal('e-dol', d.date_of_leaving || d.suggested_leaving_date || '');
 
       // Payroll flags
       setCheck('e-pf',          d.is_pf_applicable);
@@ -821,6 +991,156 @@ unset($__errorArgs, $__bag); ?>>
     const el = document.getElementById(id);
     if (el) el.checked = !!val;
   }
+
+  // Company-based employee ID suggestion map (company_id → suggested emp ID string)
+  const _empIdByCompany = <?php echo json_encode($suggestedEmpIdByCompany, 15, 512) ?>;
+
+  function onCompanyChange(companyId) {
+    const empIdInput = document.querySelector('#emp-modal input[name="employee_id"]');
+    if (!empIdInput) return;
+    const suggested = _empIdByCompany[companyId] || '';
+    empIdInput.value       = suggested;
+    empIdInput.placeholder = suggested || 'e.g. 202618053';
+  }
+
+  // ── Bulk selection ───────────────────────────────────────────────────────
+  // _selectAllPages is ONLY set to true when the user explicitly clicks the
+  // "Select all N employees" banner — the header checkbox NEVER triggers it.
+  let _selectAllPages = false;
+  const _totalCount   = <?php echo e($employees->total()); ?>;
+  const _pageCount    = <?php echo e($employees->count()); ?>;
+
+  function getChecked() {
+    return [...document.querySelectorAll('.emp-chk:checked')].map(c => c.value);
+  }
+
+  function updateBulkBar() {
+    const ids    = getChecked();
+    const count  = _selectAllPages ? _totalCount : ids.length;
+    const bar    = document.getElementById('sel-bar');
+    const summary= document.getElementById('sel-summary');
+
+    bar.style.display = count > 0 ? 'flex' : 'none';
+    summary.textContent = (count === _totalCount && _selectAllPages)
+      ? 'All ' + count + ' employees selected'
+      : count + ' employee' + (count === 1 ? '' : 's') + ' selected (this page)';
+
+    // Show "Select all pages" banner only when ALL current-page items are checked
+    // AND there are more employees on other pages — AND user hasn't already done it
+    const allPageBanner = document.getElementById('sel-all-banner');
+    const allPageActive = document.getElementById('sel-all-active');
+    const allOnPage     = ids.length === _pageCount && _pageCount > 0;
+
+    if (_selectAllPages) {
+      allPageBanner.style.display = 'none';
+      allPageActive.style.display = '';
+    } else if (allOnPage && _totalCount > _pageCount) {
+      // Offer the option but don't activate it automatically
+      allPageBanner.style.display = '';
+      allPageActive.style.display = 'none';
+    } else {
+      allPageBanner.style.display = 'none';
+      allPageActive.style.display = 'none';
+    }
+
+    // Sync header checkbox — reflects only current page selection, never "all pages"
+    const all = document.querySelectorAll('.emp-chk');
+    const hdr = document.getElementById('chk-all');
+    if (hdr) {
+      const pageChecked = ids.length;
+      hdr.indeterminate = pageChecked > 0 && pageChecked < all.length;
+      hdr.checked       = pageChecked === all.length && all.length > 0;
+    }
+  }
+
+  // Header checkbox: select / deselect CURRENT PAGE ONLY
+  // Never auto-selects other pages — that requires an explicit click on the banner.
+  function toggleAll(hdr) {
+    _selectAllPages = false;   // always reset cross-page selection
+    document.querySelectorAll('.emp-chk').forEach(c => c.checked = hdr.checked);
+    updateBulkBar();
+  }
+
+  // Explicit "Select all X employees" banner click → cross-page selection
+  function selectAllPages() {
+    _selectAllPages = true;
+    document.querySelectorAll('.emp-chk').forEach(c => c.checked = true);
+    updateBulkBar();
+  }
+
+  function clearAllPages() {
+    _selectAllPages = false;
+    document.querySelectorAll('.emp-chk').forEach(c => c.checked = false);
+    const hdr = document.getElementById('chk-all');
+    if (hdr) { hdr.checked = false; hdr.indeterminate = false; }
+    updateBulkBar();
+  }
+
+  function submitBulk(action) {
+    const ids   = getChecked();
+    const count = _selectAllPages ? _totalCount : ids.length;
+    if (count === 0) return;
+
+    if (action === 'delete') {
+      Swal.fire({
+        icon:              'error',
+        title:             '⛔ Permanent Delete',
+        html:
+          '<strong>' + count + ' employee' + (count === 1 ? '' : 's') + '</strong> and ALL their data will be <strong>permanently destroyed</strong>:<br><br>' +
+          '• Bank &amp; statutory details<br>' +
+          '• Salary records<br>' +
+          '• Attendance &amp; leave history<br>' +
+          '• Loans &amp; EMIs<br>' +
+          '• Documents<br><br>' +
+          '<span style="color:#dc2626;font-weight:700">This CANNOT be undone.</span>',
+        showCancelButton:  true,
+        confirmButtonText: 'Yes, permanently delete',
+        confirmButtonColor:'#dc2626',
+        cancelButtonText:  'Cancel',
+        reverseButtons:    true,
+      }).then(result => {
+        if (!result.isConfirmed) return;
+        _doSubmitBulk(action);
+      });
+    } else {
+      Swal.fire({
+        icon:              'warning',
+        title:             'Archive ' + count + ' employee' + (count === 1 ? '' : 's') + '?',
+        html:
+          'Their data will be <strong>preserved</strong> in the database but hidden everywhere in the app.<br><br>' +
+          'You can restore them later by re-importing or re-adding.',
+        showCancelButton:  true,
+        confirmButtonText: 'Yes, archive',
+        confirmButtonColor:'#f59e0b',
+        cancelButtonText:  'Cancel',
+        reverseButtons:    true,
+      }).then(result => {
+        if (!result.isConfirmed) return;
+        _doSubmitBulk(action);
+      });
+    }
+  }
+
+  function _doSubmitBulk(action) {
+    // Build the form
+    document.getElementById('bulk-action').value     = action;
+    document.getElementById('bulk-select-all').value = _selectAllPages ? '1' : '0';
+
+    const container = document.getElementById('bulk-id-inputs');
+    container.innerHTML = '';
+
+    if (!_selectAllPages) {
+      ids.forEach(id => {
+        const inp = document.createElement('input');
+        inp.type  = 'hidden';
+        inp.name  = 'ids[]';
+        inp.value = id;
+        container.appendChild(inp);
+      });
+    }
+
+    document.getElementById('bulk-form').submit();
+  }  // end _doSubmitBulk
   </script>
   <?php $__env->stopPush(); ?>
 <?php $__env->stopSection(); ?>

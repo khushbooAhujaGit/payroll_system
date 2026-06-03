@@ -17,33 +17,33 @@ class WebHelpdeskController extends Controller
 {
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $tickets = HelpdeskTicket::with([
-            'employee:id,employee_id,first_name,last_name',
+            'employee:id,employee_id,first_name,middle_name,last_name',
             'category:id,name',
             'assignedTo:id,name',
         ])
-        ->where('entity_id', $entityId)
+        ->where('company_id', $companyId)
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->when($request->priority, fn($q) => $q->where('priority', $request->priority))
         ->orderByDesc('created_at')
         ->paginate(25)->withQueryString();
 
-        $categories = HelpdeskCategory::where('entity_id', $entityId)->where('is_active', true)->get();
+        $categories = HelpdeskCategory::where('company_id', $companyId)->where('is_active', true)->get();
 
         $stats = [
-            'open'        => HelpdeskTicket::where('entity_id', $entityId)->where('status', 'open')->count(),
-            'in_progress' => HelpdeskTicket::where('entity_id', $entityId)->where('status', 'in_progress')->count(),
-            'resolved'    => HelpdeskTicket::where('entity_id', $entityId)->where('status', 'resolved')->count(),
+            'open'        => HelpdeskTicket::where('company_id', $companyId)->where('status', 'open')->count(),
+            'in_progress' => HelpdeskTicket::where('company_id', $companyId)->where('status', 'in_progress')->count(),
+            'resolved'    => HelpdeskTicket::where('company_id', $companyId)->where('status', 'resolved')->count(),
         ];
 
-        return view('helpdesk.index', compact('tickets', 'categories', 'stats', 'entityId'));
+        return view('helpdesk.index', compact('tickets', 'categories', 'stats', 'companyId'));
     }
 
     public function store(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'category_id' => 'required|exists:helpdesk_categories,id',
@@ -59,7 +59,7 @@ class WebHelpdeskController extends Controller
         HelpdeskTicket::create([
             'ticket_number' => $num,
             'employee_id'   => $employee?->id,
-            'entity_id'     => $entityId,
+            'company_id' => $companyId,
             'category_id'   => $validated['category_id'],
             'subject'       => $validated['subject'],
             'description'   => $validated['description'],
@@ -97,7 +97,7 @@ class WebHelpdeskController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Tickets');
         foreach (['Employee ID', 'Category', 'Subject', 'Priority (low/medium/high/urgent)', 'Description'] as $i => $h) {
-            $sheet->setCellValueByColumnAndRow($i + 1, 1, $h);
+            $sheet->setCellValue([$i + 1, 1], $h);
         }
         $sheet->fromArray(['EMP0001', 'IT Support', 'Laptop not working', 'high', 'Laptop fails to boot since morning.'], null, 'A2');
 
@@ -111,7 +111,7 @@ class WebHelpdeskController extends Controller
     {
         $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv']);
 
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         try {
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($request->file('file')->getPathname());
@@ -126,13 +126,13 @@ class WebHelpdeskController extends Controller
                 if (!$subject) continue;
 
                 $employee = $empId ? Employee::where('employee_id', $empId)->first() : null;
-                $category = $catName ? HelpdeskCategory::where('entity_id', $entityId)->where('name', $catName)->first() : null;
+                $category = $catName ? HelpdeskCategory::where('company_id', $companyId)->where('name', $catName)->first() : null;
                 $num      = 'TKT-' . now()->year . '-' . str_pad(HelpdeskTicket::count() + $count + 1, 5, '0', STR_PAD_LEFT);
 
                 HelpdeskTicket::create([
                     'ticket_number' => $num,
                     'employee_id'   => $employee?->id,
-                    'entity_id'     => $entityId,
+                    'company_id' => $companyId,
                     'category_id'   => $category?->id,
                     'subject'       => substr(trim($subject), 0, 200),
                     'description'   => $description ?? '',

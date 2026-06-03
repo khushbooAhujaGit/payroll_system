@@ -16,9 +16,9 @@ use Carbon\Carbon;
 
 class BankTransferFile extends Model
 {
-    protected $fillable = ['payroll_run_id','entity_id','bank_name','file_format','total_records','total_amount','file_path','reference_number','status'];
+    protected $fillable = ['payroll_run_id','company_id','bank_name','file_format','total_records','total_amount','file_path','reference_number','status'];
     protected $casts    = ['total_amount' => 'decimal:2'];
 
     public function payrollRun(): BelongsTo { return $this->belongsTo(PayrollRun::class); }
-    public function entity(): BelongsTo     { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo     { return $this->belongsTo(Company::class); }
 }

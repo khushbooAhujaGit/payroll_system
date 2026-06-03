@@ -9,30 +9,34 @@ use App\Models\ReimbursementItem;
 use App\Models\ReimbursementType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class WebReimbursementController extends Controller
 {
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $claims = ReimbursementClaim::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
             'items.reimbursementType:id,name',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        ->whereHas('employee', fn($q) => $q)
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->orderByDesc('created_at')
         ->paginate(25)->withQueryString();
 
         $types     = ReimbursementType::where('is_active', true)
-            ->where(fn($q) => $q->whereNull('entity_id')->orWhere('entity_id', $entityId))
+            ->where(fn($q) => $q->whereNull('company_id')->orWhere('company_id', $companyId))
             ->orderBy('name')->get();
-        $employees = \App\Models\Employee::where('entity_id', $entityId)->where('employee_status', 'active')
+        $employees = \App\Models\Employee::currentlyEmployed()
             ->orderBy('first_name')->get();
 
-        return view('reimbursements.index', compact('claims', 'types', 'employees', 'entityId'));
+        return view('reimbursements.index', compact('claims', 'types', 'employees', 'companyId'));
     }
 
     public function store(Request $request)
@@ -95,6 +99,38 @@ class WebReimbursementController extends Controller
         }
 
         return redirect()->route('reimbursements')->with('success', 'Reimbursement claim submitted.');
+    }
+
+    public function template()
+    {
+        $wb = new Spreadsheet();
+        $ws = $wb->getActiveSheet();
+        $ws->setTitle('Template');
+
+        $headers = ['Date', 'Employee ID', 'Employee Name', 'Amount', 'Remarks', 'Image'];
+        $ws->fromArray($headers, null, 'A1');
+
+        $lastCol = count($headers);
+        $range   = 'A1:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastCol) . '1';
+        $ws->getStyle($range)->applyFromArray([
+            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E3A5F']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
+
+        foreach ([16, 8, 8, 20, 26, 40, 12] as $ci => $w) {
+            $ws->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci + 1))->setWidth($w);
+        }
+
+        // Sample row
+        $ws->fromArray(['EMP001', now()->year, now()->month, 'PETROL', now()->toDateString(), 'Petrol reimbursement', 1800], null, 'A2');
+
+        $writer = new Xlsx($wb);
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, 'Reimbursement_Claims_Template.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     public function approve(Request $request, ReimbursementClaim $claim)

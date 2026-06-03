@@ -36,7 +36,7 @@ class EmployeeController extends Controller
             'branch',
             'reportingManager',
             'currentSalary',
-        ])->byEntity(Auth::user()->entity_id ?? $request->entity_id);
+        ])->byEntity(Auth::user()->company_id ?? $request->company_id);
 
         // Filters
         if ($request->filled('search')) {
@@ -199,14 +199,14 @@ class EmployeeController extends Controller
 
         $request->validate([
             'file'      => 'required|file|mimes:xlsx,xls|max:10240',
-            'entity_id' => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
         ]);
 
         $result = $this->excelImportService->import(
             $request->file('file'),
             'employee',
             EmployeeImporter::class,
-            ['entity_id' => $request->entity_id]
+            ['company_id' => $request->company_id]
         );
 
         return response()->json($result);
@@ -221,7 +221,7 @@ class EmployeeController extends Controller
         $this->authorize('employee.export');
 
         $employees = Employee::with(['department', 'designation', 'grade', 'branch', 'statutoryDetails'])
-            ->byEntity($request->entity_id)
+            ->byEntity($request->company_id)
             ->get();
 
         $headers = [

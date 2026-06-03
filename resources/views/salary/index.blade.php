@@ -6,6 +6,7 @@
     <a href="{{ route('salary.template') }}" class="btn">📥 Template</a>
     <button class="btn" onclick="om('sal-import-modal')">📤 Import</button>
   @endif
+  <button class="btn" onclick="exportTableXLSX('salary_details')">⬇ Export</button>
   <a href="{{ route('salary.report') }}" class="btn acc">📊 Salary Report</a>
 @endsection
 
@@ -14,6 +15,7 @@
   {{-- Filter bar --}}
   <form method="GET" action="{{ route('salary') }}" class="card"
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <input type="hidden" name="company_id" value="{{ $companyId }}">
     <div class="fld" style="flex:1;min-width:160px">
       <label>Search</label>
       <input type="text" name="search" value="{{ request('search') }}" placeholder="Name or employee ID…">
@@ -58,7 +60,7 @@
             @php $salary = $emp->salaryForMonth; @endphp
             <tr>
               <td class="mono">{{ $emp->employee_id }}</td>
-              <td>{{ $emp->first_name }} {{ $emp->last_name }}</td>
+              <td>{{ $emp->full_name }}</td>
               
               {{-- CTC Annual (admin only — decrypted) --}}
               <td>
@@ -112,7 +114,7 @@
                 <td style="white-space:nowrap">
                   <button class="btn sm" onclick="openSalModal(
                       {{ $emp->id }},
-                      '{{ addslashes($emp->first_name . ' ' . $emp->last_name) }}',
+                      '{{ addslashes($emp->full_name) }}',
                       {{ $salary ? $salary->getCtcAnnualDecrypted() : 0 }},
                       {{ $salary ? $salary->getGrossDecrypted() : 0 }}
                     )">

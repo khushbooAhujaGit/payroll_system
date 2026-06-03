@@ -27,7 +27,7 @@ class AttendanceController extends Controller
     public function monthly(Request $request): JsonResponse
     {
         $request->validate([
-            'entity_id' => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'year'      => 'required|integer',
             'month'     => 'required|integer|min:1|max:12',
         ]);
@@ -35,8 +35,8 @@ class AttendanceController extends Controller
         $from = Carbon::createFromDate($request->year, $request->month, 1)->startOfMonth()->toDateString();
         $to   = Carbon::createFromDate($request->year, $request->month, 1)->endOfMonth()->toDateString();
 
-        $records = Attendance::with('employee:id,employee_id,first_name,last_name,department_id')
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        $records = Attendance::with('employee:id,employee_id,first_name,middle_name,last_name,department_id')
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->whereBetween('attendance_date', [$from, $to])
             ->when($request->department_id, fn($q) => $q->whereHas('employee', fn($q2) => $q2->where('department_id', $request->department_id)))
             ->when($request->employee_id, fn($q) => $q->where('employee_id', $request->employee_id))
@@ -119,14 +119,14 @@ class AttendanceController extends Controller
     {
         $today = now()->toDateString();
 
-        $summary = Attendance::whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id)->where('employee_status', 'active'))
+        $summary = Attendance::whereHas('employee', fn($q) => $q->where('company_id', $request->company_id)->where('employee_status', 'active'))
             ->where('attendance_date', $today)
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
 
-        $totalActive = \App\Models\Employee::where('entity_id', $request->entity_id)->active()->count();
-        $markedCount = Attendance::whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))->where('attendance_date', $today)->count();
+        $totalActive = \App\Models\Employee::where('company_id', $request->company_id)->active()->count();
+        $markedCount = Attendance::whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))->where('attendance_date', $today)->count();
 
         return response()->json([
             'date'         => $today,
@@ -171,8 +171,8 @@ class AttendanceController extends Controller
     {
         $this->authorize('attendance.approve');
 
-        $regs = AttendanceRegularization::with(['employee:id,employee_id,first_name,last_name', 'employee.department:id,name'])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        $regs = AttendanceRegularization::with(['employee:id,employee_id,first_name,middle_name,last_name', 'employee.department:id,name'])
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->where('status', 'pending')
             ->orderBy('attendance_date')
             ->paginate(50);
@@ -206,8 +206,8 @@ class AttendanceController extends Controller
 
     public function overtimeRequests(Request $request): JsonResponse
     {
-        $query = OvertimeRequest::with('employee:id,employee_id,first_name,last_name')
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        $query = OvertimeRequest::with('employee:id,employee_id,first_name,middle_name,last_name')
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->orderByDesc('overtime_date');
 
@@ -244,7 +244,7 @@ class AttendanceController extends Controller
 
         $request->validate([
             'file'      => 'required|file|mimes:xlsx,xls|max:20480',
-            'entity_id' => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'year'      => 'required|integer',
             'month'     => 'required|integer|min:1|max:12',
         ]);
@@ -253,7 +253,7 @@ class AttendanceController extends Controller
             $request->file('file'),
             'attendance',
             AttendanceImporter::class,
-            ['entity_id' => $request->entity_id, 'year' => $request->year, 'month' => $request->month]
+            ['company_id' => $request->company_id, 'year' => $request->year, 'month' => $request->month]
         );
 
         return response()->json($result);
@@ -265,13 +265,13 @@ class AttendanceController extends Controller
 
     public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $request->validate(['entity_id' => 'required', 'year' => 'required|integer', 'month' => 'required|integer']);
+        $request->validate(['company_id' => 'required', 'year' => 'required|integer', 'month' => 'required|integer']);
 
         $from = Carbon::createFromDate($request->year, $request->month, 1)->startOfMonth()->toDateString();
         $to   = Carbon::createFromDate($request->year, $request->month, 1)->endOfMonth()->toDateString();
 
-        $records = Attendance::with('employee:id,employee_id,first_name,last_name,department_id', 'employee.department:id,name')
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        $records = Attendance::with('employee:id,employee_id,first_name,middle_name,last_name,department_id', 'employee.department:id,name')
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->whereBetween('attendance_date', [$from, $to])
             ->orderBy('attendance_date')
             ->get();

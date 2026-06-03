@@ -35,7 +35,7 @@
         @foreach($recentEmployees as $emp)
         <tr>
           <td class="mono">{{ $emp->employee_id }}</td>
-          <td>{{ $emp->first_name }} {{ $emp->last_name }}</td>
+          <td>{{ $emp->full_name }}</td>
           <td>{{ $emp->department?->name ?? '—' }}</td>
           <td><span class="bx {{ $emp->employee_status === 'active' ? 'g' : 'gr' }}">{{ $emp->employee_status }}</span></td>
         </tr>

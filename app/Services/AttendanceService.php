@@ -198,9 +198,9 @@ class AttendanceService
     /**
      * Lock all attendance for a period (called by payroll lock).
      */
-    public function lockPeriod(int $entityId, string $from, string $to): int
+    public function lockPeriod(int $companyId, string $from, string $to): int
     {
-        return Attendance::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        return Attendance::whereHas('employee', fn($q) => $q->where('company_id', $companyId))
             ->whereBetween('attendance_date', [$from, $to])
             ->update(['is_locked' => true]);
     }

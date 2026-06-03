@@ -8,9 +8,11 @@ use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\EmployeeBankDetail;
+use App\Models\EmployeeDocument;
 use App\Models\EmployeeStatutoryDetail;
 use App\Models\Entity;
 use App\Models\Grade;
+use App\Services\EmployeeService;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
 
@@ -45,14 +47,12 @@ class EmployeeImporter extends BaseImporter
     public function getTemplateHeaders(): array
     {
         return [
-            'New Emp ID', 'Count', 'Employee Name', 'CurrentStatus', 'Left Date',
-            'Reporting Manager', 'Team Leader', 'Attendance', 'Office', 'Mobile Number',
+            'New Emp ID', 'Employee Name', 'Left Date',
+            'Reporting Manager', 'Team Leader', 'Attendance', 'Mobile Number',
             'PAN', 'Marital Status', 'Gender', 'Birth Date', 'Join Date',
             'Department', 'Designation Final', 'Location (City)',
-            'PF Number (if applicable)', 'UAN No (if applicable)', 'ESI Number (if applicable)',
+            'UAN No (if applicable)',
             'Bank Name', 'Account Number', 'IFSC Code', 'Email address',
-            'Please attach a copy of your PAN card (size limit 10 MB)',
-            'Please attach a copy of your AADHAAR card (size limit 10 MB)',
             'PF', 'RSC Mail ID', 'Firm', 'PF Applicability', 'UAN Number',
             'Offer Letter Date', 'Left Type',
         ];
@@ -67,7 +67,7 @@ class EmployeeImporter extends BaseImporter
 
     protected function getRequiredHeaders(): array
     {
-        return ['New Emp ID', 'Employee Name', 'Join Date'];
+        return ['New Emp ID', 'Employee Name', 'Join Date', 'Bank Name', 'Account Number', 'IFSC Code'];
     }
 
     
@@ -84,8 +84,9 @@ class EmployeeImporter extends BaseImporter
             'Mobile Number'   => ['required' => false, 'format' => '10 digit number', 'example' => '9876543210'],
             'PAN'             => ['required' => false, 'format' => '10 char alphanumeric (ABCDE1234F)', 'example' => 'ABCDE1234F'],
             'ESI Number (if applicable)' => ['required' => false, 'format' => 'ESIC Number', 'example' => 'ESI1234'],
-            'Account Number'  => ['required' => false, 'format' => 'Numeric', 'example' => '50100123456789'],
-            'IFSC Code'       => ['required' => false, 'format' => '11 char (HDFC0001234)', 'example' => 'HDFC0001234'],
+            'Bank Name'       => ['required' => true,  'format' => 'Bank name', 'example' => 'HDFC Bank'],
+            'Account Number'  => ['required' => true,  'format' => 'Numeric', 'example' => '50100123456789'],
+            'IFSC Code'       => ['required' => true,  'format' => '11 char (HDFC0001234)', 'example' => 'HDFC0001234'],
             'PF Applicability'=> ['required' => false, 'format' => 'Yes / No', 'example' => 'Yes'],
             'UAN Number'      => ['required' => false, 'format' => '12 digit number', 'example' => '101234567890'],
             'Offer Letter Date' => ['required' => false, 'format' => 'DD-MM-YYYY', 'example' => '01-12-2023'],
@@ -137,8 +138,8 @@ class EmployeeImporter extends BaseImporter
             'Account Number'                                                 => 'account_number',
             'IFSC Code'                                                      => 'ifsc_code',
             'Email address'                                                  => 'official_email',
-            'Please attach a copy of your PAN card (size limit 10 MB)'      => '_skip_pan_doc',
-            'Please attach a copy of your AADHAAR card (size limit 10 MB)'  => '_skip_aadhaar_doc',
+            'Please attach a copy of your PAN card (size limit 10 MB)'      => 'pan_doc_path',
+            'Please attach a copy of your AADHAAR card (size limit 10 MB)'  => 'aadhaar_doc_path',
             'PF'                                                             => '_skip_pf_old',
             'RSC Mail ID'                                                    => 'personal_email',
             'Firm'                                                           => 'firm',
@@ -210,8 +211,16 @@ class EmployeeImporter extends BaseImporter
             }
         }
 
-        // All other fields (Birth Date, Mobile, IFSC, UAN, Offer Letter Date, etc.)
-        // are optional — invalid values are silently stored as null, no error generated.
+        // ── Required: Bank Details ───────────────────────────────────────────
+        if (empty($data['bank_name'])) {
+            $errors[] = "Bank Name is required.";
+        }
+        if (empty($data['account_number'])) {
+            $errors[] = "Account Number is required.";
+        }
+        if (empty($data['ifsc_code'])) {
+            $errors[] = "IFSC Code is required.";
+        }
 
         return $errors;
     }
@@ -222,7 +231,7 @@ class EmployeeImporter extends BaseImporter
 
     public function process(array $data, int $rowNumber): void
     {
-        $entityId = $this->resolveImportEntityId($data['firm'] ?? null);
+        $companyId = $this->resolveImportCompanyId($data['firm'] ?? null);
         $newEmpId = trim((string) ($data['new_emp_id'] ?? ''));
 
         if ($newEmpId === '') {
@@ -238,6 +247,7 @@ class EmployeeImporter extends BaseImporter
 
         // ── Parse dates ──────────────────────────────────────
         $dateOfJoining   = $this->parseDate($data['date_of_joining'] ?? '');
+        // dd($dateOfJoining, $data);
         $dateOfBirth     = $this->parseDate($data['date_of_birth'] ?? '');   // null when non-date value like a name
         $offerLetterDate = $this->parseDate($data['offer_letter_date'] ?? ''); // null when blank or unparseable
 
@@ -280,32 +290,63 @@ class EmployeeImporter extends BaseImporter
         }
 
         // ── Resolve foreign keys (all silent — null if not found) ──
-        $departmentId  = $this->resolveOrCreateMasterId(Department::class, $data['department'] ?? null, $entityId);
-        $designationId = $this->resolveOrCreateMasterId(Designation::class, $data['designation'] ?? null, $entityId);
-        $branchId      = $this->resolveOrCreateMasterId(Branch::class, $data['branch'] ?? null, $entityId, [
+        $departmentId  = $this->resolveOrCreateMasterId(Department::class, $data['department'] ?? null, $companyId);
+        $designationId = $this->resolveOrCreateMasterId(Designation::class, $data['designation'] ?? null, $companyId);
+        $branchId      = $this->resolveOrCreateMasterId(Branch::class, $data['branch'] ?? null, $companyId, [
             'city' => $data['current_city'] ?? null,
         ]);
 
-        $reportingManagerId = $this->resolveEmployee($entityId, $data['reporting_manager'] ?? null);
-        $teamLeaderId       = $this->resolveEmployee($entityId, $data['team_leader']       ?? null);
+        $reportingManagerId = $this->resolveEmployee($companyId, $data['reporting_manager'] ?? null);
+        $teamLeaderId       = $this->resolveEmployee($companyId, $data['team_leader']       ?? null);
 
-        // ── Dedup: New Emp ID only — no PAN/mobile fallback ─────────────────
-        // Fallback dedup by PAN or mobile caused two different employees to be
-        // silently merged whenever their data-quality values collided. Employee
-        // uniqueness is enforced only by employee_id / external_emp_id so that
-        // each row in the template always maps to exactly one employee record.
-        $employee = Employee::where('entity_id', $entityId)
-            ->where(function ($q) use ($newEmpId) {
+        // $pan needed for dedup and statutory details
+        $pan = !empty($data['pan']) ? strtoupper(trim((string) $data['pan'])) : null;
+
+        // ── Dedup step 1: active employee by Emp ID ──────────────────────────
+        $employee = Employee::where(function ($q) use ($newEmpId) {
                 $q->where('employee_id',     $newEmpId)
                   ->orWhere('external_emp_id', $newEmpId);
             })
             ->first();
 
-        // $pan is needed later for statutory details — declare it here.
-        $pan = !empty($data['pan']) ? strtoupper(trim((string) $data['pan'])) : null;
+        // ── Dedup step 2: soft-deleted employee — restore instead of duplicate
+        // Check order: Emp ID match → PAN match → Name match
+        if (!$employee) {
+            $deleted = Employee::onlyTrashed()
+                ->where(function ($q) use ($newEmpId) {
+                    $q->where('employee_id',     $newEmpId)
+                      ->orWhere('external_emp_id', $newEmpId);
+                })
+                ->first();
+
+            // Fallback: match deleted employee by PAN
+            if (!$deleted && $pan) {
+                $deleted = Employee::onlyTrashed()
+                    ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number', $pan))
+                    ->first();
+            }
+
+            // Fallback: match deleted employee by first + last name
+            if (!$deleted) {
+                $deleted = Employee::onlyTrashed()
+                    ->whereRaw('LOWER(first_name) = ?', [strtolower($firstName)])
+                    ->whereRaw('LOWER(last_name)  = ?', [strtolower($lastName)])
+                    ->first();
+            }
+
+            if ($deleted) {
+                // Restore: clear soft-delete flag (deleted_at = null)
+                $deleted->restore();
+                // Ensure they show as active immediately (status will be
+                // re-set correctly by $fields below, but clear date_of_leaving
+                // here in case the import row says "Working")
+                $deleted->forceFill(['date_of_leaving' => null])->save();
+                $employee = $deleted;
+            }
+        }
 
         $fields = [
-            'entity_id'           => $entityId,
+            'company_id' => $companyId,
             'employee_id'         => $newEmpId,
             'external_emp_id'     => $newEmpId,
             'title'               => $data['title']           ?? null,
@@ -356,7 +397,7 @@ class EmployeeImporter extends BaseImporter
         if (!$reportingManagerId && !empty($data['reporting_manager'])) {
             $this->pendingEmployeeLinks[] = [
                 'employee_id' => $employee->id,
-                'entity_id' => $entityId,
+                'company_id' => $companyId,
                 'field' => 'reporting_manager_id',
                 'reference' => $data['reporting_manager'],
             ];
@@ -365,7 +406,7 @@ class EmployeeImporter extends BaseImporter
         if (!$teamLeaderId && !empty($data['team_leader'])) {
             $this->pendingEmployeeLinks[] = [
                 'employee_id' => $employee->id,
-                'entity_id' => $entityId,
+                'company_id' => $companyId,
                 'field' => 'team_leader_id',
                 'reference' => $data['team_leader'],
             ];
@@ -408,6 +449,39 @@ class EmployeeImporter extends BaseImporter
                 ]
             );
         }
+
+        // ── Document links (PAN card / Aadhaar card) ──────────
+        // Cells contain URLs (e.g. Google Drive links) submitted via form upload.
+        // Stored as EmployeeDocument records so the link is traceable per employee.
+        $panDocPath     = $this->cleanCellString($data['pan_doc_path']     ?? null);
+        $aadhaarDocPath = $this->cleanCellString($data['aadhaar_doc_path'] ?? null);
+
+        if ($panDocPath) {
+            EmployeeDocument::updateOrCreate(
+                ['employee_id' => $employee->id, 'document_type' => 'pan'],
+                [
+                    'document_name' => 'PAN Card',
+                    'file_path'     => $panDocPath,
+                    'file_name'     => basename($panDocPath),
+                    'uploaded_by'   => auth()->id(),
+                ]
+            );
+        }
+
+        if ($aadhaarDocPath) {
+            // Also write to the denormalised column on the employee row
+            $employee->update(['aadhaar_document_path' => $aadhaarDocPath]);
+
+            EmployeeDocument::updateOrCreate(
+                ['employee_id' => $employee->id, 'document_type' => 'aadhaar'],
+                [
+                    'document_name' => 'Aadhaar Card',
+                    'file_path'     => $aadhaarDocPath,
+                    'file_name'     => basename($aadhaarDocPath),
+                    'uploaded_by'   => auth()->id(),
+                ]
+            );
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -417,7 +491,7 @@ class EmployeeImporter extends BaseImporter
     public function afterImport(): void
     {
         foreach ($this->pendingEmployeeLinks as $link) {
-            $managerId = $this->resolveEmployee($link['entity_id'], $link['reference']);
+            $managerId = $this->resolveEmployee($link['company_id'], $link['reference']);
 
             if (!$managerId || $managerId === $link['employee_id']) {
                 continue;
@@ -451,57 +525,94 @@ class EmployeeImporter extends BaseImporter
     }
 
     /**
-     * Parse date — accepts DD-MM-YYYY, DD/MM/YYYY, or any format Carbon understands.
+     * Parse date from any format Excel/user might supply.
+     *
+     * Handles:
+     *  • DateTimeInterface objects (PhpSpreadsheet date-formatted cells)
+     *  • Excel serial numbers (numeric cells with no date format)
+     *  • DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY  (Indian standard — tried first)
+     *  • YYYY-MM-DD / YYYY/MM/DD               (ISO)
+     *  • D-M-YYYY, D/M/YYYY                    (no leading zeros)
+     *  • DD-Mon-YYYY, DD Mon YYYY              (text month abbreviations)
+     *  • MM/DD/YYYY                            (US format — tried last to avoid ambiguity)
+     *
      * Returns null on failure instead of throwing.
      */
     protected function parseDate($value): ?string
     {
         if ($value === null || $value === '') return null;
 
-        // PHP DateTime / Carbon object (PhpSpreadsheet returns these for date-formatted cells)
+        // ── DateTimeInterface (PhpSpreadsheet returns this for date-formatted cells) ──
         if ($value instanceof \DateTimeInterface) {
             return Carbon::instance($value)->format('Y-m-d');
         }
 
-        // Excel serial number (integer or numeric string like '45473')
-        // Serials shown in the cell as a plain number mean Excel has no date format on that cell.
+        // ── Excel serial number ───────────────────────────────────────────────────────
+        // Numeric value means the cell had NO date number-format applied in Excel.
+        // Use PhpSpreadsheet's own converter which correctly handles Excel's 1900
+        // leap-year bug (Excel incorrectly treats 1900 as a leap year).
         if (is_numeric($value)) {
             $serial = (float) $value;
-            if ($serial < 1 || $serial > 2958465) return null; // outside 1900-9999 range
+            if ($serial < 1 || $serial > 2958465) return null; // outside 1900–9999 range
             try {
-                // Excel epoch: Dec 30, 1899 (accounting for Excel's 1900 leap-year bug).
-                // Use UTC so local timezone offset never shifts the date by ±1 day.
-                return Carbon::createFromTimestampUTC((int)(($serial - 25569) * 86400))->format('Y-m-d');
+                $dt = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($serial);
+                return Carbon::instance($dt)->format('Y-m-d');
             } catch (\Throwable) {
                 return null;
             }
         }
 
         $str = trim((string) $value);
-        if ($str === '' || strtolower($str) === 'working') return null;
 
-        // Try explicit date formats first (most specific to least specific)
-        foreach (['d-m-Y', 'd/m/Y', 'Y-m-d', 'Y-m-d H:i:s', 'd-m-y', 'd/m/y', 'd.m.Y', 'm/d/Y'] as $fmt) {
+        // Fast bail: empty, "Working" sentinel, or no digits at all (e.g. "Jay Dave")
+        if ($str === '' || strtolower($str) === 'working') return null;
+        if (!preg_match('/\d/', $str)) return null;
+
+        // ── Try explicit formats — Indian standard (DD-MM-YYYY) first ────────────────
+        $formats = [
+            'd-m-Y',        // 19-12-2017    DD-MM-YYYY  ← primary Indian format
+            'd/m/Y',        // 19/12/2017    DD/MM/YYYY
+            'd.m.Y',        // 19.12.2017    DD.MM.YYYY
+            'Y-m-d',        // 2017-12-19    ISO 8601
+            'Y/m/d',        // 2017/12/19    ISO with slashes
+            'Y-m-d H:i:s',  // 2017-12-19 00:00:00
+            'Y-m-d\TH:i:s', // 2017-12-19T00:00:00
+            'd-m-y',        // 19-12-17      two-digit year
+            'd/m/y',        // 19/12/17
+            'd.m.y',        // 19.12.17
+            'j-n-Y',        // 1-2-2019      no leading zeros DD-MM
+            'j/n/Y',        // 1/2/2019
+            'j.n.Y',        // 1.2.2019
+            'd-M-Y',        // 19-Dec-2017   text month abbreviation
+            'd/M/Y',        // 19/Dec/2017
+            'd M Y',        // 19 Dec 2017
+            'j M Y',        // 1 Dec 2017
+            'd-F-Y',        // 19-December-2017
+            'd F Y',        // 19 December 2017
+            'j-n-y',        // 1-2-19
+            'm/d/Y',        // 12/19/2017    US format (tried last — ambiguous with DD/MM)
+        ];
+
+        foreach ($formats as $fmt) {
             try {
                 $parsed = Carbon::createFromFormat($fmt, $str);
-                // createFromFormat can match partial strings — verify the year is sensible
                 if ($parsed && $parsed->year >= 1900 && $parsed->year <= 2100) {
                     return $parsed->format('Y-m-d');
                 }
             } catch (\Throwable) {
-                // try next
+                // try next format
             }
         }
 
-        // Carbon::parse as last resort — fails gracefully on non-date strings like 'Jay Dave'
+        // ── Carbon::parse as last resort ─────────────────────────────────────────────
+        // Handles many edge cases (e.g. "December 19, 2017") but is more permissive,
+        // so only reached after all explicit formats fail.
         try {
             $parsed = Carbon::parse($str);
             if ($parsed->year >= 1900 && $parsed->year <= 2100) {
                 return $parsed->format('Y-m-d');
             }
-        } catch (\Throwable) {
-            // not a date
-        }
+        } catch (\Throwable) {}
 
         return null;
     }
@@ -538,13 +649,13 @@ class EmployeeImporter extends BaseImporter
     /**
      * Look up an employee within the same entity by employee_id/external_emp_id or by full name.
      */
-    protected function resolveEmployee(int $entityId, $value): ?int
+    protected function resolveEmployee(int $companyId, $value): ?int
     {
         $value = $this->cleanCellString($value);
         if ($value === null) return null;
 
         // Try as employee ID first
-        $id = Employee::where('entity_id', $entityId)
+        $id = Employee::where('company_id', $companyId)
             ->where(function ($q) use ($value) {
                 $q->where('employee_id',     $value)
                   ->orWhere('external_emp_id', $value);
@@ -554,7 +665,7 @@ class EmployeeImporter extends BaseImporter
         if ($id) return $id;
 
         if (preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/i', $value)) {
-            $id = Employee::where('entity_id', $entityId)
+            $id = Employee::where('company_id', $companyId)
                 ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number', strtoupper($value)))
                 ->value('id');
 
@@ -562,18 +673,18 @@ class EmployeeImporter extends BaseImporter
         }
 
         // Fallback: match by full name (case-insensitive)
-        return Employee::where('entity_id', $entityId)
+        return Employee::where('company_id', $companyId)
             ->whereRaw("TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(middle_name,''),' ',COALESCE(last_name,''))) = ?", [trim($value)])
             ->value('id');
     }
 
-    protected function resolveImportEntityId($firm): int
+    protected function resolveImportCompanyId($firm): int
     {
-        $defaultEntityId = (int) ($this->meta['entity_id'] ?? Entity::query()->value('id') ?? 1);
+        $defaultCompanyId = (int) ($this->meta['company_id'] ?? Company::query()->value('id') ?? 1);
         $firm = $this->cleanCellString($firm);
 
         if ($firm === null) {
-            return $defaultEntityId;
+            return $defaultCompanyId;
         }
 
         $company = Company::firstOrCreate(
@@ -581,20 +692,15 @@ class EmployeeImporter extends BaseImporter
             ['short_name' => $this->makeShortName($firm), 'is_active' => true]
         );
 
-        $entity = Entity::firstOrCreate(
-            ['company_id' => $company->id, 'name' => $firm],
-            ['short_name' => $this->makeShortName($firm), 'is_active' => true]
-        );
-
-        return (int) $entity->id;
+        return (int) $company->id;
     }
 
-    protected function resolveOrCreateMasterId(string $model, $value, int $entityId, array $extra = []): ?int
+    protected function resolveOrCreateMasterId(string $model, $value, int $companyId, array $extra = []): ?int
     {
         $name = $this->cleanCellString($value);
         if ($name === null) return null;
 
-        $record = $model::where('entity_id', $entityId)
+        $record = $model::where('company_id', $companyId)
             ->whereRaw('LOWER(name) = LOWER(?)', [$name])
             ->first();
 
@@ -603,7 +709,7 @@ class EmployeeImporter extends BaseImporter
         }
 
         $payload = array_filter(array_merge([
-            'entity_id' => $entityId,
+            'company_id' => $companyId,
             'name' => $name,
             'code' => $this->makeCode($name),
             'is_active' => true,

@@ -74,7 +74,7 @@
       @endphp
       <tr>
         <td class="mono" style="font-size:12px">{{ $loan->loan_number }}</td>
-        <td style="white-space:nowrap">{{ $loan->employee?->first_name }} {{ $loan->employee?->last_name }}
+        <td style="white-space:nowrap">{{ $loan->employee?->full_name }}
           <div style="font-size:10px;color:var(--t3)">{{ $loan->employee?->employee_id }}</div>
         </td>
         <td style="font-size:11px">{{ $loan->loanType?->name ?? 'Advance' }}</td>
@@ -208,7 +208,7 @@
           <select name="employee_id" required @error('employee_id') class="inp-err" @enderror>
             <option value="">Select employee</option>
             @foreach($employees as $emp)
-            <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>{{ $emp->employee_id }} — {{ $emp->first_name }} {{ $emp->last_name }}</option>
+            <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>{{ $emp->employee_id }} — {{ $emp->full_name }}</option>
             @endforeach
           </select>
           @error('employee_id') <div class="ferr">{{ $message }}</div> @enderror

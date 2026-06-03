@@ -17,7 +17,7 @@ use Carbon\Carbon;
 class PayrollRun extends Model
 {
     protected $fillable = [
-        'payroll_period_id','entity_id','run_type','run_name',
+        'payroll_period_id','company_id','run_type','run_name',
         'total_employees','total_gross','total_deductions','total_net',
         'total_employer_contribution','status','is_editable',
         'calculated_at','calculated_by','approved_at','approved_by','remarks',
@@ -31,7 +31,7 @@ class PayrollRun extends Model
     ];
 
     public function period(): BelongsTo      { return $this->belongsTo(PayrollPeriod::class, 'payroll_period_id'); }
-    public function entity(): BelongsTo      { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo      { return $this->belongsTo(Company::class); }
     public function calculatedBy(): BelongsTo{ return $this->belongsTo(User::class, 'calculated_by'); }
     public function approvedBy(): BelongsTo  { return $this->belongsTo(User::class, 'approved_by'); }
     public function employeeRecords(): HasMany{ return $this->hasMany(PayrollEmployeeRecord::class); }

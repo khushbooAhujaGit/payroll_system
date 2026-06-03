@@ -21,7 +21,7 @@ class ReimbursementController extends Controller
 
     public function types(Request $request): JsonResponse
     {
-        $types = ReimbursementType::where('entity_id', $request->entity_id)->where('is_active', true)->get();
+        $types = ReimbursementType::where('company_id', $request->company_id)->where('is_active', true)->get();
         return response()->json(['data' => $types]);
     }
 
@@ -30,7 +30,7 @@ class ReimbursementController extends Controller
         $this->authorize('reimbursement.manage');
 
         $validated = $request->validate([
-            'entity_id'     => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'          => 'required|string|max:100',
             'code'          => 'required|string|max:20',
             'monthly_limit' => 'nullable|numeric|min:0',
@@ -167,12 +167,12 @@ class ReimbursementController extends Controller
         $this->authorize('reimbursement.view');
 
         $claims = ReimbursementClaim::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
             'items.reimbursementType:id,name',
             'approvedBy:id,name',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->when($request->year,   fn($q) => $q->where('year', $request->year))
         ->when($request->month,  fn($q) => $q->where('month', $request->month))
@@ -231,12 +231,12 @@ class ReimbursementController extends Controller
 
         $summary = ReimbursementClaim::where('year', $request->get('year', now()->year))
             ->when($request->month, fn($q) => $q->where('month', $request->month))
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->selectRaw('status, SUM(total_claimed) as total_claimed, SUM(total_approved) as total_approved, COUNT(*) as count')
             ->groupBy('status')
             ->get();
 
-        $byType = ReimbursementItem::whereHas('claim', fn($q) => $q->whereHas('employee', fn($q2) => $q2->where('entity_id', $request->entity_id))
+        $byType = ReimbursementItem::whereHas('claim', fn($q) => $q->whereHas('employee', fn($q2) => $q2->where('company_id', $request->company_id))
             ->where('status', 'approved'))
             ->where('status', 'approved')
             ->selectRaw('reimbursement_type_id, SUM(approved_amount) as total_approved, COUNT(*) as count')

@@ -16,7 +16,7 @@ use Carbon\Carbon;
 
 class EsicSetting extends Model
 {
-    protected $fillable = ['entity_id','employee_contribution_pct','employer_contribution_pct','wage_limit'];
+    protected $fillable = ['company_id','employee_contribution_pct','employer_contribution_pct','wage_limit'];
     protected $casts    = ['wage_limit' => 'decimal:2'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

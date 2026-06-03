@@ -71,7 +71,7 @@
         </td>
         <td>
           @if($bio->employee)
-            {{ $bio->employee->first_name }} {{ $bio->employee->last_name }}
+            {{ $bio->employee->full_name }}
           @else
             <span style="color:var(--t3)">— unlinked —</span>
           @endif
@@ -128,7 +128,7 @@
           <select name="employee_id" required>
             <option value="">Select employee</option>
             @foreach($employees as $emp)
-            <option value="{{ $emp->id }}">{{ $emp->employee_id }} — {{ $emp->first_name }} {{ $emp->last_name }}</option>
+            <option value="{{ $emp->id }}">{{ $emp->employee_id }} — {{ $emp->full_name }}</option>
             @endforeach
           </select>
         </div>

@@ -16,7 +16,7 @@ use Carbon\Carbon;
 
 class PtSlab extends Model
 {
-    protected $fillable = ['entity_id','state','salary_from','salary_to','pt_amount','effective_year','is_active'];
+    protected $fillable = ['company_id','state','salary_from','salary_to','pt_amount','effective_year','is_active'];
     protected $casts    = ['salary_from' => 'decimal:2', 'salary_to' => 'decimal:2', 'pt_amount' => 'decimal:2'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

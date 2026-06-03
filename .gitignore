@@ -2,6 +2,7 @@
 /node_modules
 .env
 /public/storage
+/public/salary-archives
 /storage/*.key
 .claude
 /{public,app

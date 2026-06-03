@@ -79,9 +79,9 @@ class LoanImporter extends BaseImporter
 
     public function process(array $data, int $rowNumber): void
     {
-        $entityId = $this->meta['entity_id'];
+        $companyId = $this->meta['company_id'];
 
-        $employee = Employee::where('entity_id', $entityId)
+        $employee = Employee::where('company_id', $companyId)
             ->where('employee_id', $data['emp_id'])
             ->first();
 
@@ -90,11 +90,11 @@ class LoanImporter extends BaseImporter
         }
 
         // Use Salary Advance loan type for this entity
-        $loanType = LoanType::where('entity_id', $entityId)->where('code', 'SA')->first()
-            ?? LoanType::where('entity_id', $entityId)->first();
+        $loanType = LoanType::where('company_id', $companyId)->where('code', 'SA')->first()
+            ?? LoanType::where('company_id', $companyId)->first();
 
         if (!$loanType) {
-            throw new \RuntimeException("No loan type configured for entity {$entityId}");
+            throw new \RuntimeException("No loan type configured for entity {$companyId}");
         }
 
         $loanNumber = 'LN-' . now()->year . '-' . str_pad(EmployeeLoan::count() + 1, 4, '0', STR_PAD_LEFT);

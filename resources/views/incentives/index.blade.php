@@ -4,6 +4,8 @@
 @section('page_actions')
   <a href="{{ route('incentives.template') }}" class="btn">📥 Template</a>
   <button class="btn" onclick="om('inc-import-modal')">📤 Import</button>
+  <a href="{{ route('incentives.export') . '?' . http_build_query(request()->only('month')) }}" class="btn">⬇ Export</a>
+  <button class="btn acc" onclick="openIncModal()">+ Add Incentive</button>
 @endsection
 
 @section('content')
@@ -21,28 +23,32 @@
 {{-- Stat cards --}}
 <div class="g4" style="margin-bottom:16px">
   <div class="sc">
-    <div class="lbl">Employees</div>
-    <div class="val">{{ $employees->count() }}</div>
-  </div>
-  <div class="sc">
-    <div class="lbl">With Incentive</div>
-    <div class="val" style="color:var(--grn)">{{ $incentives->count() }}</div>
+    <div class="lbl">Records This Month</div>
+    <div class="val">{{ $records->total() }}</div>
   </div>
   <div class="sc">
     <div class="lbl">Total Incentive (₹)</div>
-    <div class="val">{{ number_format($totalIncentive, 0) }}</div>
+    <div class="val" style="color:var(--grn)">{{ number_format($totalIncentive, 0) }}</div>
   </div>
   <div class="sc">
     <div class="lbl">Month</div>
     <div class="val" style="font-size:14px">{{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('M Y') }}</div>
+  </div>
+  <div class="sc">
+    <div class="lbl">Actions</div>
+    <div class="val" style="font-size:12px">
+      <button class="btn sm acc" onclick="openIncModal()">+ Add</button>
+    </div>
   </div>
 </div>
 
 <div class="card">
   <div class="ch">
     <div class="ct">Incentives — {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('M Y') }}</div>
-    <div style="font-size:11px;color:var(--t3)">Click <strong>Add</strong> next to an employee to enter their incentive amount</div>
+    <div style="font-size:11px;color:var(--t3)">{{ $records->total() }} record(s)</div>
   </div>
+
+  @if($records->isNotEmpty())
   <table>
     <thead>
       <tr>
@@ -54,45 +60,69 @@
       </tr>
     </thead>
     <tbody>
-      @foreach($employees as $emp)
-      @php $inc = $incentives[$emp->id] ?? null; @endphp
+      @foreach($records as $inc)
+      @php $emp = $inc->employee; @endphp
       <tr>
-        <td class="mono">{{ $emp->employee_id }}</td>
-        <td>{{ $emp->first_name }} {{ $emp->last_name }}</td>
-        <td style="text-align:right;font-weight:{{ $inc ? '600' : '400' }};color:{{ $inc ? 'var(--grn)' : 'var(--t3)' }}">
-          {{ $inc ? '₹ ' . number_format($inc->amount, 0) : '—' }}
+        <td class="mono">{{ $emp?->employee_id ?? '—' }}</td>
+        <td>{{ $emp?->full_name }}</td>
+        <td style="text-align:right;font-weight:600;color:var(--grn)">
+          ₹ {{ number_format($inc->amount, 0) }}
         </td>
-        <td style="font-size:11px;color:var(--t2)">{{ $inc?->reason ?? '—' }}</td>
+        <td style="font-size:11px;color:var(--t2)">{{ $inc->reason ?? '—' }}</td>
         <td style="white-space:nowrap">
           <button class="btn sm"
-            onclick="openIncModal({{ $emp->id }}, '{{ addslashes($emp->first_name) }} {{ addslashes($emp->last_name) }}', {{ $inc?->amount ?? 0 }}, '{{ addslashes($inc?->reason ?? '') }}', '{{ $inc?->month ?? $month }}')">
-            {{ $inc ? 'Edit' : 'Add' }}
+            onclick="openIncModal({{ $inc->employee_id }}, '{{ addslashes($emp?->full_name) }}', {{ $inc->amount }}, '{{ addslashes($inc->reason ?? '') }}', '{{ $inc->month }}')">
+            Edit
           </button>
-          @if($inc)
           <form method="POST" action="{{ route('incentives.destroy', $inc) }}" style="display:inline">
             @csrf @method('DELETE')
             <button type="button" class="btn sm" style="color:var(--red)"
-              onclick="swConfirm(this.closest('form'), 'Remove Incentive?', 'The incentive for {{ $emp->first_name }} will be permanently removed.', 'warning', 'Yes, remove', '#dc2626')">Del</button>
+              onclick="swConfirm(this.closest('form'), 'Remove Incentive?', 'The incentive for {{ $emp?->first_name }} will be permanently removed.', 'warning', 'Yes, remove', '#dc2626')">Del</button>
           </form>
-          @endif
         </td>
       </tr>
       @endforeach
     </tbody>
   </table>
+  <div style="margin-top:14px">{{ $records->withQueryString()->links() }}</div>
+  @else
+  <div class="empty">
+    <div class="ico">💰</div>
+    <p>No incentive records for {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('M Y') }}.</p>
+    <p style="font-size:12px;color:var(--t3);margin-top:4px">
+      Click <strong>+ Add Incentive</strong> to enter one, or <strong>📤 Import</strong> to bulk-upload.
+    </p>
+  </div>
+  @endif
 </div>
 
-{{-- Set / Edit Modal --}}
+{{-- Add / Edit Modal --}}
 <div class="modal" id="inc-modal">
   <div class="mb">
     <div class="mh">
-      <span class="mt" id="inc-modal-title">Set Incentive</span>
+      <span class="mt" id="inc-modal-title">Add Incentive</span>
       <button class="mc" onclick="cm('inc-modal')">✕</button>
     </div>
     <form method="POST" action="{{ route('incentives.upsert') }}">
       @csrf
       <input type="hidden" name="employee_id" id="inc-emp-id">
       <div class="fg2">
+        <div class="fld full" id="inc-emp-select-wrap">
+          <label class="req">Employee</label>
+          <select name="_emp_select" id="inc-emp-select" onchange="incEmpChanged(this)"
+            style="width:100%">
+            <option value="">— Select employee —</option>
+            @foreach($allEmployees as $emp)
+            <option value="{{ $emp->id }}" data-name="{{ $emp->full_name }}">
+              {{ $emp->employee_id }} — {{ $emp->full_name }}
+            </option>
+            @endforeach
+          </select>
+        </div>
+        <div class="fld" id="inc-emp-display" style="display:none">
+          <label>Employee</label>
+          <div id="inc-emp-name-display" style="font-weight:600;padding:6px 0;color:var(--t1)"></div>
+        </div>
         <div class="fld">
           <label class="req">Month</label>
           <input type="month" name="month" id="inc-month" required value="{{ $month }}"
@@ -152,13 +182,30 @@
 
 @push('scripts')
 <script>
+// empId=null → Add mode (show employee select dropdown)
+// empId set  → Edit mode (show employee name, hide select)
 function openIncModal(empId, name, amount, reason, month) {
-  document.getElementById('inc-modal-title').textContent = 'Incentive — ' + name;
-  document.getElementById('inc-emp-id').value   = empId;
+  const isEdit = !!empId;
+  document.getElementById('inc-modal-title').textContent = isEdit ? ('Incentive — ' + name) : 'Add Incentive';
+  document.getElementById('inc-emp-id').value   = empId || '';
   document.getElementById('inc-month').value    = month || '{{ $month }}';
   document.getElementById('inc-amount').value   = amount || '';
   document.getElementById('inc-reason').value   = reason || '';
+
+  // Toggle employee selector vs display
+  document.getElementById('inc-emp-select-wrap').style.display = isEdit ? 'none' : '';
+  document.getElementById('inc-emp-display').style.display     = isEdit ? '' : 'none';
+  if (isEdit) {
+    document.getElementById('inc-emp-name-display').textContent = name || '';
+    document.getElementById('inc-emp-select').value = '';
+  } else {
+    document.getElementById('inc-emp-select').value = '';
+  }
   om('inc-modal');
+}
+
+function incEmpChanged(sel) {
+  document.getElementById('inc-emp-id').value = sel.value;
 }
 </script>
 @endpush

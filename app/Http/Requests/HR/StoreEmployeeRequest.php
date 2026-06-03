@@ -11,7 +11,8 @@ class StoreEmployeeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'entity_id'              => 'required|exists:entities,id',
+            'company_id'             => 'required|exists:companies,id',
+            'employee_id'            => 'nullable|string|max:20',
             'branch_id'              => 'nullable|exists:branches,id',
             'department_id'          => 'nullable|exists:departments,id',
             'designation_id'         => 'nullable|exists:designations,id',
@@ -51,16 +52,16 @@ class StoreEmployeeRequest extends FormRequest
             'is_tds_applicable'      => 'boolean',
             'tds_regime'             => 'in:old,new',
 
-            // Statutory (optional at creation)
-            'pan_number'             => 'nullable|regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/',
-            'aadhaar_number'         => 'nullable|regex:/^\d{12}$/',
+            // Statutory — required at creation
+            'pan_number'             => ['required', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/'],
+            'aadhaar_number'         => 'required|regex:/^\d{12}$/',
             'uan_number'             => 'nullable|string|max:12',
 
-            // Bank
-            'bank_name'              => 'nullable|string|max:100',
-            'account_number'         => 'nullable|string|max:30',
-            'ifsc_code'              => 'nullable|regex:/^[A-Z]{4}0[A-Z0-9]{6}$/',
-            'account_holder_name'    => 'nullable|string|max:200',
+            // Bank — required at creation
+            'bank_name'              => 'required|string|max:100',
+            'account_number'         => 'required|string|max:30',
+            'ifsc_code'              => ['required', 'regex:/^[A-Z]{4}0[A-Z0-9]{6}$/'],
+            'account_holder_name'    => 'required|string|max:200',
 
             // Emergency contact
             'emergency_contact_name' => 'nullable|string|max:100',

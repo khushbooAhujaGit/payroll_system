@@ -75,7 +75,7 @@ class WebTdsController extends Controller
         $sheet->setTitle('TDS Slabs');
         $headers = ['Financial Year', 'Regime', 'Income From', 'Income To', 'Tax Rate %', 'Surcharge %', 'Cess %'];
         foreach ($headers as $i => $h) {
-            $sheet->setCellValueByColumnAndRow($i + 1, 1, $h);
+            $sheet->setCellValue([$i + 1, 1], $h);
         }
         // Sample row
         $sheet->fromArray([2024, 'new', 0, 300000, 0, 0, 4], null, 'A2');

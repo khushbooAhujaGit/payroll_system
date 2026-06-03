@@ -17,10 +17,10 @@ use Carbon\Carbon;
 class HelpdeskCategory extends Model
 {
     protected $table = 'helpdesk_categories';
-    protected $fillable = ['entity_id','name','parent_id','assigned_team','sla_hours','is_active'];
+    protected $fillable = ['company_id','name','parent_id','assigned_team','sla_hours','is_active'];
     protected $casts    = ['is_active' => 'boolean'];
 
-    public function entity(): BelongsTo   { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo   { return $this->belongsTo(Company::class); }
     public function parent(): BelongsTo   { return $this->belongsTo(HelpdeskCategory::class, 'parent_id'); }
     public function children(): HasMany   { return $this->hasMany(HelpdeskCategory::class, 'parent_id'); }
     public function tickets(): HasMany    { return $this->hasMany(HelpdeskTicket::class, 'category_id'); }

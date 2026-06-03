@@ -16,6 +16,6 @@ use Carbon\Carbon;
 
 class BonusRule extends Model
 {
-    protected $fillable = ['entity_id','name','bonus_type','amount_or_pct','calculation_basis','frequency','is_taxable','is_in_payroll','is_active'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    protected $fillable = ['company_id','name','bonus_type','amount_or_pct','calculation_basis','frequency','is_taxable','is_in_payroll','is_active'];
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

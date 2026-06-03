@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Entity;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRun;
@@ -14,14 +15,14 @@ class WebPayrollController extends Controller
 {
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
-        $periods = PayrollPeriod::where('entity_id', $entityId)
+        $periods = PayrollPeriod::where('company_id', $companyId)
             ->withCount('runs')
             ->orderByDesc('year')->orderByDesc('month')
             ->paginate(24);
 
-        $lastRun = PayrollRun::where('entity_id', $entityId)
+        $lastRun = PayrollRun::where('company_id', $companyId)
             ->whereIn('status', ['finalized', 'paid'])
             ->orderByDesc('id')->first();
 
@@ -45,17 +46,17 @@ class WebPayrollController extends Controller
         $userIds = $savedReports->pluck('locked_by')->filter()->unique()->all();
         $lockers = User::whereIn('id', $userIds)->pluck('name', 'id');
 
-        $entities = Entity::orderBy('name')->get(['id', 'name', 'short_name']);
+        $companies = Company::orderBy('name')->get(['id', 'name', 'short_name']);
 
         return view('payroll.index', compact(
-            'periods', 'lastRun', 'entityId',
-            'savedReports', 'lockers', 'entities'
+            'periods', 'lastRun', 'companyId',
+            'savedReports', 'lockers', 'companies'
         ));
     }
 
     public function createPeriod(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'year'        => 'required|integer|min:2000|max:2100',
@@ -65,7 +66,7 @@ class WebPayrollController extends Controller
             'payment_date'=> 'nullable|date',
         ]);
 
-        $exists = PayrollPeriod::where('entity_id', $entityId)
+        $exists = PayrollPeriod::where('company_id', $companyId)
             ->where('year', $validated['year'])
             ->where('month', $validated['month'])->exists();
 
@@ -74,7 +75,7 @@ class WebPayrollController extends Controller
         }
 
         PayrollPeriod::create(array_merge($validated, [
-            'entity_id'            => $entityId,
+            'company_id' => $companyId,
             'attendance_lock_date' => $validated['period_to'],
             'status'               => 'open',
         ]));
@@ -97,7 +98,7 @@ class WebPayrollController extends Controller
 
         PayrollRun::create([
             'payroll_period_id' => $period->id,
-            'entity_id'         => $period->entity_id,
+            'company_id' => $period->company_id,
             'run_type'          => $validated['run_type'],
             'run_name'          => ucfirst($validated['run_type']),
             'status'            => 'draft',

@@ -15,7 +15,7 @@ class BonusController extends Controller
     public function index(Request $request): JsonResponse
     {
         return response()->json([
-            'data' => BonusRule::where('entity_id', $request->entity_id)->where('is_active', true)->get()
+            'data' => BonusRule::where('company_id', $request->company_id)->where('is_active', true)->get()
         ]);
     }
 
@@ -24,7 +24,7 @@ class BonusController extends Controller
         $this->authorize('payroll.edit');
 
         $validated = $request->validate([
-            'entity_id'         => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'              => 'required|string|max:100',
             'bonus_type'        => 'required|in:performance,statutory,festival,gratuitous,retention',
             'amount_or_pct'     => 'required|in:amount,percentage',

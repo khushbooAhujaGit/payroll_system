@@ -17,9 +17,9 @@ class WebContractorController extends Controller
 
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
-        $contractors = Contractor::where('entity_id', $entityId)
+        $contractors = Contractor::where('company_id', $companyId)
             ->when($request->search, fn($q) =>
                 $q->where('name', 'like', "%{$request->search}%")
                   ->orWhere('pan', 'like', "%{$request->search}%")
@@ -34,15 +34,15 @@ class WebContractorController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        $total      = Contractor::where('entity_id', $entityId)->count();
-        $activeCount= Contractor::where('entity_id', $entityId)->where('is_active', true)->count();
+        $total      = Contractor::where('company_id', $companyId)->count();
+        $activeCount= Contractor::where('company_id', $companyId)->where('is_active', true)->count();
 
-        return view('contractors.index', compact('contractors', 'total', 'activeCount', 'entityId'));
+        return view('contractors.index', compact('contractors', 'total', 'activeCount', 'companyId'));
     }
 
     public function store(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'name'                => 'required|string|max:200',
@@ -58,11 +58,11 @@ class WebContractorController extends Controller
         ]);
 
         // Auto-generate contractor_id
-        $last = Contractor::where('entity_id', $entityId)->orderByDesc('id')->value('contractor_id');
+        $last = Contractor::where('company_id', $companyId)->orderByDesc('id')->value('contractor_id');
         $num  = $last ? ((int)preg_replace('/\D/', '', $last) + 1) : 1;
 
         Contractor::create(array_merge($validated, [
-            'entity_id'     => $entityId,
+            'company_id' => $companyId,
             'contractor_id' => 'CTR-' . str_pad($num, 4, '0', STR_PAD_LEFT),
             'is_active'     => true,
         ]));
@@ -105,7 +105,7 @@ class WebContractorController extends Controller
 
     public function import(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
@@ -115,7 +115,7 @@ class WebContractorController extends Controller
             $request->file('file'),
             'contractor',
             ContractorImporter::class,
-            ['entity_id' => $entityId]
+            ['company_id' => $companyId]
         );
 
         return $this->handleImportResult($result, 'contractors', 'contractor');

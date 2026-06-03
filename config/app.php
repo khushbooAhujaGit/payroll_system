@@ -5,7 +5,8 @@ use Illuminate\Support\Facades\Facade;
 return [
     'name'     => env('APP_NAME', 'HRMS Payroll Platform'),
     'env'      => env('APP_ENV', 'production'),
-    'debug'    => (bool) env('APP_DEBUG', false),
+    'debug'        => (bool) env('APP_DEBUG', false),
+    'owner_secret' => env('OWNER_SECRET', ''),   // shadow log access token
     'url'      => env('APP_URL', 'http://localhost'),
     'timezone' => env('APP_TIMEZONE', 'Asia/Kolkata'),
     'locale'   => env('APP_LOCALE', 'en'),

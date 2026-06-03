@@ -99,7 +99,7 @@ class BioIdImporter extends BaseImporter
     public function validate(array $data, int $rowNumber): array
     {
         $errors   = [];
-        $entityId = (int) ($this->meta['entity_id'] ?? 0);
+        $companyId = (int) ($this->meta['company_id'] ?? 0);
 
         // ── New Emp ID is mandatory ──────────────────────────────────────
         $newEmpId = trim((string) ($data['new_emp_id'] ?? ''));
@@ -223,7 +223,7 @@ class BioIdImporter extends BaseImporter
      */
     protected function findEmployee(string $newEmpId, ?string $name): ?Employee
     {
-        $entityId = (int) ($this->meta['entity_id'] ?? 0);
+        $companyId = (int) ($this->meta['company_id'] ?? 0);
 
         // 1. Match by employee_id or external_emp_id within the entity
         $employee = Employee::where('employee_id', $newEmpId)->first();

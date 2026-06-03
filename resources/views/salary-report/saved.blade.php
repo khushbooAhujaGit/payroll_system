@@ -72,7 +72,7 @@
           <form method="POST" action="{{ route('salary.report.download') }}" style="display:inline">
             @csrf
             <input type="hidden" name="month" value="{{ $rep['year_month'] }}">
-            <input type="hidden" name="entity_id" value="0">
+            <input type="hidden" name="company_id" value="0">
             <button type="submit" class="btn sm" style="font-size:10px">📥 Excel</button>
           </form>
 
@@ -91,7 +91,7 @@
           <form method="POST" action="{{ route('salary.report.unlock') }}" style="display:inline">
             @csrf
             <input type="hidden" name="month" value="{{ $rep['year_month'] }}">
-            <input type="hidden" name="entity_id" value="0">
+            <input type="hidden" name="company_id" value="0">
             <button type="button" class="btn sm" style="font-size:10px;color:var(--t2)"
               onclick="swConfirm(this.closest('form'),
                 'Unlock report?',

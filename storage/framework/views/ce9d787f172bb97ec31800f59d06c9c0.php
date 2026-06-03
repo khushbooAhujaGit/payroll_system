@@ -73,7 +73,7 @@
       ?>
       <tr>
         <td class="mono" style="font-size:12px"><?php echo e($loan->loan_number); ?></td>
-        <td style="white-space:nowrap"><?php echo e($loan->employee?->first_name); ?> <?php echo e($loan->employee?->last_name); ?>
+        <td style="white-space:nowrap"><?php echo e($loan->employee?->full_name); ?>
 
           <div style="font-size:10px;color:var(--t3)"><?php echo e($loan->employee?->employee_id); ?></div>
         </td>
@@ -217,7 +217,7 @@ endif;
 unset($__errorArgs, $__bag); ?>>
             <option value="">Select employee</option>
             <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-            <option value="<?php echo e($emp->id); ?>" <?php echo e(old('employee_id') == $emp->id ? 'selected' : ''); ?>><?php echo e($emp->employee_id); ?> — <?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?></option>
+            <option value="<?php echo e($emp->id); ?>" <?php echo e(old('employee_id') == $emp->id ? 'selected' : ''); ?>><?php echo e($emp->employee_id); ?> — <?php echo e($emp->full_name); ?></option>
             <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
           </select>
           <?php $__errorArgs = ['employee_id'];

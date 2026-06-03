@@ -24,7 +24,7 @@ class StatutoryController extends Controller
 
     public function pfSettings(Request $request): JsonResponse
     {
-        $settings = PfSetting::where('entity_id', $request->entity_id)->first();
+        $settings = PfSetting::where('company_id', $request->company_id)->first();
         return response()->json(['data' => $settings]);
     }
 
@@ -33,7 +33,7 @@ class StatutoryController extends Controller
         $this->authorize('statutory.manage');
 
         $validated = $request->validate([
-            'entity_id'                  => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'employee_contribution_pct'  => 'required|numeric|between:0,100',
             'employer_contribution_pct'  => 'required|numeric|between:0,100',
             'eps_contribution_pct'       => 'required|numeric|between:0,100',
@@ -44,7 +44,7 @@ class StatutoryController extends Controller
             'allow_vpf'                  => 'boolean',
         ]);
 
-        $settings = PfSetting::updateOrCreate(['entity_id' => $validated['entity_id']], $validated);
+        $settings = PfSetting::updateOrCreate(['company_id' => $validated['company_id']], $validated);
 
         return response()->json(['message' => 'PF settings saved.', 'data' => $settings]);
     }
@@ -55,7 +55,7 @@ class StatutoryController extends Controller
 
     public function esicSettings(Request $request): JsonResponse
     {
-        $settings = EsicSetting::where('entity_id', $request->entity_id)->first();
+        $settings = EsicSetting::where('company_id', $request->company_id)->first();
         return response()->json(['data' => $settings]);
     }
 
@@ -64,13 +64,13 @@ class StatutoryController extends Controller
         $this->authorize('statutory.manage');
 
         $validated = $request->validate([
-            'entity_id'                 => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'employee_contribution_pct' => 'required|numeric|between:0,100',
             'employer_contribution_pct' => 'required|numeric|between:0,100',
             'wage_limit'                => 'required|numeric|min:0',
         ]);
 
-        $settings = EsicSetting::updateOrCreate(['entity_id' => $validated['entity_id']], $validated);
+        $settings = EsicSetting::updateOrCreate(['company_id' => $validated['company_id']], $validated);
 
         return response()->json(['message' => 'ESIC settings saved.', 'data' => $settings]);
     }
@@ -81,7 +81,7 @@ class StatutoryController extends Controller
 
     public function ptSlabs(Request $request): JsonResponse
     {
-        $slabs = PtSlab::where('entity_id', $request->entity_id)
+        $slabs = PtSlab::where('company_id', $request->company_id)
             ->where('is_active', true)
             ->orderBy('salary_from')
             ->get();
@@ -94,7 +94,7 @@ class StatutoryController extends Controller
         $this->authorize('statutory.manage');
 
         $validated = $request->validate([
-            'entity_id' => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'state'     => 'required|string',
             'slabs'     => 'required|array',
             'slabs.*.salary_from' => 'required|numeric|min:0',
@@ -103,11 +103,11 @@ class StatutoryController extends Controller
         ]);
 
         // Deactivate old slabs for this state
-        PtSlab::where('entity_id', $validated['entity_id'])->where('state', $validated['state'])->update(['is_active' => false]);
+        PtSlab::where('company_id', $validated['company_id'])->where('state', $validated['state'])->update(['is_active' => false]);
 
         foreach ($validated['slabs'] as $slab) {
             PtSlab::create([
-                'entity_id'   => $validated['entity_id'],
+                'company_id' => $validated['company_id'],
                 'state'       => $validated['state'],
                 'salary_from' => $slab['salary_from'],
                 'salary_to'   => $slab['salary_to'] ?? null,
@@ -196,13 +196,13 @@ class StatutoryController extends Controller
         }
 
         $content  = implode("\n", $lines);
-        $fileName = "ecr/{$payrollRun->entity_id}/{$period->year}_{$period->month}_ecr.txt";
+        $fileName = "ecr/{$payrollRun->company_id}/{$period->year}_{$period->month}_ecr.txt";
         Storage::put($fileName, $content);
 
         $ecr = PfEcrRegister::updateOrCreate(
             ['payroll_run_id' => $payrollRun->id],
             [
-                'entity_id'           => $payrollRun->entity_id,
+                'company_id' => $payrollRun->company_id,
                 'year'                => $period->year,
                 'month'               => $period->month,
                 'total_employees'     => $records->count(),
@@ -237,7 +237,7 @@ class StatutoryController extends Controller
 
     public function challans(Request $request): JsonResponse
     {
-        $challans = ComplianceChallan::where('entity_id', $request->entity_id)
+        $challans = ComplianceChallan::where('company_id', $request->company_id)
             ->when($request->challan_type, fn($q) => $q->where('challan_type', $request->challan_type))
             ->when($request->year, fn($q) => $q->where('year', $request->year))
             ->when($request->status, fn($q) => $q->where('status', $request->status))
@@ -252,7 +252,7 @@ class StatutoryController extends Controller
         $this->authorize('statutory.manage');
 
         $validated = $request->validate([
-            'entity_id'    => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'challan_type' => 'required|in:pf,esic,pt,tds,lwf',
             'year'         => 'required|integer',
             'month'        => 'required|integer|min:1|max:12',
@@ -277,7 +277,7 @@ class StatutoryController extends Controller
 
         $receiptPath = null;
         if ($request->hasFile('receipt')) {
-            $receiptPath = $request->file('receipt')->store("challans/{$challan->entity_id}", 'local');
+            $receiptPath = $request->file('receipt')->store("challans/{$challan->company_id}", 'local');
         }
 
         $challan->update([
@@ -298,24 +298,24 @@ class StatutoryController extends Controller
     {
         $this->authorize('statutory.view');
 
-        $entityId = $request->entity_id;
+        $companyId = $request->company_id;
         $year     = $request->get('year', now()->year);
 
         // Overdue challans
-        $overdue = ComplianceChallan::where('entity_id', $entityId)
+        $overdue = ComplianceChallan::where('company_id', $companyId)
             ->where('due_date', '<', now())
             ->where('status', 'pending')
             ->get();
 
         // Due this month
-        $dueThisMonth = ComplianceChallan::where('entity_id', $entityId)
+        $dueThisMonth = ComplianceChallan::where('company_id', $companyId)
             ->whereYear('due_date', now()->year)
             ->whereMonth('due_date', now()->month)
             ->where('status', 'pending')
             ->get();
 
         // Monthly summary for the year
-        $monthlySummary = ComplianceChallan::where('entity_id', $entityId)
+        $monthlySummary = ComplianceChallan::where('company_id', $companyId)
             ->where('year', $year)
             ->selectRaw('month, challan_type, SUM(amount) as total, SUM(penalty) as penalty, status')
             ->groupBy('month', 'challan_type', 'status')
@@ -323,7 +323,7 @@ class StatutoryController extends Controller
             ->get();
 
         // Annual totals by type
-        $annualTotals = ComplianceChallan::where('entity_id', $entityId)
+        $annualTotals = ComplianceChallan::where('company_id', $companyId)
             ->where('year', $year)
             ->selectRaw('challan_type, SUM(amount) as total_amount, COUNT(*) as count, SUM(CASE WHEN status="paid" THEN 1 ELSE 0 END) as paid_count')
             ->groupBy('challan_type')

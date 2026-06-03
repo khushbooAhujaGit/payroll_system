@@ -16,8 +16,8 @@ use Carbon\Carbon;
 
 class LoanType extends Model
 {
-    protected $fillable = ['entity_id','name','code','max_amount','max_emi','interest_rate','is_active'];
+    protected $fillable = ['company_id','name','code','max_amount','max_emi','interest_rate','is_active'];
     protected $casts    = ['max_amount' => 'decimal:2', 'interest_rate' => 'decimal:2', 'is_active' => 'boolean'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
     public function loans(): HasMany    { return $this->hasMany(EmployeeLoan::class); }
 }

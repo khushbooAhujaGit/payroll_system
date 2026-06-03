@@ -70,16 +70,16 @@ class ContractorImporter extends BaseImporter
     {
         $success = 0;
         $errors  = [];
-        $entityId = $context['entity_id'];
+        $companyId = $context['company_id'];
 
-        $last = Contractor::where('entity_id', $entityId)->orderByDesc('id')->value('contractor_id');
+        $last = Contractor::where('company_id', $companyId)->orderByDesc('id')->value('contractor_id');
         $num  = $last ? ((int)preg_replace('/\D/', '', $last) + 1) : 1;
 
         foreach ($rows as $idx => $row) {
             $rowNum = $idx + 2;
             try {
                 Contractor::create(array_merge($row, [
-                    'entity_id'     => $entityId,
+                    'company_id' => $companyId,
                     'contractor_id' => 'CTR-' . str_pad($num++, 4, '0', STR_PAD_LEFT),
                     'is_active'     => true,
                 ]));

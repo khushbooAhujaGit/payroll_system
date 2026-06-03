@@ -11,7 +11,7 @@ class HolidayCalendarController extends MasterCrudController
     protected string $model     = \App\Models\HolidayCalendar::class;
     protected array  $relations = ['holidays'];
     protected array  $rules     = [
-        'entity_id' => 'required|exists:entities,id',
+        'company_id' => 'required|exists:companies,id',
         'name'      => 'required|string|max:200',
         'year'      => 'required|integer',
         'region'    => 'nullable|string|max:100',

@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 
 class EntityController extends MasterCrudController
 {
-    protected string $model     = \App\Models\Entity::class;
+    protected string $model     = \App\Models\Company::class;
     protected array  $relations = ['company'];
     protected array  $rules     = [
         'company_id'        => 'required|exists:companies,id',

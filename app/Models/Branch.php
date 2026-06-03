@@ -2,22 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Carbon\Carbon;
 
 class Branch extends Model
 {
-    protected $table = 'branches';
-    protected $fillable = ['entity_id','name','code','address','city','state','pincode','phone','is_active'];
-    public function entity(): BelongsTo  { return $this->belongsTo(Entity::class); }
-    public function employees(): HasMany { return $this->hasMany(Employee::class); }
+    protected $table    = 'branches';
+    protected $fillable = ['company_id', 'name', 'code', 'address', 'city', 'state', 'pincode', 'phone', 'is_active'];
+
+    public function company(): BelongsTo  { return $this->belongsTo(Company::class); }
+    public function employees(): HasMany  { return $this->hasMany(Employee::class); }
 }

@@ -3,6 +3,7 @@
 <?php $__env->startSection('page_actions'); ?>
   <button class="btn acc" onclick="om('leave-modal')">+ Apply Leave</button>
   <button class="btn" onclick="om('tracker-import-modal')">📤 Import Tracker</button>
+  <a href="<?php echo e(route('leave.export') . '?' . http_build_query(request()->only('status'))); ?>" class="btn">⬇ Export</a>
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('content'); ?>
@@ -47,7 +48,7 @@
       <?php $__currentLoopData = $applications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $app): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
       <tr>
         <td class="mono"><?php echo e($app->application_number); ?></td>
-        <td><?php echo e($app->employee?->first_name); ?> <?php echo e($app->employee?->last_name); ?></td>
+        <td><?php echo e($app->employee?->full_name); ?></td>
         <td><?php echo e($app->leaveType?->name ?? '—'); ?></td>
         <td><?php echo e(\Carbon\Carbon::parse($app->from_date)->format('d M Y')); ?></td>
         <td><?php echo e(\Carbon\Carbon::parse($app->to_date)->format('d M Y')); ?></td>
@@ -127,6 +128,7 @@
         <th>From</th>
         <th>To</th>
         <th>Team Leader</th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -135,7 +137,7 @@
         <td>
           <?php if($grp->employee_id): ?>
             <?php $emp = \App\Models\Employee::find($grp->employee_id); ?>
-            <?php echo e($emp ? $emp->first_name . ' ' . $emp->last_name : $grp->employee_name); ?>
+            <?php echo e($emp ? $emp->full_name : $grp->employee_name); ?>
 
           <?php else: ?>
             <span style="color:var(--t3);font-style:italic"><?php echo e($grp->employee_name ?? '—'); ?></span>
@@ -159,6 +161,21 @@
 
         </td>
         <td style="color:var(--t2);font-size:11px"><?php echo e($grp->team_leader_name ?? '—'); ?></td>
+        <td style="white-space:nowrap;text-align:center">
+          
+          <a href="<?php echo e(route('leave.tracker', ['view' => 'daily', 'emp_id' => $grp->sheet_emp_id, 'leave_type' => $grp->leave_type, 'date_from' => $grp->first_date, 'date_to' => $grp->last_date])); ?>"
+             class="btn sm" style="font-size:10px;padding:3px 8px">Edit →</a>
+          
+          <form method="POST" action="<?php echo e(route('leave.tracker.bulk_destroy')); ?>" style="display:inline"
+                onsubmit="return confirm('Delete all <?php echo e($grp->total_days); ?> day(s) of <?php echo e($grp->leave_type); ?> for this employee?')">
+            <?php echo csrf_field(); ?>
+            <input type="hidden" name="sheet_emp_id" value="<?php echo e($grp->sheet_emp_id); ?>">
+            <input type="hidden" name="leave_type"   value="<?php echo e($grp->leave_type); ?>">
+            <input type="hidden" name="date_from"    value="<?php echo e($grp->first_date); ?>">
+            <input type="hidden" name="date_to"      value="<?php echo e($grp->last_date); ?>">
+            <button type="submit" class="btn sm" style="font-size:10px;padding:3px 8px;color:var(--red)">Delete</button>
+          </form>
+        </td>
       </tr>
       <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
     </tbody>
@@ -198,7 +215,7 @@
           <select name="employee_id">
             <option value="">— Self —</option>
             <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-            <option value="<?php echo e($emp->id); ?>"><?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?> (<?php echo e($emp->employee_id); ?>)</option>
+            <option value="<?php echo e($emp->id); ?>"><?php echo e($emp->full_name); ?> (<?php echo e($emp->employee_id); ?>)</option>
             <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
           </select>
         </div>

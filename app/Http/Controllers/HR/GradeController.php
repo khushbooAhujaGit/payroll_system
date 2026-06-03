@@ -10,7 +10,7 @@ class GradeController extends MasterCrudController
 {
     protected string $model = \App\Models\Grade::class;
     protected array  $rules = [
-        'entity_id' => 'required|exists:entities,id',
+        'company_id' => 'required|exists:companies,id',
         'name'      => 'required|string|max:100',
         'code'      => 'required|string|max:10',
         'level'     => 'required|integer|min:1',

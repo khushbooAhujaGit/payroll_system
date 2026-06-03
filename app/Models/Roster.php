@@ -16,7 +16,7 @@ use Carbon\Carbon;
 
 class Roster extends Model
 {
-    protected $fillable = ['entity_id','name','working_days'];
+    protected $fillable = ['company_id','name','working_days'];
     protected $casts    = ['working_days' => 'array'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

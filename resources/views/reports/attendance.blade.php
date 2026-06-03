@@ -24,7 +24,7 @@
       <option value="">All Employees</option>
       @foreach($allEmployees as $e)
       <option value="{{ $e->employee_id }}" {{ $empFilter == $e->employee_id ? 'selected' : '' }}>
-        {{ $e->first_name }} {{ $e->last_name }} ({{ $e->employee_id }})
+        {{ $e->full_name }} ({{ $e->employee_id }})
       </option>
       @endforeach
     </select>

@@ -30,7 +30,7 @@ class User extends Authenticatable
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'user_roles')
-                    ->withPivot('entity_id','department_id')
+                    ->withPivot('company_id','department_id')
                     ->withTimestamps();
     }
     public function assignedTickets(): HasMany { return $this->hasMany(HelpdeskTicket::class, 'assigned_to'); }

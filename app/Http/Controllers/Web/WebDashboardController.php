@@ -14,25 +14,25 @@ class WebDashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $today = now()->toDateString();
 
-        $totalActive   = Employee::where('entity_id', $entityId)->where('employee_status', 'active')->count();
-        $newJoiners    = Employee::where('entity_id', $entityId)
+        $totalActive   = Employee::where('employee_status', 'active')->count();
+        $newJoiners    = Employee::query()
                             ->whereYear('date_of_joining', now()->year)
                             ->whereMonth('date_of_joining', now()->month)->count();
-        $pendingLeaves = LeaveApplication::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        $pendingLeaves = LeaveApplication::whereHas('employee', fn($q) => $q)
                             ->where('status', 'pending')->count();
-        $openTickets   = HelpdeskTicket::where('entity_id', $entityId)
+        $openTickets   = HelpdeskTicket::where('company_id', $companyId)
                             ->whereNotIn('status', ['closed', 'resolved'])->count();
 
-        $todayAttendance = Attendance::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        $todayAttendance = Attendance::whereHas('employee', fn($q) => $q)
                             ->where('attendance_date', $today)
                             ->selectRaw('status, COUNT(*) as count')
                             ->groupBy('status')->pluck('count', 'status');
 
-        $deptStrength = Employee::where('entity_id', $entityId)
+        $deptStrength = Employee::query()
                             ->where('employee_status', 'active')
                             ->selectRaw('department_id, COUNT(*) as count')
                             ->with('department:id,name')
@@ -40,10 +40,10 @@ class WebDashboardController extends Controller
                             ->orderByDesc('count')->get();
 
         $recentEmployees = Employee::with(['department', 'designation'])
-                            ->where('entity_id', $entityId)
+                            ->where('company_id', $companyId)
                             ->orderByDesc('created_at')->limit(6)->get();
 
-        $lastRun = PayrollRun::where('entity_id', $entityId)
+        $lastRun = PayrollRun::where('company_id', $companyId)
                     ->whereIn('status', ['finalized', 'paid'])->orderByDesc('id')->first();
 
         return view('dashboard.index', compact(

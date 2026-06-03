@@ -64,7 +64,7 @@ class SalaryRevisionImporter extends BaseImporter
         $success = 0;
         $errors  = [];
 
-        $employeeMap = Employee::where('entity_id', $context['entity_id'])
+        $employeeMap = Employee::where('company_id', $context['company_id'])
             ->pluck('id', 'employee_id');
 
         foreach ($rows as $idx => $row) {

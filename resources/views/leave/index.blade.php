@@ -4,6 +4,7 @@
 @section('page_actions')
   <button class="btn acc" onclick="om('leave-modal')">+ Apply Leave</button>
   <button class="btn" onclick="om('tracker-import-modal')">📤 Import Tracker</button>
+  <a href="{{ route('leave.export') . '?' . http_build_query(request()->only('status')) }}" class="btn">⬇ Export</a>
 @endsection
 
 @section('content')
@@ -48,7 +49,7 @@
       @foreach($applications as $app)
       <tr>
         <td class="mono">{{ $app->application_number }}</td>
-        <td>{{ $app->employee?->first_name }} {{ $app->employee?->last_name }}</td>
+        <td>{{ $app->employee?->full_name }}</td>
         <td>{{ $app->leaveType?->name ?? '—' }}</td>
         <td>{{ \Carbon\Carbon::parse($app->from_date)->format('d M Y') }}</td>
         <td>{{ \Carbon\Carbon::parse($app->to_date)->format('d M Y') }}</td>
@@ -128,6 +129,7 @@
         <th>From</th>
         <th>To</th>
         <th>Team Leader</th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -136,7 +138,7 @@
         <td>
           @if($grp->employee_id)
             @php $emp = \App\Models\Employee::find($grp->employee_id); @endphp
-            {{ $emp ? $emp->first_name . ' ' . $emp->last_name : $grp->employee_name }}
+            {{ $emp ? $emp->full_name : $grp->employee_name }}
           @else
             <span style="color:var(--t3);font-style:italic">{{ $grp->employee_name ?? '—' }}</span>
             <span style="font-size:9px;background:#fef3c7;color:#d97706;border-radius:3px;padding:1px 4px;margin-left:4px">unmatched</span>
@@ -156,6 +158,21 @@
           {{ \Carbon\Carbon::parse($grp->last_date)->format('d M Y') }}
         </td>
         <td style="color:var(--t2);font-size:11px">{{ $grp->team_leader_name ?? '—' }}</td>
+        <td style="white-space:nowrap;text-align:center">
+          {{-- Edit individual records (go to tracker day-wise view) --}}
+          <a href="{{ route('leave.tracker', ['view' => 'daily', 'emp_id' => $grp->sheet_emp_id, 'leave_type' => $grp->leave_type, 'date_from' => $grp->first_date, 'date_to' => $grp->last_date]) }}"
+             class="btn sm" style="font-size:10px;padding:3px 8px">Edit →</a>
+          {{-- Delete entire spell --}}
+          <form method="POST" action="{{ route('leave.tracker.bulk_destroy') }}" style="display:inline"
+                onsubmit="return confirm('Delete all {{ $grp->total_days }} day(s) of {{ $grp->leave_type }} for this employee?')">
+            @csrf
+            <input type="hidden" name="sheet_emp_id" value="{{ $grp->sheet_emp_id }}">
+            <input type="hidden" name="leave_type"   value="{{ $grp->leave_type }}">
+            <input type="hidden" name="date_from"    value="{{ $grp->first_date }}">
+            <input type="hidden" name="date_to"      value="{{ $grp->last_date }}">
+            <button type="submit" class="btn sm" style="font-size:10px;padding:3px 8px;color:var(--red)">Delete</button>
+          </form>
+        </td>
       </tr>
       @endforeach
     </tbody>
@@ -194,7 +211,7 @@
           <select name="employee_id">
             <option value="">— Self —</option>
             @foreach($employees as $emp)
-            <option value="{{ $emp->id }}">{{ $emp->first_name }} {{ $emp->last_name }} ({{ $emp->employee_id }})</option>
+            <option value="{{ $emp->id }}">{{ $emp->full_name }} ({{ $emp->employee_id }})</option>
             @endforeach
           </select>
         </div>

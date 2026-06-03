@@ -57,7 +57,7 @@ class LeaveYearClose extends Command
 
         // ── Load leave types ───────────────────────────────────────────────
         $leaveTypeMap = LeaveType::whereIn('code', $types)
-            ->orderByRaw('entity_id IS NULL DESC')
+            ->orderByRaw('company_id IS NULL DESC')
             ->get()
             ->keyBy('code');
 
@@ -70,7 +70,7 @@ class LeaveYearClose extends Command
         // Prefer entity-specific policy; fall back to global (entity_id = null).
         $policyMap = LeavePolicy::whereIn('leave_type_id', $leaveTypeMap->map(fn($lt) => $lt->id)->values())
             ->where('is_active', true)
-            ->orderByRaw('entity_id IS NULL ASC') // entity-specific first
+            ->orderByRaw('company_id IS NULL ASC') // entity-specific first
             ->get()
             ->keyBy('leave_type_id');
 

@@ -23,7 +23,7 @@
       <option value="">All Employees</option>
       <?php $__currentLoopData = $allEmployees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $e): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
       <option value="<?php echo e($e->employee_id); ?>" <?php echo e($empFilter == $e->employee_id ? 'selected' : ''); ?>>
-        <?php echo e($e->first_name); ?> <?php echo e($e->last_name); ?> (<?php echo e($e->employee_id); ?>)
+        <?php echo e($e->full_name); ?> (<?php echo e($e->employee_id); ?>)
       </option>
       <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
     </select>

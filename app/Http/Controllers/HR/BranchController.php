@@ -11,7 +11,7 @@ class BranchController extends MasterCrudController
     protected string $model     = \App\Models\Branch::class;
     protected array  $relations = ['entity'];
     protected array  $rules     = [
-        'entity_id' => 'required|exists:entities,id',
+        'company_id' => 'required|exists:companies,id',
         'name'      => 'required|string|max:100',
         'code'      => 'required|string|max:10',
         'city'      => 'nullable|string|max:100',

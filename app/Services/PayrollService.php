@@ -514,7 +514,7 @@ class PayrollService
         ]);
         // Lock all attendance records in this period
         \App\Models\Attendance::whereBetween('attendance_date', [$period->period_from, $period->period_to])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $period->entity_id))
+            ->whereHas('employee', fn($q) => $q->where('company_id', $period->company_id))
             ->update(['is_locked' => true]);
     }
 
@@ -528,7 +528,7 @@ class PayrollService
         ]);
         // Unlock attendance
         \App\Models\Attendance::whereBetween('attendance_date', [$period->period_from, $period->period_to])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $period->entity_id))
+            ->whereHas('employee', fn($q) => $q->where('company_id', $period->company_id))
             ->update(['is_locked' => false]);
     }
 
@@ -539,7 +539,7 @@ class PayrollService
     public function generateReconciliation(PayrollRun $currentRun): void
     {
         // Get previous month's run
-        $prevPeriod = PayrollPeriod::where('entity_id', $currentRun->entity_id)
+        $prevPeriod = PayrollPeriod::where('company_id', $currentRun->company_id)
             ->where('id', '<', $currentRun->payroll_period_id)
             ->orderByDesc('id')
             ->first();
@@ -604,7 +604,7 @@ class PayrollService
 
     protected function getEligibleEmployees(PayrollRun $payrollRun): Collection
     {
-        return Employee::where('entity_id', $payrollRun->entity_id)
+        return Employee::where('company_id', $payrollRun->company_id)
             ->where('is_payroll_active', true)
             ->where('employee_status', 'active')
             ->where('date_of_joining', '<=', $payrollRun->period->period_to)

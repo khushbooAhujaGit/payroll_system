@@ -34,7 +34,7 @@
         <?php $__currentLoopData = $recentEmployees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
         <tr>
           <td class="mono"><?php echo e($emp->employee_id); ?></td>
-          <td><?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?></td>
+          <td><?php echo e($emp->full_name); ?></td>
           <td><?php echo e($emp->department?->name ?? '—'); ?></td>
           <td><span class="bx <?php echo e($emp->employee_status === 'active' ? 'g' : 'gr'); ?>"><?php echo e($emp->employee_status); ?></span></td>
         </tr>

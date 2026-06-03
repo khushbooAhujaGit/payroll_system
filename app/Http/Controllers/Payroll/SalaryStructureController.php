@@ -18,7 +18,7 @@ class SalaryStructureController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $structures = SalaryStructure::where('entity_id', $request->entity_id)
+        $structures = SalaryStructure::where('company_id', $request->company_id)
             ->when($request->boolean('with_components'), fn($q) => $q->with(['components.salaryComponent']))
             ->withCount('components')
             ->get();
@@ -31,7 +31,7 @@ class SalaryStructureController extends Controller
         $this->authorize('payroll.edit');
 
         $validated = $request->validate([
-            'entity_id'   => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'        => 'required|string|max:100',
             'description' => 'nullable|string',
             'components'  => 'required|array|min:1',
@@ -46,7 +46,7 @@ class SalaryStructureController extends Controller
         DB::beginTransaction();
         try {
             $structure = SalaryStructure::create([
-                'entity_id'   => $validated['entity_id'],
+                'company_id' => $validated['company_id'],
                 'name'        => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'is_active'   => true,

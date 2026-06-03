@@ -83,7 +83,7 @@ class AttendanceImporter extends BaseImporter
         $success = 0;
         $errors  = [];
 
-        // $entityId = $context['entity_id'];
+        // $companyId = $context['company_id'];
         $year     = $context['year'];
         $month    = $context['month'];
 

@@ -17,7 +17,7 @@ use Carbon\Carbon;
 class LeavePolicy extends Model
 {
     protected $table = 'leave_policies';
-    protected $fillable = ['entity_id','leave_type_id','name','days_per_year','accrual_type','accrual_days','accrual_on_day','proration','sandwich_policy','min_balance_to_apply','allow_negative_balance','max_negative_days','is_active'];
+    protected $fillable = ['company_id','leave_type_id','name','days_per_year','accrual_type','accrual_days','accrual_on_day','proration','sandwich_policy','min_balance_to_apply','allow_negative_balance','max_negative_days','is_active'];
     protected $casts = ['sandwich_policy' => 'boolean', 'allow_negative_balance' => 'boolean'];
     public function leaveType(): BelongsTo { return $this->belongsTo(LeaveType::class); }
 }

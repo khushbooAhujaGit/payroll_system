@@ -4,6 +4,7 @@
 @section('page_actions')
   <a href="{{ route('leave') }}" class="btn">← Leave Management</a>
   <button class="btn" onclick="om('tracker-add-modal')">+ Add Manually</button>
+  <a href="{{ route('leave.tracker.export') . '?' . http_build_query(request()->only('emp_id','leave_type','month','date_from','date_to')) }}" class="btn">⬇ Export</a>
   <button class="btn acc" onclick="om('tracker-import-modal')">📤 Import / Re-import</button>
 @endsection
 
@@ -89,6 +90,7 @@
         <th>Team Leader</th>
         <th>Reason Type</th>
         <th>Reason</th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -98,7 +100,7 @@
         <td class="mono" style="font-size:11px">{{ $rec->sheet_emp_id ?? '—' }}</td>
         <td>
           @if($rec->employee)
-            {{ $rec->employee->first_name }} {{ $rec->employee->last_name }}
+            {{ $rec->employee->full_name }}
             <span style="font-size:10px;color:var(--t3)">({{ $rec->employee->employee_id }})</span>
           @elseif($rec->employee_name)
             {{ $rec->employee_name }}
@@ -107,9 +109,7 @@
             <span style="color:var(--t3)">—</span>
           @endif
         </td>
-        <td class="mono" style="white-space:nowrap">
-          {{ \Carbon\Carbon::parse($rec->leave_date)->format('d M Y') }}
-        </td>
+        <td class="mono" style="white-space:nowrap">{{ \Carbon\Carbon::parse($rec->leave_date)->format('d M Y') }}</td>
         <td>
           <span class="bx" style="background:{{ strtoupper($rec->leave_type) === 'LOP' ? 'var(--red2)' : 'var(--acc2)' }};
                                    color:{{ strtoupper($rec->leave_type) === 'LOP' ? 'var(--red)' : 'var(--acc)' }}">
@@ -117,11 +117,27 @@
           </span>
         </td>
         <td style="font-size:11px;color:var(--t2)">{{ $rec->team_leader_name ?? '—' }}</td>
-        <td style="font-size:11px;color:var(--t2);text-transform:capitalize">
-          {{ str_replace('_', ' ', $rec->reason_type ?? '—') }}
-        </td>
-        <td style="font-size:11px;color:var(--t2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        <td style="font-size:11px;color:var(--t2);text-transform:capitalize">{{ str_replace('_', ' ', $rec->reason_type ?? '—') }}</td>
+        <td style="font-size:11px;color:var(--t2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="{{ $rec->reason }}">{{ $rec->reason ?? '—' }}</td>
+        <td style="white-space:nowrap;text-align:center">
+          {{-- Edit --}}
+          <button class="btn sm" style="font-size:10px;padding:3px 8px"
+            onclick="openTrackerEdit(
+              {{ $rec->id }},
+              '{{ $rec->leave_date?->format('Y-m-d') }}',
+              '{{ strtoupper($rec->leave_type) }}',
+              '{{ addslashes($rec->team_leader_name ?? '') }}',
+              '{{ addslashes($rec->reason_type ?? '') }}',
+              '{{ addslashes($rec->reason ?? '') }}'
+            )">Edit</button>
+          {{-- Delete individual --}}
+          <form method="POST" action="{{ route('leave.tracker.destroy', $rec->id) }}" style="display:inline"
+                onsubmit="return confirm('Delete this single day record?')">
+            @csrf @method('DELETE')
+            <button type="submit" class="btn sm" style="font-size:10px;padding:3px 8px;color:var(--red)">Del</button>
+          </form>
+        </td>
       </tr>
       @endforeach
     </tbody>
@@ -145,33 +161,25 @@
         <th>End Date</th>
         <th>Team Leader</th>
         <th>Reason Type</th>
-        <th></th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
       @foreach($spells as $sp)
-      @php
-        $isSingle = $sp['start_date']->eq($sp['end_date']);
-      @endphp
+      @php $isSingle = $sp['start_date']->eq($sp['end_date']); @endphp
       <tr>
         <td>
           @if($sp['employee'])
-            {{ $sp['employee']->first_name }} {{ $sp['employee']->last_name }}
+            {{ $sp['employee']->full_name }}
           @else
             <span style="color:var(--t3);font-style:italic">{{ $sp['employee_name'] ?? '—' }}</span>
             <span style="font-size:9px;background:#fef3c7;color:#d97706;border-radius:3px;padding:1px 4px;margin-left:4px">unmatched</span>
           @endif
         </td>
         <td class="mono" style="font-size:11px">{{ $sp['sheet_emp_id'] ?? '—' }}</td>
-        <td>
-          <span class="bx" style="background:var(--acc2);color:var(--acc)">{{ $sp['leave_type'] }}</span>
-        </td>
-        <td class="mono" style="text-align:center;font-weight:700">
-          {{ $sp['day_count'] }}
-        </td>
-        <td class="mono" style="white-space:nowrap">
-          {{ $sp['start_date']->format('d M Y') }}
-        </td>
+        <td><span class="bx" style="background:var(--acc2);color:var(--acc)">{{ $sp['leave_type'] }}</span></td>
+        <td class="mono" style="text-align:center;font-weight:700">{{ $sp['day_count'] }}</td>
+        <td class="mono" style="white-space:nowrap">{{ $sp['start_date']->format('d M Y') }}</td>
         <td class="mono" style="white-space:nowrap;color:{{ $isSingle ? 'var(--t3)' : 'inherit' }}">
           {{ $isSingle ? '—' : $sp['end_date']->format('d M Y') }}
         </td>
@@ -179,9 +187,20 @@
         <td style="font-size:11px;color:var(--t2);text-transform:capitalize">
           {{ str_replace('_', ' ', $sp['reason_type'] ?? '—') }}
         </td>
-        <td>
+        <td style="white-space:nowrap;text-align:center">
+          {{-- View individual days --}}
           <a href="{{ route('leave.tracker', ['view' => 'daily', 'emp_id' => $sp['sheet_emp_id'], 'leave_type' => $sp['leave_type'], 'date_from' => $sp['start_date']->format('Y-m-d'), 'date_to' => $sp['end_date']->format('Y-m-d')]) }}"
-             class="btn sm" style="font-size:10px">{{ $sp['day_count'] }} Days →</a>
+             class="btn sm" style="font-size:10px;padding:3px 8px">{{ $sp['day_count'] }} Days →</a>
+          {{-- Delete entire spell --}}
+          <form method="POST" action="{{ route('leave.tracker.bulk_destroy') }}" style="display:inline"
+                onsubmit="return confirm('Delete all {{ $sp['day_count'] }} day(s) of {{ $sp['leave_type'] }} for this employee?')">
+            @csrf
+            <input type="hidden" name="sheet_emp_id" value="{{ $sp['sheet_emp_id'] }}">
+            <input type="hidden" name="leave_type"   value="{{ $sp['leave_type'] }}">
+            <input type="hidden" name="date_from"    value="{{ $sp['start_date']->format('Y-m-d') }}">
+            <input type="hidden" name="date_to"      value="{{ $sp['end_date']->format('Y-m-d') }}">
+            <button type="submit" class="btn sm" style="font-size:10px;padding:3px 8px;color:var(--red)">Del Spell</button>
+          </form>
         </td>
       </tr>
       @endforeach
@@ -300,5 +319,74 @@
     </form>
   </div>
 </div>
+
+{{-- Edit Record Modal --}}
+<div class="modal" id="tracker-edit-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">Edit Leave Record</span>
+      <button class="mc" onclick="cm('tracker-edit-modal')">✕</button>
+    </div>
+    <form method="POST" id="tracker-edit-form" action="">
+      @csrf
+      <div class="fg2">
+        <div class="fld">
+          <label>Leave Date *</label>
+          <input type="date" name="leave_date" id="edit-leave-date" required>
+        </div>
+        <div class="fld">
+          <label>Leave Type *</label>
+          <select name="leave_type" id="edit-leave-type" required>
+            @foreach($leaveTypes as $lt)
+              <option value="{{ $lt }}">{{ $lt }}</option>
+            @endforeach
+            <option value="LOP">LOP (Loss of Pay)</option>
+            <option value="WFH">WFH</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label>Team Leader</label>
+          <input type="text" name="team_leader_name" id="edit-team-leader">
+        </div>
+        <div class="fld">
+          <label>Reason Type</label>
+          <input type="text" name="reason_type" id="edit-reason-type" placeholder="e.g. Personal, Medical">
+        </div>
+        <div class="fld full">
+          <label>Reason</label>
+          <input type="text" name="reason" id="edit-reason">
+        </div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('tracker-edit-modal')">Cancel</button>
+        <button type="submit" class="btn acc">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+@push('scripts')
+<script>
+function openTrackerEdit(id, date, leaveType, teamLeader, reasonType, reason) {
+  document.getElementById('tracker-edit-form').action = '/leave/tracker/' + id;
+  document.getElementById('edit-leave-date').value    = date;
+  document.getElementById('edit-team-leader').value   = teamLeader;
+  document.getElementById('edit-reason-type').value   = reasonType;
+  document.getElementById('edit-reason').value        = reason;
+  om('tracker-edit-modal');
+  // Set <select> AFTER the modal is in the render tree (display:none→flex resets <select>
+  // to its first option in Chrome). Use requestAnimationFrame so the element is painted
+  // before we write to it, and set option.selected directly to bypass the .value reset.
+  requestAnimationFrame(function() {
+    const sel    = document.getElementById('edit-leave-type');
+    const target = (leaveType || '').toUpperCase();
+    Array.from(sel.options).forEach(function(opt) {
+      opt.selected = opt.value.toUpperCase() === target;
+    });
+    if (sel._ssSync) sel._ssSync(); // refresh the searchable-select display input
+  });
+}
+</script>
+@endpush
 
 @endsection

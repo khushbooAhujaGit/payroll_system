@@ -17,7 +17,7 @@ use Carbon\Carbon;
 class SalaryComponent extends Model
 {
     protected $fillable = [
-        'entity_id','name','code','component_type','calculation_type',
+        'company_id','name','code','component_type','calculation_type',
         'percentage_of','percentage_value','formula','is_taxable',
         'is_pf_applicable','is_esic_applicable','is_pt_applicable','is_lwf_applicable',
         'is_in_ctc','is_in_gross','show_in_payslip','is_arrear_applicable',
@@ -29,5 +29,5 @@ class SalaryComponent extends Model
         'is_in_gross' => 'boolean', 'show_in_payslip' => 'boolean',
         'percentage_value' => 'decimal:2',
     ];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

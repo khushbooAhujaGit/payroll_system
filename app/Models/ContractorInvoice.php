@@ -16,10 +16,10 @@ use Carbon\Carbon;
 
 class ContractorInvoice extends Model
 {
-    protected $fillable = ['contractor_id','entity_id','invoice_number','invoice_date','year','month','invoice_amount','tds_rate','tds_amount','net_payable','description','invoice_path','status','approved_by','payment_date'];
+    protected $fillable = ['contractor_id','company_id','invoice_number','invoice_date','year','month','invoice_amount','tds_rate','tds_amount','net_payable','description','invoice_path','status','approved_by','payment_date'];
     protected $casts = ['invoice_date' => 'date', 'payment_date' => 'date', 'invoice_amount' => 'decimal:2', 'tds_amount' => 'decimal:2', 'net_payable' => 'decimal:2'];
 
     public function contractor(): BelongsTo { return $this->belongsTo(Contractor::class); }
-    public function entity(): BelongsTo     { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo     { return $this->belongsTo(Company::class); }
     public function approvedBy(): BelongsTo { return $this->belongsTo(User::class, 'approved_by'); }
 }

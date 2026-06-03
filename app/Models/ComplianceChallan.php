@@ -16,7 +16,7 @@ use Carbon\Carbon;
 
 class ComplianceChallan extends Model
 {
-    protected $fillable = ['entity_id','challan_type','year','month','amount','challan_number','due_date','payment_date','status','receipt_path','penalty','remarks'];
+    protected $fillable = ['company_id','challan_type','year','month','amount','challan_number','due_date','payment_date','status','receipt_path','penalty','remarks'];
     protected $casts    = ['due_date' => 'date', 'payment_date' => 'date', 'amount' => 'decimal:2', 'penalty' => 'decimal:2'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

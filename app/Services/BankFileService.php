@@ -33,7 +33,7 @@ class BankFileService
 
         $fileName = sprintf(
             'bank_files/%s/%s_%s_%s_%s_%s.txt',
-            $payrollRun->entity_id,
+            $payrollRun->company_id,
             strtolower($bankName),
             strtolower($fileFormat),
             $payrollRun->period->year,
@@ -56,7 +56,7 @@ class BankFileService
 
         $bankFile = BankTransferFile::create([
             'payroll_run_id'  => $payrollRun->id,
-            'entity_id'       => $payrollRun->entity_id,
+            'company_id' => $payrollRun->company_id,
             'bank_name'       => $bankName,
             'file_format'     => $fileFormat,
             'total_records'   => $records->count(),
@@ -77,7 +77,7 @@ class BankFileService
 
     protected function generateHdfc($records, PayrollRun $run, string $mode): string
     {
-        $entity       = $run->entity;
+        $entity       = $run->company;
         $debitAccount = \App\Models\SystemSetting::getValue('hdfc_debit_account', $entity->id) ?? '';
 
         $lines = [];
@@ -126,7 +126,7 @@ class BankFileService
 
     protected function generateIcici($records, PayrollRun $run, string $mode): string
     {
-        $entity       = $run->entity;
+        $entity       = $run->company;
         $debitAccount = \App\Models\SystemSetting::getValue('icici_debit_account', $entity->id) ?? '';
 
         $lines = [];

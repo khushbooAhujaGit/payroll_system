@@ -33,7 +33,7 @@
       @foreach($claims as $claim)
       <tr>
         <td class="mono">{{ $claim->claim_number }}</td>
-        <td>{{ $claim->employee?->first_name }} {{ $claim->employee?->last_name }}<br>
+        <td>{{ $claim->employee?->full_name }}<br>
             <span style="font-size:10px;color:var(--t3)">{{ $claim->employee?->department?->name }}</span></td>
         <td>{{ \Carbon\Carbon::createFromDate($claim->year, $claim->month, 1)->format('M Y') }}</td>
         <td>₹ {{ number_format($claim->total_claimed, 2) }}</td>
@@ -80,7 +80,7 @@
           <select name="employee_id">
             <option value="">— Self —</option>
             @foreach($employees as $emp)
-            <option value="{{ $emp->id }}">{{ $emp->first_name }} {{ $emp->last_name }} ({{ $emp->employee_id }})</option>
+            <option value="{{ $emp->id }}">{{ $emp->full_name }} ({{ $emp->employee_id }})</option>
             @endforeach
           </select>
         </div>
@@ -129,10 +129,11 @@
 </div>
 
 @include('partials.upload-modal', [
-    'uploadId'    => 'upload-modal',
-    'uploadTitle' => 'Bulk Upload Reimbursement Claims',
-    'uploadRoute' => 'reimbursements.store',
-    'uploadHint'  => 'Template columns: Employee ID, Year, Month, Expense Type Code, Expense Date (YYYY-MM-DD), Description, Amount. One row per expense item.',
+    'uploadId'       => 'upload-modal',
+    'uploadTitle'    => 'Bulk Upload Reimbursement Claims',
+    'uploadRoute'    => 'reimbursements.store',
+    'templateRoute'  => 'reimbursements.template',
+    'uploadHint'     => 'Template columns: Employee ID, Year, Month, Expense Type Code, Expense Date (YYYY-MM-DD), Description, Amount. One row per expense item.',
 ])
 
 @if($errors->any())

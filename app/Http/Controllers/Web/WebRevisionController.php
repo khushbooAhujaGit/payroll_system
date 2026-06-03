@@ -21,27 +21,27 @@ class WebRevisionController extends Controller
 
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $revisions = SalaryRevision::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        ->whereHas('employee', fn($q) => $q)
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->orderByDesc('created_at')
         ->paginate(25)->withQueryString();
 
-        $employees = Employee::where('entity_id', $entityId)
-            ->where('employee_status', 'active')
+        $employees = Employee::query()
+            ->currentlyEmployed()
             ->orderBy('first_name')->get();
 
-        return view('revisions.index', compact('revisions', 'employees', 'entityId'));
+        return view('revisions.index', compact('revisions', 'employees', 'companyId'));
     }
 
     public function store(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'employee_id'    => 'required|exists:employees,id',
@@ -136,7 +136,7 @@ class WebRevisionController extends Controller
 
     public function import(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
@@ -146,7 +146,7 @@ class WebRevisionController extends Controller
             $request->file('file'),
             'salary_revision',
             SalaryRevisionImporter::class,
-            ['entity_id' => $entityId]
+            ['company_id' => $companyId]
         );
 
         return $this->handleImportResult($result, 'revisions', 'salary revision');

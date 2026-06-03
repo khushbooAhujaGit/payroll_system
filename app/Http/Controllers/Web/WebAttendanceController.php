@@ -11,6 +11,7 @@ use App\Models\Entity;
 use App\Services\AttendanceService;
 use App\Services\ExcelImportService;
 use App\Http\Controllers\Concerns\ImportsExcel;
+use App\Models\Company;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -28,19 +29,19 @@ class WebAttendanceController extends Controller
         // ── Entity resolution ─────────────────────────────────────────────
         // Admin users have no linked employee — let them pick entity from the
         // URL param.  Fall back to the first entity that has active employees.
-        $userEntityId = auth()->user()->employee?->entity_id;
+        $userEntityId = auth()->user()->employee?->company_id;
 
-        $entities = Entity::orderBy('name')->get(['id', 'name']);
+        $companies = Company::orderBy('name')->get(['id', 'name']);
 
-        if ($request->filled('entity_id')) {
-            $entityId = (int) $request->get('entity_id');
+        if ($request->filled('company_id')) {
+            $companyId = (int) $request->get('company_id');
         } elseif ($userEntityId) {
-            $entityId = $userEntityId;
+            $companyId = $userEntityId;
         } else {
             // Pick the first entity that actually has active employees
-            $entityId = Employee::where('employee_status', 'active')
-                ->whereNotNull('entity_id')
-                ->value('entity_id') ?? ($entities->first()?->id ?? 1);
+            $companyId = Employee::where('employee_status', 'active')
+                ->whereNotNull('company_id')
+                ->value('company_id') ?? ($entities->first()?->id ?? 1);
         }
 
         $year     = (int) $request->get('year', now()->year);
@@ -49,39 +50,55 @@ class WebAttendanceController extends Controller
         $from = Carbon::createFromDate($year, $month, 1)->startOfMonth()->toDateString();
         $to   = Carbon::createFromDate($year, $month, 1)->endOfMonth()->toDateString();
 
-        $employees = Employee::where('entity_id', $entityId)
-            ->where('employee_status', 'active')
+        $employees = Employee::query()
+            ->currentlyEmployed()
             ->with(['department'])
             ->orderBy('employee_id')
-            ->get();
+            ->paginate(30)
+            ->withQueryString();
 
-        $records = Attendance::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        // Scope attendance data to only the current page's employees for efficiency
+        $pageEmpIds = $employees->pluck('id');
+
+        $records = Attendance::whereIn('employee_id', $pageEmpIds)
             ->whereBetween('attendance_date', [$from, $to])
             ->get()
             ->groupBy('employee_id');
 
-        $todaySummary = Attendance::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        $todaySummary = Attendance::whereHas('employee', fn($q) => $q->currentlyEmployed())
             ->where('attendance_date', now()->toDateString())
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
 
+        // Grouped collection — used by the attendance grid for day-cell tooltips
         $rawPunches = AttendanceRawPunch::whereBetween('attendance_date', [$from, $to])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+            ->whereIn('employee_id', $pageEmpIds)
             ->orderBy('attendance_date')
             ->orderBy('employee_id')
             ->get()
             ->groupBy('employee_id');
 
+        // Paginated flat list — used by the Biometric Punch Records table.
+        // Restricted to currently active employees so left employees' punches
+        // don't inflate the count.
+        $rawPunchesPaginated = AttendanceRawPunch::whereBetween('attendance_date', [$from, $to])
+            ->whereHas('employee', fn($q) => $q->currentlyEmployed())
+            ->with(['employee:id,first_name,middle_name,last_name'])
+            ->orderBy('attendance_date')
+            ->orderBy('employee_id')
+            ->paginate(50, ['*'], 'punch_page')
+            ->withQueryString();
+
         // What date ranges actually have biometric data for this entity?
         // Used to show a hint in the UI when no data found.
-        $biometricDataRange = AttendanceRawPunch::whereHas('employee', fn($q) => $q->where('entity_id', $entityId))
+        $biometricDataRange = AttendanceRawPunch::whereHas('employee', fn($q) => $q)
             ->selectRaw('MIN(attendance_date) as min_date, MAX(attendance_date) as max_date')
             ->first();
 
         return view('attendance.index', compact(
             'employees', 'records', 'todaySummary',
-            'year', 'month', 'from', 'to', 'entityId', 'rawPunches', 'entities',
+            'year', 'month', 'from', 'to', 'companyId', 'rawPunches', 'rawPunchesPaginated', 'companies',
             'biometricDataRange'
         ));
     }
@@ -113,6 +130,49 @@ class WebAttendanceController extends Controller
         return redirect()->route('attendance')->with('success', 'Attendance saved successfully.');
     }
 
+    public function export(Request $request)
+    {
+        $userEntityId = auth()->user()->employee?->company_id;
+        if ($request->filled('company_id')) {
+            $companyId = (int) $request->get('company_id');
+        } elseif ($userEntityId) {
+            $companyId = $userEntityId;
+        } else {
+            $companyId = Employee::where('employee_status', 'active')->whereNotNull('company_id')->value('company_id') ?? 1;
+        }
+
+        $year  = (int) $request->get('year',  now()->year);
+        $month = (int) $request->get('month', now()->month);
+        $from  = Carbon::createFromDate($year, $month, 1)->startOfMonth()->toDateString();
+        $to    = Carbon::createFromDate($year, $month, 1)->endOfMonth()->toDateString();
+
+        $records = Attendance::whereHas('employee', fn($q) => $q)
+            ->with(['employee:id,first_name,middle_name,last_name,employee_id,department_id', 'employee.department:id,name'])
+            ->whereBetween('attendance_date', [$from, $to])
+            ->orderBy('attendance_date')
+            ->orderBy('employee_id')
+            ->get();
+
+        $headers = [
+            'Employee ID', 'Employee Name', 'Department', 'Date',
+            'Status', 'Work Type', 'Check In', 'Check Out', 'Remarks',
+        ];
+
+        $rows = $records->map(fn($r) => [
+            $r->employee?->employee_id,
+            $r->employee ? ($r->employee->full_name) : null,
+            $r->employee?->department?->name,
+            $r->attendance_date?->format('d-m-Y'),
+            $r->status,
+            $r->work_type,
+            $r->check_in  ? substr($r->check_in,  0, 5) : null,
+            $r->check_out ? substr($r->check_out, 0, 5) : null,
+            $r->remarks,
+        ]);
+
+        return $this->streamXlsx('attendance_' . $year . '-' . str_pad($month, 2, '0', STR_PAD_LEFT), $headers, $rows);
+    }
+
     public function template()
     {
         return $this->excelImportService->generateTemplate(AttendanceImporter::class);
@@ -120,19 +180,17 @@ class WebAttendanceController extends Controller
 
     public function import(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
             'file'  => 'required|file|mimes:xlsx,xls|max:20480',
-            'year'  => 'required|integer',
-            'month' => 'required|integer|min:1|max:12',
         ]);
 
         $result = $this->excelImportService->import(
             $request->file('file'),
             'attendance',
             AttendanceImporter::class,
-            ['entity_id' => $entityId, 'year' => $request->year, 'month' => $request->month]
+            ['company_id' => $companyId]
         );
 
         return $this->handleImportResult($result, 'attendance', 'attendance record');
@@ -165,7 +223,8 @@ class WebAttendanceController extends Controller
                 'check_out'   => $validated['check_out']  ? $validated['check_out'] . ':00' : $existing->check_out,
                 'uploaded_by' => auth()->id(),
             ]);
-            return redirect()->route('attendance', $request->only('year', 'month', 'entity_id'))
+            return redirect()
+            ->route('attendance', $request->only('year', 'month', 'company_id'))
                 ->with('success', 'Punch record updated (existing record found for this date).');
         }
 
@@ -179,7 +238,7 @@ class WebAttendanceController extends Controller
             'uploaded_by'     => auth()->id(),
         ]);
 
-        return redirect()->route('attendance', $request->only('year', 'month', 'entity_id'))
+        return redirect()->route('attendance', $request->only('year', 'month', 'company_id',))
             ->with('success', 'Punch record added.');
     }
 
@@ -198,7 +257,7 @@ class WebAttendanceController extends Controller
             'uploaded_by' => auth()->id(),
         ]);
 
-        return redirect()->route('attendance', $request->only('year', 'month', 'entity_id'))
+        return redirect()->route('attendance', $request->only('year', 'month', 'company_id',))
             ->with('success', 'Punch updated.');
     }
 
@@ -223,7 +282,7 @@ class WebAttendanceController extends Controller
      */
     public function biometricImport(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
             'files'   => 'required|array|min:1|max:3',
@@ -250,7 +309,7 @@ class WebAttendanceController extends Controller
             $this->cleanupTempFiles($savedPaths);
             return redirect()->route('attendance')
                 ->with('error', 'Python is not available on this server. Run the import manually: '
-                    . "python scripts/attendance_import.py {$entityId} <file(s)>");
+                    . "python scripts/attendance_import.py {$companyId} <file(s)>");
         }
 
         // ── Execute the script ────────────────────────────────────────────

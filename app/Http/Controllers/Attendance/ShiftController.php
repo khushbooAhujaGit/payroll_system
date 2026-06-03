@@ -16,14 +16,14 @@ class ShiftController extends Controller
     public function index(Request $request): JsonResponse
     {
         return response()->json([
-            'data' => Shift::where('entity_id', $request->entity_id)->where('is_active', true)->get()
+            'data' => Shift::where('company_id', $request->company_id)->where('is_active', true)->get()
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'entity_id'                  => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'                       => 'required|string|max:100',
             'code'                       => 'required|string|max:10',
             'start_time'                 => 'required|date_format:H:i',

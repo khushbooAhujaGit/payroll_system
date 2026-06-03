@@ -18,7 +18,7 @@ class HelpdeskController extends Controller
 
     public function categories(Request $request): JsonResponse
     {
-        $categories = HelpdeskCategory::where('entity_id', $request->entity_id)
+        $categories = HelpdeskCategory::where('company_id', $request->company_id)
             ->where('is_active', true)
             ->whereNull('parent_id')
             ->with(['children' => fn($q) => $q->where('is_active', true)])
@@ -32,7 +32,7 @@ class HelpdeskController extends Controller
         $this->authorize('helpdesk.manage');
 
         $validated = $request->validate([
-            'entity_id'     => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'          => 'required|string|max:100',
             'parent_id'     => 'nullable|exists:helpdesk_categories,id',
             'assigned_team' => 'required|in:hr,payroll,it,admin,finance',
@@ -70,7 +70,7 @@ class HelpdeskController extends Controller
         $ticket = HelpdeskTicket::create([
             'ticket_number'  => $this->generateTicketNumber(),
             'employee_id'    => $employee->id,
-            'entity_id'      => $employee->entity_id,
+            'company_id' => $employee->company_id,
             'category_id'    => $validated['category_id'],
             'subject'        => $validated['subject'],
             'description'    => $validated['description'],
@@ -112,11 +112,11 @@ class HelpdeskController extends Controller
         $this->authorize('helpdesk.view');
 
         $tickets = HelpdeskTicket::with([
-            'employee:id,employee_id,first_name,last_name',
+            'employee:id,employee_id,first_name,middle_name,last_name',
             'category',
             'assignedTo:id,name',
         ])
-        ->where('entity_id', $request->entity_id)
+        ->where('company_id', $request->company_id)
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->when($request->priority, fn($q) => $q->where('priority', $request->priority))
         ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
@@ -136,7 +136,7 @@ class HelpdeskController extends Controller
     public function show(HelpdeskTicket $ticket): JsonResponse
     {
         $ticket->load([
-            'employee:id,employee_id,first_name,last_name,official_email,mobile',
+            'employee:id,employee_id,first_name,middle_name,last_name,official_email,mobile',
             'category',
             'assignedTo:id,name',
             'comments' => fn($q) => $q->with('user:id,name')->orderBy('created_at'),
@@ -274,34 +274,34 @@ class HelpdeskController extends Controller
     {
         $this->authorize('helpdesk.view');
 
-        $entityId = $request->entity_id;
+        $companyId = $request->company_id;
         $from     = $request->get('from', now()->startOfMonth());
         $to       = $request->get('to', now()->endOfMonth());
 
-        $byStatus = HelpdeskTicket::where('entity_id', $entityId)
+        $byStatus = HelpdeskTicket::where('company_id', $companyId)
             ->whereBetween('created_at', [$from, $to])
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
 
-        $byPriority = HelpdeskTicket::where('entity_id', $entityId)
+        $byPriority = HelpdeskTicket::where('company_id', $companyId)
             ->whereBetween('created_at', [$from, $to])
             ->selectRaw('priority, COUNT(*) as count')
             ->groupBy('priority')
             ->pluck('count', 'priority');
 
-        $breachedSla = HelpdeskTicket::where('entity_id', $entityId)
+        $breachedSla = HelpdeskTicket::where('company_id', $companyId)
             ->whereNotIn('status', ['closed'])
             ->where('due_by', '<', now())
             ->count();
 
-        $avgResolution = HelpdeskTicket::where('entity_id', $entityId)
+        $avgResolution = HelpdeskTicket::where('company_id', $companyId)
             ->whereNotNull('resolved_at')
             ->whereBetween('resolved_at', [$from, $to])
             ->selectRaw('AVG(TIMESTAMPDIFF(HOUR, created_at, resolved_at)) as avg_hours')
             ->value('avg_hours');
 
-        $topCategories = HelpdeskTicket::where('entity_id', $entityId)
+        $topCategories = HelpdeskTicket::where('company_id', $companyId)
             ->whereBetween('created_at', [$from, $to])
             ->selectRaw('category_id, COUNT(*) as count')
             ->with('category:id,name')

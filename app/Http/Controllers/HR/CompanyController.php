@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 class CompanyController extends MasterCrudController
 {
     protected string $model     = \App\Models\Company::class;
-    protected array  $relations = ['entities'];
+    protected array  $relations = [];
     protected array  $rules     = [
         'name'       => 'required|string|max:200',
         'short_name' => 'required|string|max:20',

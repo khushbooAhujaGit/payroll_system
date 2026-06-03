@@ -23,7 +23,7 @@ class LeaveController extends Controller
 
     public function leaveTypes(Request $request): JsonResponse
     {
-        $types = LeaveType::where('entity_id', $request->entity_id)
+        $types = LeaveType::where('company_id', $request->company_id)
             ->where('is_active', true)
             ->with('policies')
             ->get();
@@ -36,7 +36,7 @@ class LeaveController extends Controller
         $this->authorize('leave.manage');
 
         $validated = $request->validate([
-            'entity_id'     => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'          => 'required|string|max:100',
             'code'          => 'required|string|max:10',
             'category'      => 'required|string',
@@ -75,8 +75,8 @@ class LeaveController extends Controller
     {
         $this->authorize('leave.view');
 
-        $balances = LeaveBalance::with(['employee:id,employee_id,first_name,last_name', 'leaveType:id,name,code'])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        $balances = LeaveBalance::with(['employee:id,employee_id,first_name,middle_name,last_name', 'leaveType:id,name,code'])
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->where('year', $request->get('year', now()->year))
             ->get();
 
@@ -242,12 +242,12 @@ class LeaveController extends Controller
         $this->authorize('leave.view');
 
         $applications = LeaveApplication::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
             'leaveType:id,name,code,color',
             'approvals.approver:id,name',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->when($request->department_id, fn($q) => $q->whereHas('employee', fn($q2) => $q2->where('department_id', $request->department_id)))
         ->when($request->employee_id, fn($q) => $q->where('employee_id', $request->employee_id))
@@ -264,7 +264,7 @@ class LeaveController extends Controller
 
         $applications = LeaveApplication::whereHas('approvals', fn($q) => $q->where('approver_id', $user->id)->where('action', 'pending'))
             ->with([
-                'employee:id,employee_id,first_name,last_name',
+                'employee:id,employee_id,first_name,middle_name,last_name',
                 'leaveType:id,name,code',
             ])
             ->where('status', 'pending')
@@ -385,7 +385,7 @@ class LeaveController extends Controller
 
         if ($request->action === 'approved') {
             // Credit comp-off leave balance
-            $compOffType = LeaveType::where('entity_id', $compOff->employee->entity_id)
+            $compOffType = LeaveType::where('company_id', $compOff->employee->company_id)
                 ->where('category', 'comp_off')->first();
 
             if ($compOffType) {
@@ -410,12 +410,12 @@ class LeaveController extends Controller
     {
         $this->authorize('leave.manage');
 
-        $request->validate(['entity_id' => 'required', 'from_year' => 'required|integer']);
+        $request->validate(['company_id' => 'required', 'from_year' => 'required|integer']);
 
         $fromYear = $request->from_year;
         $toYear   = $fromYear + 1;
 
-        $leaveTypes = LeaveType::where('entity_id', $request->entity_id)
+        $leaveTypes = LeaveType::where('company_id', $request->company_id)
             ->where('is_carry_forward', true)
             ->where('is_active', true)
             ->get();
@@ -424,7 +424,7 @@ class LeaveController extends Controller
         foreach ($leaveTypes as $lt) {
             $balances = LeaveBalance::where('leave_type_id', $lt->id)
                 ->where('year', $fromYear)
-                ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id)->where('employee_status', 'active'))
+                ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id)->where('employee_status', 'active'))
                 ->get();
 
             foreach ($balances as $balance) {
@@ -452,13 +452,13 @@ class LeaveController extends Controller
 
     public function leaveCalendar(Request $request): JsonResponse
     {
-        $request->validate(['entity_id' => 'required', 'from' => 'required|date', 'to' => 'required|date']);
+        $request->validate(['company_id' => 'required', 'from' => 'required|date', 'to' => 'required|date']);
 
         $leaves = LeaveApplication::with([
-            'employee:id,employee_id,first_name,last_name',
+            'employee:id,employee_id,first_name,middle_name,last_name',
             'leaveType:id,name,code,color',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
         ->where('status', 'approved')
         ->where('from_date', '<=', $request->to)
         ->where('to_date', '>=', $request->from)

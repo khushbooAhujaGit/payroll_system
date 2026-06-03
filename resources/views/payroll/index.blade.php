@@ -90,7 +90,7 @@
           <form method="POST" action="{{ route('salary.report.download') }}" style="display:inline">
             @csrf
             <input type="hidden" name="month" value="{{ $rep['year_month'] }}">
-            <input type="hidden" name="entity_id" value="0">
+            <input type="hidden" name="company_id" value="0">
             <button type="submit" class="btn sm" style="background:var(--grn2);color:var(--grn)">
               📥 Excel
             </button>
@@ -99,7 +99,7 @@
           <form method="POST" action="{{ route('salary.report.unlock') }}" style="display:inline">
             @csrf
             <input type="hidden" name="month" value="{{ $rep['year_month'] }}">
-            <input type="hidden" name="entity_id" value="0">
+            <input type="hidden" name="company_id" value="0">
             <button type="button" class="btn sm" style="background:#fff7ed;color:#c2410c"
               onclick="swConfirm(this.closest('form'),
                 'Unlock {{ $repLabel }}?',
@@ -219,7 +219,7 @@
         <label>Firm</label>
         <select id="gen-entity">
           <option value="0">All Firms</option>
-          @foreach($entities as $ent)
+          @foreach($companies as $ent)
           <option value="{{ $ent->id }}">{{ $ent->short_name ?? $ent->name }}</option>
           @endforeach
         </select>
@@ -312,7 +312,7 @@ function goToReport() {
   const month  = document.getElementById('gen-month').value;
   const entity = document.getElementById('gen-entity').value;
   if (!month) { alert('Please select a month.'); return; }
-  window.location.href = '{{ route('salary.report') }}?month=' + month + '&entity_id=' + entity;
+  window.location.href = '{{ route('salary.report') }}?month=' + month + '&company_id=' + entity;
 }
 </script>
 @endpush

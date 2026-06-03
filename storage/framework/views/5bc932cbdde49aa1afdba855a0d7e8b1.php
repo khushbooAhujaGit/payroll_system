@@ -4,6 +4,7 @@
   <button class="btn acc" onclick="om('att-modal')">✔ Mark Attendance</button>
   <button class="btn" onclick="om('punch-add-modal')">+ Add Punch</button>
   <button class="btn" onclick="om('biometric-upload-modal')">🖱 Bulk Upload</button>
+  <a href="<?php echo e(route('attendance.export') . '?' . http_build_query(request()->only('company_id','year','month'))); ?>" class="btn">⬇ Export</a>
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('content'); ?>
@@ -31,12 +32,12 @@
   
   <form method="GET" action="<?php echo e(route('attendance')); ?>" class="card"
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-    <?php if($entities->count() > 1): ?>
+    <?php if($companies->count() > 1): ?>
     <div class="fld" style="min-width:200px">
       <label>Entity / Company</label>
-      <select name="entity_id">
-        <?php $__currentLoopData = $entities; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ent): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-          <option value="<?php echo e($ent->id); ?>" <?php echo e($entityId == $ent->id ? 'selected' : ''); ?>>
+      <select name="company_id">
+        <?php $__currentLoopData = $companies; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ent): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+          <option value="<?php echo e($ent->id); ?>" <?php echo e($companyId == $ent->id ? 'selected' : ''); ?>>
             <?php echo e($ent->name); ?>
 
           </option>
@@ -44,7 +45,7 @@
       </select>
     </div>
     <?php else: ?>
-      <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
+      <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
     <?php endif; ?>
     <div class="fld">
       <label>Year</label>
@@ -76,7 +77,7 @@
     <?php endif; ?>
   </form>
 
-  <div class="card">
+  <div class="card d-none" style="display: none !important;">
     <div class="ch">
       <div class="ct">Attendance — <?php echo e(\Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')); ?></div>
     </div>
@@ -154,7 +155,7 @@
                 $present = 0; $absent = 0; $leave = 0;
               ?>
               <tr>
-                <td style="white-space:nowrap;font-size:12px"><?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?></td>
+                <td style="white-space:nowrap;font-size:12px"><?php echo e($emp->full_name); ?></td>
                 <td style="font-size:11px;color:var(--t3)"><?php echo e($emp->department?->name ?? '—'); ?></td>
                 <?php for($d = 1; $d <= $days; $d++): ?>
                   <?php
@@ -211,6 +212,7 @@
           </tbody>
         </table>
       </div>
+      <div style="margin-top:14px"><?php echo e($employees->links()); ?></div>
     <?php else: ?>
       <div class="empty">
         <div class="ico">🕐</div>
@@ -223,10 +225,11 @@
   </div>
 
   
-  <?php if($rawPunches->isNotEmpty()): ?>
+  <?php if($rawPunchesPaginated->isNotEmpty()): ?>
   <div class="card" style="margin-top:20px">
     <div class="ch">
       <div class="ct">Biometric Punch Records — <?php echo e(\Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')); ?></div>
+      <div style="font-size:11px;color:var(--t3)"><?php echo e(number_format($rawPunchesPaginated->total())); ?> records</div>
     </div>
     <div style="overflow-x:auto">
       <table>
@@ -244,60 +247,59 @@
           </tr>
         </thead>
         <tbody>
-          <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-            <?php $empPunches = $rawPunches[$emp->id] ?? collect(); ?>
-            <?php $__currentLoopData = $empPunches; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $punch): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-              <?php
-                $hours = null;
-                if ($punch->check_in && $punch->check_out) {
-                  $in  = \Carbon\Carbon::parse($punch->check_in);
-                  $out = \Carbon\Carbon::parse($punch->check_out);
-                  $diff = $in->diffInMinutes($out);
-                  $hours = sprintf('%dh %02dm', intdiv($diff, 60), $diff % 60);
-                }
-              ?>
-              <tr>
-                <td style="white-space:nowrap"><?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?></td>
-                <td><?php echo e(\Carbon\Carbon::parse($punch->attendance_date)->format('d M')); ?></td>
-                <td style="font-size:11px;color:var(--t3)"><?php echo e($punch->machine_name ?? '—'); ?></td>
-                <td style="font-size:11px;color:var(--t3)"><?php echo e($punch->bio_id_full ?? '—'); ?></td>
-                <td style="color:var(--grn);font-weight:600">
-                  <?php echo e($punch->check_in ? \Carbon\Carbon::parse($punch->check_in)->format('H:i') : '—'); ?>
+          <?php $__currentLoopData = $rawPunchesPaginated; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $punch): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <?php
+              $pEmp  = $punch->employee;
+              $hours = null;
+              if ($punch->check_in && $punch->check_out) {
+                $in   = \Carbon\Carbon::parse($punch->check_in);
+                $out  = \Carbon\Carbon::parse($punch->check_out);
+                $diff = $in->diffInMinutes($out);
+                $hours = sprintf('%dh %02dm', intdiv($diff, 60), $diff % 60);
+              }
+            ?>
+            <tr>
+              <td style="white-space:nowrap"><?php echo e($pEmp?->full_name); ?></td>
+              <td><?php echo e(\Carbon\Carbon::parse($punch->attendance_date)->format('d M')); ?></td>
+              <td style="font-size:11px;color:var(--t3)"><?php echo e($punch->machine_name ?? '—'); ?></td>
+              <td style="font-size:11px;color:var(--t3)"><?php echo e($punch->bio_id_full ?? '—'); ?></td>
+              <td style="color:var(--grn);font-weight:600">
+                <?php echo e($punch->check_in ? \Carbon\Carbon::parse($punch->check_in)->format('H:i') : '—'); ?>
 
-                </td>
-                <td style="color:var(--red)">
-                  <?php echo e($punch->check_out ? \Carbon\Carbon::parse($punch->check_out)->format('H:i') : '—'); ?>
+              </td>
+              <td style="color:var(--red)">
+                <?php echo e($punch->check_out ? \Carbon\Carbon::parse($punch->check_out)->format('H:i') : '—'); ?>
 
-                </td>
-                <td style="font-size:11px"><?php echo e($hours ?? '—'); ?></td>
-                <td>
-                  <?php if($punch->is_absent): ?>
-                    <span style="color:var(--red);font-size:11px;font-weight:600">Absent</span>
-                  <?php elseif($punch->check_in && $punch->check_out): ?>
-                    <span style="color:var(--grn);font-size:11px;font-weight:600">Present</span>
-                  <?php elseif($punch->check_in): ?>
-                    <span style="color:var(--yel);font-size:11px">In only</span>
-                  <?php else: ?>
-                    <span style="color:var(--t4);font-size:11px">—</span>
-                  <?php endif; ?>
-                </td>
-                <td style="white-space:nowrap">
-                  <button class="btn sm" style="font-size:10px"
-                    onclick="openPunchEdit(<?php echo e($punch->id); ?>, '<?php echo e(substr($punch->check_in ?? '', 0, 5)); ?>', '<?php echo e(substr($punch->check_out ?? '', 0, 5)); ?>', '<?php echo e($punch->machine_name ?? ''); ?>')">
-                    Edit
-                  </button>
-                  <form method="POST" action="<?php echo e(route('attendance.punch.destroy', $punch)); ?>" style="display:inline">
-                    <?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?>
-                    <button type="button" class="btn sm" style="font-size:10px;color:var(--red)"
-                      onclick="swConfirm(this.closest('form'), 'Delete Punch Record?', 'This punch record will be permanently removed.', 'warning', 'Yes, delete', '#dc2626')">Del</button>
-                  </form>
-                </td>
-              </tr>
-            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+              </td>
+              <td style="font-size:11px"><?php echo e($hours ?? '—'); ?></td>
+              <td>
+                <?php if($punch->is_absent): ?>
+                  <span style="color:var(--red);font-size:11px;font-weight:600">Absent</span>
+                <?php elseif($punch->check_in && $punch->check_out): ?>
+                  <span style="color:var(--grn);font-size:11px;font-weight:600">Present</span>
+                <?php elseif($punch->check_in): ?>
+                  <span style="color:var(--yel);font-size:11px">In only</span>
+                <?php else: ?>
+                  <span style="color:var(--t4);font-size:11px">—</span>
+                <?php endif; ?>
+              </td>
+              <td style="white-space:nowrap">
+                <button class="btn sm" style="font-size:10px"
+                  onclick="openPunchEdit(<?php echo e($punch->id); ?>, '<?php echo e(substr($punch->check_in ?? '', 0, 5)); ?>', '<?php echo e(substr($punch->check_out ?? '', 0, 5)); ?>', '<?php echo e($punch->machine_name ?? ''); ?>')">
+                  Edit
+                </button>
+                <form method="POST" action="<?php echo e(route('attendance.punch.destroy', $punch)); ?>" style="display:inline">
+                  <?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?>
+                  <button type="button" class="btn sm" style="font-size:10px;color:var(--red)"
+                    onclick="swConfirm(this.closest('form'), 'Delete Punch Record?', 'This punch record will be permanently removed.', 'warning', 'Yes, delete', '#dc2626')">Del</button>
+                </form>
+              </td>
+            </tr>
           <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </tbody>
       </table>
     </div>
+    <div style="margin-top:14px"><?php echo e($rawPunchesPaginated->links()); ?></div>
   </div>
   <?php endif; ?>
 
@@ -329,7 +331,7 @@
               <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $i => $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <input type="hidden" name="records[<?php echo e($i); ?>][emp_id]" value="<?php echo e($emp->id); ?>">
                 <tr>
-                  <td><?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?></td>
+                  <td><?php echo e($emp->full_name); ?></td>
                   <td><?php echo e($emp->department?->name ?? '—'); ?></td>
                   <td>
                     <select name="records[<?php echo e($i); ?>][status]"
@@ -380,24 +382,13 @@
     </div>
     <form method="POST" action="<?php echo e(route('attendance.import')); ?>" enctype="multipart/form-data">
       <?php echo csrf_field(); ?>
-      <div class="fg2">
-        <div class="fld">
-          <label>Year *</label>
-          <input type="number" name="year" required value="<?php echo e(now()->year); ?>">
-        </div>
-        <div class="fld">
-          <label>Month *</label>
-          <select name="month" required>
-            <?php $__currentLoopData = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $i => $m): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-              <option value="<?php echo e($i + 1); ?>" <?php echo e(now()->month == $i + 1 ? 'selected' : ''); ?>><?php echo e($m); ?></option>
-            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-          </select>
-        </div>
-        <div class="fld full">
-          <label>Excel File (.xlsx / .xls) *</label>
-          <input type="file" name="file" accept=".xlsx,.xls" required multiple
-            style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
-        </div>
+      <div style="font-size:12px;color:var(--t2);background:var(--s2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        The attendance date is read directly from the Excel sheet. No month selection needed.
+      </div>
+      <div class="fld" style="margin-bottom:14px">
+        <label>Excel File (.xlsx / .xls) *</label>
+        <input type="file" name="file" accept=".xlsx,.xls" required multiple
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
       </div>
       <div class="mf">
         <button type="button" class="btn" onclick="cm('upload-modal')">Cancel</button>
@@ -430,13 +421,7 @@
           enctype="multipart/form-data" id="bio-import-form">
       <?php echo csrf_field(); ?>
 
-      <div class="fg2" style="margin-bottom:10px">
-        <div class="fld">
-          <label>Attendance Month *</label>
-          <input type="month" name="import_month" required value="<?php echo e(now()->format('Y-m')); ?>"
-                 style="padding:9px 12px;border:1.5px solid var(--b1);border-radius:8px;background:#f9fafb;font-family:inherit;font-size:13px;color:var(--txt);outline:none;width:100%">
-          <span style="font-size:10px;color:var(--t3)">Month the attendance data belongs to</span>
-        </div>
+      <div style="margin-bottom:10px">
         <div class="fld">
           <label>Machine XLS Files (.xls) *</label>
           <input type="file" name="files[]" id="bio-files-input"
@@ -444,6 +429,9 @@
                  style="background:var(--s2);border:1.5px dashed var(--b2);
                         border-radius:8px;padding:10px;cursor:pointer;width:100%"
                  onchange="showBioFiles(this)">
+          <span style="font-size:11px;color:var(--t3);margin-top:4px;display:block">
+            Attendance dates are read directly from the file — no month selection needed.
+          </span>
         </div>
       </div>
 
@@ -471,14 +459,14 @@
       <?php echo csrf_field(); ?>
       <input type="hidden" name="year" value="<?php echo e($year); ?>">
       <input type="hidden" name="month" value="<?php echo e($month); ?>">
-      <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
+      <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
       <div class="fg2">
         <div class="fld full">
           <label>Employee *</label>
           <select name="employee_id" required>
             <option value="">Select employee</option>
             <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-            <option value="<?php echo e($emp->id); ?>"><?php echo e($emp->employee_id); ?> — <?php echo e($emp->first_name); ?> <?php echo e($emp->last_name); ?></option>
+            <option value="<?php echo e($emp->id); ?>"><?php echo e($emp->employee_id); ?> — <?php echo e($emp->full_name); ?></option>
             <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
           </select>
         </div>
@@ -518,7 +506,7 @@
       <?php echo csrf_field(); ?>
       <input type="hidden" name="year" value="<?php echo e($year); ?>">
       <input type="hidden" name="month" value="<?php echo e($month); ?>">
-      <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
+      <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
       <div class="fg2">
         <div class="fld">
           <label>Check In (HH:MM)</label>

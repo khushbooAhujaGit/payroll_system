@@ -112,7 +112,7 @@ class RoleController extends Controller
     public function users(Role $role): JsonResponse
     {
         $users = User::whereHas('roles', fn($q) => $q->where('roles.id', $role->id))
-            ->with('employee:id,employee_id,first_name,last_name')
+            ->with('employee:id,employee_id,first_name,middle_name,last_name')
             ->get();
 
         return response()->json(['data' => $users]);
@@ -124,12 +124,12 @@ class RoleController extends Controller
         $request->validate([
             'role_ids'    => 'required|array',
             'role_ids.*'  => 'exists:roles,id',
-            'entity_id'   => 'nullable|exists:entities,id',
+            'company_id' => 'nullable|exists:companies,id',
         ]);
 
         foreach ($request->role_ids as $roleId) {
             if (!$user->roles()->where('roles.id', $roleId)->exists()) {
-                $user->roles()->attach($roleId, ['entity_id' => $request->entity_id]);
+                $user->roles()->attach($roleId, ['company_id' => $request->company_id]);
             }
         }
 

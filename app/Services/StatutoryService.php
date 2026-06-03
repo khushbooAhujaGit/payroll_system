@@ -43,7 +43,7 @@ class StatutoryService
     {
         if (!$employee->is_pf_applicable) return 0;
 
-        $settings = PfSetting::where('entity_id', $employee->entity_id)->first();
+        $settings = PfSetting::where('company_id', $employee->company_id)->first();
         if (!$settings) return 0;
 
         $pfWage = $this->getPfWage($employee, $earningsMap, $settings);
@@ -54,7 +54,7 @@ class StatutoryService
     {
         if (!$employee->is_pf_applicable) return 0;
 
-        $settings = PfSetting::where('entity_id', $employee->entity_id)->first();
+        $settings = PfSetting::where('company_id', $employee->company_id)->first();
         if (!$settings) return 0;
 
         $pfWage = $this->getPfWage($employee, $earningsMap, $settings);
@@ -87,7 +87,7 @@ class StatutoryService
     {
         if (!$employee->is_esic_applicable) return 0;
 
-        $settings = EsicSetting::where('entity_id', $employee->entity_id)->first();
+        $settings = EsicSetting::where('company_id', $employee->company_id)->first();
         if (!$settings) return 0;
 
         // ESIC applicable only if gross <= wage limit
@@ -100,7 +100,7 @@ class StatutoryService
     {
         if (!$employee->is_esic_applicable) return 0;
 
-        $settings = EsicSetting::where('entity_id', $employee->entity_id)->first();
+        $settings = EsicSetting::where('company_id', $employee->company_id)->first();
         if (!$settings) return 0;
 
         if ($grossSalary > $settings->wage_limit) return 0;
@@ -120,7 +120,7 @@ class StatutoryService
         $state = $employee->entity->state ?? $employee->branch?->state ?? null;
         if (!$state) return 0;
 
-        $slab = PtSlab::where('entity_id', $employee->entity_id)
+        $slab = PtSlab::where('company_id', $employee->company_id)
             ->where('state', $state)
             ->where('salary_from', '<=', $grossSalary)
             ->where(fn($q) => $q->whereNull('salary_to')->orWhere('salary_to', '>=', $grossSalary))
@@ -140,7 +140,7 @@ class StatutoryService
         if (!$employee->is_lwf_applicable) return 0;
 
         // LWF is often bi-annual (June & December) or annual
-        $slab = LwfSlab::where('entity_id', $employee->entity_id)->where('is_active', true)->first();
+        $slab = LwfSlab::where('company_id', $employee->company_id)->where('is_active', true)->first();
         if (!$slab) return 0;
 
         // Check if this is a deduction month
@@ -153,7 +153,7 @@ class StatutoryService
     {
         if (!$employee->is_lwf_applicable) return 0;
 
-        $slab = LwfSlab::where('entity_id', $employee->entity_id)->where('is_active', true)->first();
+        $slab = LwfSlab::where('company_id', $employee->company_id)->where('is_active', true)->first();
         if (!$slab) return 0;
 
         if (!$this->isLwfDeductionMonth($slab, $period->month)) return 0;

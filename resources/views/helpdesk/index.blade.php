@@ -73,7 +73,7 @@
             <tr>
               <td class="mono">{{ $ticket->ticket_number }}</td>
               <td>{{ \Illuminate\Support\Str::limit($ticket->subject, 50) }}</td>
-              <td>{{ $ticket->employee?->first_name }} {{ $ticket->employee?->last_name }}</td>
+              <td>{{ $ticket->employee?->full_name }}</td>
               <td>{{ $ticket->category?->name ?? '—' }}</td>
               <td><span class="bx"
                   style="color:{{ $priColors[$ticket->priority] ?? 'var(--t3)' }}">{{ ucfirst($ticket->priority) }}</span>

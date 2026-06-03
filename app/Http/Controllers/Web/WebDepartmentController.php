@@ -15,16 +15,16 @@ class WebDepartmentController extends Controller
 {
     public function index(Request $request)
     {
-        $entityId    = $this->resolveEntityId($request);
-        $departments = Department::where('entity_id', $entityId)->orderBy('name')->get();
-        $designations= Designation::where('entity_id', $entityId)->orderBy('name')->get();
+        $companyId    = $this->resolveCompanyId($request);
+        $departments = Department::where('company_id', $companyId)->orderBy('name')->get();
+        $designations= Designation::where('company_id', $companyId)->orderBy('name')->get();
 
-        return view('masters.departments', compact('departments', 'designations', 'entityId'));
+        return view('masters.departments', compact('departments', 'designations', 'companyId'));
     }
 
     public function storeDepartment(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'name'      => 'required|string|max:100',
@@ -32,13 +32,13 @@ class WebDepartmentController extends Controller
             'parent_id' => 'nullable|exists:departments,id',
         ]);
 
-        Department::create(array_merge($validated, ['entity_id' => $entityId, 'is_active' => true]));
+        Department::create(array_merge($validated, ['company_id' => $companyId, 'is_active' => true]));
         return redirect()->route('departments')->with('success', 'Department created.');
     }
 
     public function storeDesignation(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
             'name'  => 'required|string|max:100',
@@ -46,7 +46,7 @@ class WebDepartmentController extends Controller
             'level' => 'nullable|integer|min:1',
         ]);
 
-        Designation::create(array_merge($validated, ['entity_id' => $entityId, 'is_active' => true]));
+        Designation::create(array_merge($validated, ['company_id' => $companyId, 'is_active' => true]));
         return redirect()->route('departments')->with('success', 'Designation created.');
     }
 
@@ -57,7 +57,7 @@ class WebDepartmentController extends Controller
         // Sheet 1 — Departments
         $deptSheet = $spreadsheet->getActiveSheet()->setTitle('Departments');
         foreach (['Name', 'Code', 'Parent Department Code'] as $i => $h) {
-            $deptSheet->setCellValueByColumnAndRow($i + 1, 1, $h);
+            $deptSheet->setCellValue([$i + 1, 1], $h);
         }
         $deptSheet->fromArray(['Engineering', 'ENG', ''], null, 'A2');
         $deptSheet->fromArray(['Frontend', 'FE', 'ENG'], null, 'A3');
@@ -65,7 +65,7 @@ class WebDepartmentController extends Controller
         // Sheet 2 — Designations
         $desigSheet = $spreadsheet->createSheet()->setTitle('Designations');
         foreach (['Name', 'Code', 'Level'] as $i => $h) {
-            $desigSheet->setCellValueByColumnAndRow($i + 1, 1, $h);
+            $desigSheet->setCellValue([$i + 1, 1], $h);
         }
         $desigSheet->fromArray(['Software Engineer', 'SE', 3], null, 'A2');
         $desigSheet->fromArray(['Senior Engineer', 'SSE', 4], null, 'A3');
@@ -79,7 +79,7 @@ class WebDepartmentController extends Controller
     public function import(Request $request)
     {
         $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv']);
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
         try {
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($request->file('file')->getPathname());
@@ -99,7 +99,7 @@ class WebDepartmentController extends Controller
                 $parentId = $parentCode && isset($deptCodeMap[strtoupper($parentCode)])
                     ? $deptCodeMap[strtoupper($parentCode)] : null;
                 $dept = Department::updateOrCreate(
-                    ['entity_id' => $entityId, 'code' => strtoupper(trim($code))],
+                    ['company_id' => $companyId, 'code' => strtoupper(trim($code))],
                     ['name' => trim($name), 'parent_id' => $parentId, 'is_active' => true]
                 );
                 $deptCodeMap[strtoupper(trim($code))] = $dept->id;
@@ -116,7 +116,7 @@ class WebDepartmentController extends Controller
                     [$name, $code, $level] = array_pad($row, 3, null);
                     if (!$name || !$code) continue;
                     Designation::updateOrCreate(
-                        ['entity_id' => $entityId, 'code' => strtoupper(trim($code))],
+                        ['company_id' => $companyId, 'code' => strtoupper(trim($code))],
                         ['name' => trim($name), 'level' => $level ? (int)$level : null, 'is_active' => true]
                     );
                     $count++;

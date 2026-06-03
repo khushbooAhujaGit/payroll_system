@@ -6,6 +6,8 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveTrackerRecord;
 use App\Models\LeaveType;
+use App\Services\LeaveBalanceSyncService;
+use App\Services\LeaveTrackerStatusService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
@@ -187,12 +189,21 @@ class LeaveTrackerImporter extends BaseImporter
         // Employee is guaranteed to exist here — shouldSkipRow filtered unmatched rows
         $employee = $this->resolveEmployee($sheetEmpId);
 
+        if (!$employee) {
+            \Log::warning("LeaveTrackerImporter::process - Employee not found", [
+                'sheet_emp_id' => $sheetEmpId,
+                'row_number' => $rowNumber,
+                'leave_date' => $leaveDate,
+            ]);
+            return; // Skip this row
+        }
+
         $now = now()->toDateTimeString();
 
         // Accumulate into batch — flushed by afterImport()
         $this->pendingRows[] = [
             'leave_ref_id'     => $refId,
-            'employee_id'      => $employee?->id,
+            'employee_id'      => $employee->id,
             'sheet_emp_id'     => $sheetEmpId ?: null,
             'employee_name'    => trim((string) ($data['employee_name'] ?? '')) ?: null,
             'leave_date'       => $leaveDate,
@@ -219,9 +230,9 @@ class LeaveTrackerImporter extends BaseImporter
             return;
         }
 
-        // Collect distinct employee_ids before we clear pendingRows
-        $affectedEmpIds = array_values(array_unique(
-            array_filter(array_column($this->pendingRows, 'employee_id'))
+        // Collect sheet emp IDs from pendingRows (these are more reliable than employee_id)
+        $affectedSheetIds = array_values(array_unique(
+            array_filter(array_column($this->pendingRows, 'sheet_emp_id'))
         ));
 
         $updateColumns = [
@@ -237,95 +248,38 @@ class LeaveTrackerImporter extends BaseImporter
         $this->pendingRows = [];
 
         // ── Sync leave_balances from the tracker records ───────────────────────
-        if (!empty($affectedEmpIds)) {
-            $this->syncLeaveBalances($affectedEmpIds);
-        }
-    }
+        // Query database directly for all employees who now have leave records
+        // This is more reliable than using employee_id from pendingRows (which might be null)
+        if (!empty($affectedSheetIds)) {
+            $affectedEmpIds = LeaveTrackerRecord::whereIn('sheet_emp_id', $affectedSheetIds)
+                ->whereNotNull('employee_id')
+                ->distinct()
+                ->pluck('employee_id')
+                ->all();
 
-    /**
-     * Aggregate leave_tracker_records for the given employees and upsert into
-     * leave_balances (availed + closing_balance).
-     *
-     * leave_balances.closing_balance = opening_balance + accrued + carry_forwarded
-     *                                  + adjusted - availed - encashed - lapsed
-     * Since we only manage availed here, closing_balance = -availed when other
-     * fields are 0. To keep it meaningful (days consumed), we store availed as
-     * the closing_balance when no opening/accrual data is set.
-     */
-    protected function syncLeaveBalances(array $empIds): void
-    {
-        // Build code → id map for all global leave types (entity_id IS NULL)
-        // and fall back to any entity-specific type with the same code.
-        $leaveTypeMap = LeaveType::whereIn('code', ['CL', 'SL', 'EL', 'CP', 'LOP', 'WFH',
-                                                     'HCL', 'HSL', 'CO', 'HCO', 'MTL', 'PTL',
-                                                     'RL', 'JN', 'POM', 'PIM', 'PM', 'BDY',
-                                                     'WDA', 'AP', 'LFT', 'EL', 'LOP'])
-            ->orderByRaw('entity_id IS NULL DESC') // prefer global (NULL) entries
-            ->get()
-            ->keyBy('code')
-            ->map(fn($lt) => $lt->id);
-
-        // Aggregate: (employee_id, leave_type code, FY year) → count of days availed.
-        // Financial year: April 1 – March 31.  FY year = start calendar year.
-        //   Apr-Dec of year Y  → fy_year = Y
-        //   Jan-Mar of year Y  → fy_year = Y-1
-        $fyExpr = 'CASE WHEN MONTH(leave_date) >= 4 THEN YEAR(leave_date) ELSE YEAR(leave_date) - 1 END';
-
-        $rows = DB::table('leave_tracker_records')
-            ->select(
-                'employee_id',
-                'leave_type',
-                DB::raw("{$fyExpr} as fy_year"),
-                DB::raw('MONTH(leave_date) as lv_month'),
-                DB::raw('COUNT(*) as availed')
-            )
-            ->whereIn('employee_id', $empIds)
-            ->whereNotNull('employee_id')
-            ->where('is_active', true)
-            ->groupBy('employee_id', 'leave_type', DB::raw($fyExpr), DB::raw('MONTH(leave_date)'))
-            ->get();
-
-        $now = now()->toDateTimeString();
-
-        foreach ($rows as $row) {
-            $leaveTypeId = $leaveTypeMap[$row->leave_type] ?? null;
-            if ($leaveTypeId === null) {
-                continue; // unknown leave type code — skip
+            if (!empty($affectedEmpIds)) {
+                $synced = (new LeaveBalanceSyncService())->sync($affectedEmpIds);
+                \Log::info('LeaveTrackerImporter: Leave balances synced successfully', [
+                    'sheet_emp_ids' => $affectedSheetIds,
+                    'employee_ids' => $affectedEmpIds,
+                    'synced_entries' => $synced,
+                    'timestamp' => now(),
+                ]);
+            } else {
+                \Log::warning('LeaveTrackerImporter: No employee_id found in imported records', [
+                    'sheet_emp_ids' => $affectedSheetIds,
+                    'timestamp' => now(),
+                ]);
             }
-
-            $month = (int) $row->lv_month;
-
-            // Read existing monthly balance so we don't overwrite opening/accrued/carry-forward
-            $existing = LeaveBalance::where('employee_id', $row->employee_id)
-                ->where('leave_type_id', $leaveTypeId)
-                ->where('year', $row->fy_year)
-                ->where('month', $month)
-                ->first();
-
-            $opening       = (float) ($existing->opening_balance  ?? 0);
-            $accrued       = (float) ($existing->accrued          ?? 0);
-            $carryFwd      = (float) ($existing->carry_forwarded  ?? 0);
-            $adjusted      = (float) ($existing->adjusted         ?? 0);
-            $encashed      = (float) ($existing->encashed         ?? 0);
-            $lapsed        = (float) ($existing->lapsed           ?? 0);
-            $availed       = (float) $row->availed;
-            $closingBal    = $opening + $accrued + $carryFwd + $adjusted - $availed - $encashed - $lapsed;
-
-            LeaveBalance::updateOrCreate(
-                [
-                    'employee_id'   => $row->employee_id,
-                    'leave_type_id' => $leaveTypeId,
-                    'year'          => $row->fy_year,
-                    'month'         => $month,
-                ],
-                [
-                    'availed'         => $availed,
-                    'closing_balance' => $closingBal,
-                    'updated_at'      => $now,
-                ]
-            );
         }
+
+        // ── Sync employee_status (active / inactive) from LFT / JN records ────
+        // Re-evaluates only employees touched by THIS upload.
+        // LFT with no subsequent JN  → inactive + date_of_leaving set
+        // JN  with no subsequent LFT → active   + date_of_leaving cleared
+        (new LeaveTrackerStatusService())->sync($affectedSheetIds ?: null);
     }
+
 
     // ─────────────────────────────────────────────
     // HELPERS

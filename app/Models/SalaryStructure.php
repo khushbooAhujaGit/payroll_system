@@ -16,7 +16,7 @@ use Carbon\Carbon;
 
 class SalaryStructure extends Model
 {
-    protected $fillable = ['entity_id','name','description','is_active'];
+    protected $fillable = ['company_id','name','description','is_active'];
     public function components(): HasMany
     {
         return $this->hasMany(SalaryStructureComponent::class)

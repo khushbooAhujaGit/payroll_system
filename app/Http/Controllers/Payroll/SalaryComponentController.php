@@ -18,7 +18,7 @@ class SalaryComponentController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $components = SalaryComponent::where('entity_id', $request->entity_id)
+        $components = SalaryComponent::where('company_id', $request->company_id)
             ->when($request->component_type, fn($q) => $q->where('component_type', $request->component_type))
             ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
             ->orderBy('sort_order')
@@ -32,7 +32,7 @@ class SalaryComponentController extends Controller
         $this->authorize('payroll.edit');
 
         $validated = $request->validate([
-            'entity_id'            => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'                 => 'required|string|max:100',
             'code'                 => 'required|string|max:20',
             'component_type'       => 'required|in:earning,deduction,employer_contribution',

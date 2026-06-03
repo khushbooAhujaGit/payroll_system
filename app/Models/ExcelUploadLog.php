@@ -16,6 +16,6 @@ use Carbon\Carbon;
 
 class ExcelUploadLog extends Model
 {
-    protected $fillable = ['entity_id','user_id','module','file_name','file_path','total_rows','success_rows','error_rows','errors','warnings','status','meta'];
+    protected $fillable = ['company_id','user_id','module','file_name','file_path','total_rows','success_rows','error_rows','errors','warnings','status','meta'];
     protected $casts    = ['errors' => 'array', 'warnings' => 'array', 'meta' => 'array'];
 }

@@ -14,24 +14,28 @@ class WebIncentiveController extends Controller
 {
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
         $month    = $request->get('month', now()->format('Y-m'));
 
-        $employees = Employee::where('entity_id', $entityId)
-            ->where('employee_status', 'active')
-            ->with(['designation:id,name', 'department:id,name'])
+        // Only load records that have been entered (not all employees)
+        $records = EmployeeIncentive::where('month', $month)
+            ->whereHas('employee', fn($q) => $q)
+            ->with(['employee:id,first_name,middle_name,last_name,employee_id'])
+            ->orderByDesc('created_at')
+            ->paginate(25)
+            ->withQueryString();
+
+        $totalIncentive = EmployeeIncentive::where('month', $month)
+            ->whereHas('employee', fn($q) => $q)
+            ->sum('amount');
+
+        // Slim employee list for the "Add" modal dropdown — active only
+        $allEmployees = Employee::query()
+            ->currentlyEmployed()
             ->orderBy('employee_id')
-            ->get();
+            ->get(['id', 'first_name', 'middle_name', 'last_name', 'employee_id']);
 
-        // Build lookup: employee_id → incentive record
-        $incentives = EmployeeIncentive::where('month', $month)
-            ->whereIn('employee_id', $employees->pluck('id'))
-            ->get()
-            ->keyBy('employee_id');
-
-        $totalIncentive = $incentives->sum('amount');
-
-        return view('incentives.index', compact('employees', 'incentives', 'month', 'totalIncentive', 'entityId'));
+        return view('incentives.index', compact('records', 'allEmployees', 'month', 'totalIncentive', 'companyId'));
     }
 
     public function upsert(Request $request)
@@ -61,15 +65,38 @@ class WebIncentiveController extends Controller
             ->with('success', 'Incentive removed.');
     }
 
+    public function export(Request $request)
+    {
+        $companyId = $this->resolveCompanyId($request);
+        $month    = $request->get('month', now()->format('Y-m'));
+
+        $records = EmployeeIncentive::whereHas('employee', fn($q) => $q)
+            ->with(['employee:id,first_name,middle_name,last_name,employee_id'])
+            ->where('month', $month)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $headers = ['Employee ID', 'Employee Name', 'Month', 'Amount (₹)', 'Reason'];
+
+        $rows = $records->map(fn($r) => [
+            $r->employee?->employee_id,
+            $r->employee ? ($r->employee->full_name) : null,
+            $r->month,
+            (float) $r->amount,
+            $r->reason,
+        ]);
+
+        return $this->streamXlsx("incentives_{$month}", $headers, $rows);
+    }
+
     public function template()
     {
         $spreadsheet = new Spreadsheet();
         $ws = $spreadsheet->getActiveSheet();
         $ws->setTitle('Incentives');
         foreach (['Emp ID', 'Amount', 'Reason'] as $i => $h) {
-            $ws->setCellValueByColumnAndRow($i + 1, 1, $h);
+            $ws->setCellValue([$i + 1, 1], $h);
         }
-        $ws->fromArray(['202118007', 5000, 'Performance bonus'], null, 'A2');
 
         $writer = new Xlsx($spreadsheet);
         return response()->streamDownload(function () use ($writer) {

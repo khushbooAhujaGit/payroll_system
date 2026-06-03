@@ -14,8 +14,8 @@ class EmployeeBonusController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $bonuses = EmployeeBonus::with(['employee:id,employee_id,first_name,last_name', 'bonusRule:id,name'])
-            ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        $bonuses = EmployeeBonus::with(['employee:id,employee_id,first_name,middle_name,last_name', 'bonusRule:id,name'])
+            ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
             ->when($request->year,  fn($q) => $q->where('year', $request->year))
             ->when($request->month, fn($q) => $q->where('month', $request->month))
             ->when($request->status, fn($q) => $q->where('status', $request->status))
@@ -51,7 +51,7 @@ class EmployeeBonusController extends Controller
         $this->authorize('payroll.edit');
 
         $validated = $request->validate([
-            'entity_id'     => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'department_id' => 'nullable|exists:departments,id',
             'bonus_rule_id' => 'required|exists:bonus_rules,id',
             'bonus_name'    => 'required|string|max:200',
@@ -62,7 +62,7 @@ class EmployeeBonusController extends Controller
             'remarks'       => 'nullable|string',
         ]);
 
-        $employees = Employee::where('entity_id', $validated['entity_id'])
+        $employees = Employee::query()
             ->where('employee_status', 'active')
             ->when($validated['department_id'] ?? null, fn($q) => $q->where('department_id', $validated['department_id']))
             ->with('currentSalary')

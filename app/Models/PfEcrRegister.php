@@ -16,7 +16,7 @@ use Carbon\Carbon;
 
 class PfEcrRegister extends Model
 {
-    protected $fillable = ['entity_id','payroll_run_id','year','month','total_employees','total_pf_wages','total_employee_pf','total_employer_pf','total_eps','total_edli','ecr_file_path','status'];
-    public function entity(): BelongsTo    { return $this->belongsTo(Entity::class); }
+    protected $fillable = ['company_id','payroll_run_id','year','month','total_employees','total_pf_wages','total_employee_pf','total_employer_pf','total_eps','total_edli','ecr_file_path','status'];
+    public function entity(): BelongsTo    { return $this->belongsTo(Company::class); }
     public function payrollRun(): BelongsTo{ return $this->belongsTo(PayrollRun::class); }
 }

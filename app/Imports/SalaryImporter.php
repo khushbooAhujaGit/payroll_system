@@ -144,7 +144,7 @@ class SalaryImporter extends BaseImporter
             ]);
         });
 
-        // ── Audit / raw-upload record (immutable backup) ──────────────────────
+        // ── Encrypted audit record ────────────────────────────────────────────
         SalaryRawUpload::create([
             'employee_id'       => $employee->id,
             'emp_id_text'       => $empId,
@@ -156,6 +156,7 @@ class SalaryImporter extends BaseImporter
             'source'            => 'import',
             'uploaded_by'       => $uploadedBy,
         ]);
+
     }
 
     protected function resolveEmployee(string $empId): ?\App\Models\Employee

@@ -33,14 +33,14 @@ class WebReportController extends Controller
 
     public function index(Request $request)
     {
-        $entityId = $this->resolveEntityId($request);
+        $companyId = $this->resolveCompanyId($request);
 
-        $headcount = Employee::where('entity_id', $entityId)
+        $headcount = Employee::query()
             ->selectRaw('employee_status, COUNT(*) as count')
             ->groupBy('employee_status')
             ->pluck('count', 'employee_status');
 
-        $deptBreakdown = Employee::where('entity_id', $entityId)
+        $deptBreakdown = Employee::query()
             ->where('employee_status', 'active')
             ->selectRaw('department_id, COUNT(*) as count')
             ->with('department:id,name')
@@ -48,7 +48,7 @@ class WebReportController extends Controller
             ->orderByDesc('count')
             ->get();
 
-        $lastPayroll = PayrollRun::where('entity_id', $entityId)
+        $lastPayroll = PayrollRun::where('company_id', $companyId)
             ->whereIn('status', ['finalized', 'paid'])
             ->with('period')
             ->orderByDesc('id')->first();
@@ -60,7 +60,7 @@ class WebReportController extends Controller
             : null;
 
         return view('reports.index', compact(
-            'headcount', 'deptBreakdown', 'lastPayroll', 'lastRunRecords', 'entityId'
+            'headcount', 'deptBreakdown', 'lastPayroll', 'lastRunRecords', 'companyId'
         ));
     }
 
@@ -70,14 +70,14 @@ class WebReportController extends Controller
 
     public function attendance(Request $request)
     {
-        $entityId  = $this->resolveEntityId($request);
+        $companyId  = $this->resolveCompanyId($request);
         $monthStr  = $request->get('month');
         $empFilter = $request->get('emp_id');
 
-        $allEmployees = Employee::where('entity_id', $entityId)
+        $allEmployees = Employee::query()
             ->where('employee_status', 'active')
             ->orderBy('employee_id')
-            ->get(['id', 'employee_id', 'first_name', 'last_name']);
+            ->get(['id', 'employee_id', 'first_name', 'middle_name', 'last_name']);
 
         // No month selected yet — show empty state
         if (!$monthStr || !preg_match('/^\d{4}-\d{2}$/', $monthStr)) {
@@ -86,7 +86,7 @@ class WebReportController extends Controller
                 'monthStr'    => null,
                 'from'        => null,
                 'to'          => null,
-                'entityId'    => $entityId,
+                'companyId'    => $companyId,
                 'allEmployees'=> $allEmployees,
                 'empFilter'   => $empFilter,
             ]);
@@ -95,10 +95,10 @@ class WebReportController extends Controller
         $from = Carbon::parse($monthStr . '-01')->startOfMonth();
         $to   = $from->copy()->endOfMonth();
 
-        $rows = $this->buildAttendanceRows($entityId, $from, $to, $empFilter);
+        $rows = $this->buildAttendanceRows($companyId, $from, $to, $empFilter);
 
         return view('reports.attendance', compact(
-            'rows', 'monthStr', 'from', 'to', 'entityId', 'allEmployees', 'empFilter'
+            'rows', 'monthStr', 'from', 'to', 'companyId', 'allEmployees', 'empFilter'
         ));
     }
 
@@ -108,7 +108,7 @@ class WebReportController extends Controller
 
     public function attendanceExport(Request $request)
     {
-        $entityId  = $this->resolveEntityId($request);
+        $companyId  = $this->resolveCompanyId($request);
         $monthStr  = $request->get('month');
         $empFilter = $request->get('emp_id');
 
@@ -119,7 +119,7 @@ class WebReportController extends Controller
         $from = Carbon::parse($monthStr . '-01')->startOfMonth();
         $to   = $from->copy()->endOfMonth();
 
-        $rows = $this->buildAttendanceRows($entityId, $from, $to, $empFilter);
+        $rows = $this->buildAttendanceRows($companyId, $from, $to, $empFilter);
 
         $headers = [
             'Month', 'Date', 'Day Name', 'New Emp ID', 'Employee Name',
@@ -201,9 +201,9 @@ class WebReportController extends Controller
     // Shared: Build flat attendance rows
     // ─────────────────────────────────────────────────────────────────────────
 
-    private function buildAttendanceRows(int $entityId, Carbon $from, Carbon $to, ?string $empFilter): array
+    private function buildAttendanceRows(int $companyId, Carbon $from, Carbon $to, ?string $empFilter): array
     {
-        $employees = Employee::where('entity_id', $entityId)
+        $employees = Employee::query()
             ->where('employee_status', 'active')
             ->when($empFilter, fn($q) => $q->where(fn($sq) =>
                 $sq->where('employee_id', $empFilter)
@@ -263,7 +263,7 @@ class WebReportController extends Controller
 
         foreach ($employees as $emp) {
             $empId   = $emp->id;
-            $empName = $emp->first_name . ' ' . $emp->last_name;
+            $empName = $emp->full_name;
 
             foreach ($dayMeta as $date => $meta) {
                 $key      = $empId . '_' . $date;

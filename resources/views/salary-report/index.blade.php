@@ -7,7 +7,7 @@
   <form method="POST" action="{{ route('salary.report.download') }}" style="display:inline">
     @csrf
     <input type="hidden" name="month" value="{{ $month }}">
-    <input type="hidden" name="entity_id" value="{{ $entityId }}">
+    <input type="hidden" name="company_id" value="{{ $companyId }}">
     <button type="submit" class="btn acc">📥 Download Excel</button>
   </form>
   @endif
@@ -26,10 +26,10 @@
     </div>
     <div class="fld" style="min-width:200px">
       <label>Firm</label>
-      <select name="entity_id">
-        <option value="0" {{ $entityId == 0 ? 'selected' : '' }}>All Firms</option>
-        @foreach($entities as $ent)
-          <option value="{{ $ent->id }}" {{ $ent->id == $entityId ? 'selected' : '' }}>
+      <select name="company_id">
+        <option value="0" {{ $companyId == 0 ? 'selected' : '' }}>All Firms</option>
+        @foreach($companies as $ent)
+          <option value="{{ $ent->id }}" {{ $ent->id == $companyId ? 'selected' : '' }}>
             {{ $ent->short_name ?? $ent->name }}
           </option>
         @endforeach
@@ -85,7 +85,7 @@
     <form method="POST" action="{{ route('salary.report.lock') }}" style="display:inline">
       @csrf
       <input type="hidden" name="month" value="{{ $month }}">
-      <input type="hidden" name="entity_id" value="{{ $entityId }}">
+      <input type="hidden" name="company_id" value="{{ $companyId }}">
       <button type="button" class="btn sm" style="background:#fed7aa;color:#9a3412;font-weight:600"
         onclick="swConfirm(this.closest('form'),
           'Re-lock {{ $lockLabel }}?',
@@ -117,7 +117,7 @@
   <form method="POST" action="{{ route('salary.report.lock') }}" style="display:inline">
     @csrf
     <input type="hidden" name="month" value="{{ $month }}">
-    <input type="hidden" name="entity_id" value="{{ $entityId }}">
+    <input type="hidden" name="company_id" value="{{ $companyId }}">
     <button type="button" class="btn sm acc"
       onclick="swConfirm(this.closest('form'),
         'Save report for {{ $lockLabel }}?',
@@ -132,7 +132,7 @@
 {{-- Preview Table --}}
 <div class="card" style="overflow-x:auto">
   <div class="ch">
-    <div class="ct">Salary Sheet — {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y') }} · {{ $entityId == 0 ? 'All Firms' : ($entities->firstWhere('id', $entityId)?->short_name ?? $entities->firstWhere('id', $entityId)?->name ?? '') }}
+    <div class="ct">Salary Sheet — {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y') }} · {{ $companyId == 0 ? 'All Firms' : ($companies->firstWhere('id', $companyId)?->short_name ?? $companies->firstWhere('id', $companyId)?->name ?? '') }}
       @if($isLocked)<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:2px 6px;font-size:10px;margin-left:8px">🔄 LIVE (snapshot saved)</span>@endif
     </div>
     <div style="font-size:11px;color:var(--t3)">{{ count($rows) }} employees · Scroll right for full details</div>

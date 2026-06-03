@@ -3,6 +3,7 @@
 <?php $__env->startSection('page_actions'); ?>
   <a href="<?php echo e(route('leave')); ?>" class="btn">← Leave Management</a>
   <button class="btn" onclick="om('tracker-add-modal')">+ Add Manually</button>
+  <a href="<?php echo e(route('leave.tracker.export') . '?' . http_build_query(request()->only('emp_id','leave_type','month','date_from','date_to'))); ?>" class="btn">⬇ Export</a>
   <button class="btn acc" onclick="om('tracker-import-modal')">📤 Import / Re-import</button>
 <?php $__env->stopSection(); ?>
 
@@ -90,7 +91,7 @@
         <th>Team Leader</th>
         <th>Reason Type</th>
         <th>Reason</th>
-        <th></th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -100,7 +101,7 @@
         <td class="mono" style="font-size:11px"><?php echo e($rec->sheet_emp_id ?? '—'); ?></td>
         <td>
           <?php if($rec->employee): ?>
-            <?php echo e($rec->employee->first_name); ?> <?php echo e($rec->employee->last_name); ?>
+            <?php echo e($rec->employee->full_name); ?>
 
             <span style="font-size:10px;color:var(--t3)">(<?php echo e($rec->employee->employee_id); ?>)</span>
           <?php elseif($rec->employee_name): ?>
@@ -111,36 +112,34 @@
             <span style="color:var(--t3)">—</span>
           <?php endif; ?>
         </td>
-        <td class="mono" style="white-space:nowrap">
-          <?php echo e(\Carbon\Carbon::parse($rec->leave_date)->format('d M Y')); ?>
-
-        </td>
+        <td class="mono" style="white-space:nowrap"><?php echo e(\Carbon\Carbon::parse($rec->leave_date)->format('d M Y')); ?></td>
         <td>
           <span class="bx" style="background:<?php echo e(strtoupper($rec->leave_type) === 'LOP' ? 'var(--red2)' : 'var(--acc2)'); ?>;
                                    color:<?php echo e(strtoupper($rec->leave_type) === 'LOP' ? 'var(--red)' : 'var(--acc)'); ?>">
             <?php echo e($rec->leave_type); ?>
 
           </span>
-          <?php if(!$rec->is_approved): ?>
-          <span class="bx" style="background:#fef2f2;color:#dc2626;margin-left:4px;font-size:9px">⚠ Not Approved</span>
-          <?php endif; ?>
         </td>
         <td style="font-size:11px;color:var(--t2)"><?php echo e($rec->team_leader_name ?? '—'); ?></td>
-        <td style="font-size:11px;color:var(--t2);text-transform:capitalize">
-          <?php echo e(str_replace('_', ' ', $rec->reason_type ?? '—')); ?>
-
-        </td>
-        <td style="font-size:11px;color:var(--t2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        <td style="font-size:11px;color:var(--t2);text-transform:capitalize"><?php echo e(str_replace('_', ' ', $rec->reason_type ?? '—')); ?></td>
+        <td style="font-size:11px;color:var(--t2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="<?php echo e($rec->reason); ?>"><?php echo e($rec->reason ?? '—'); ?></td>
-        <td style="white-space:nowrap">
-          <button class="btn sm" style="font-size:10px"
-            onclick="openEditModal(<?php echo e($rec->id); ?>, '<?php echo e($rec->leave_date ? \Carbon\Carbon::parse($rec->leave_date)->format('Y-m-d') : ''); ?>', '<?php echo e($rec->leave_type); ?>', '<?php echo e(addslashes($rec->team_leader_name ?? '')); ?>', '<?php echo e(addslashes($rec->reason_type ?? '')); ?>', '<?php echo e(addslashes($rec->reason ?? '')); ?>', <?php echo e($rec->is_approved ? 1 : 0); ?>)">
-            Edit
-          </button>
-          <form method="POST" action="<?php echo e(route('leave.tracker.destroy', $rec)); ?>" style="display:inline">
+        <td style="white-space:nowrap;text-align:center">
+          
+          <button class="btn sm" style="font-size:10px;padding:3px 8px"
+            onclick="openTrackerEdit(
+              <?php echo e($rec->id); ?>,
+              '<?php echo e($rec->leave_date?->format('Y-m-d')); ?>',
+              '<?php echo e(strtoupper($rec->leave_type)); ?>',
+              '<?php echo e(addslashes($rec->team_leader_name ?? '')); ?>',
+              '<?php echo e(addslashes($rec->reason_type ?? '')); ?>',
+              '<?php echo e(addslashes($rec->reason ?? '')); ?>'
+            )">Edit</button>
+          
+          <form method="POST" action="<?php echo e(route('leave.tracker.destroy', $rec->id)); ?>" style="display:inline"
+                onsubmit="return confirm('Delete this single day record?')">
             <?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?>
-            <button type="button" class="btn sm" style="font-size:10px;color:var(--red)"
-              onclick="swConfirm(this.closest('form'), 'Delete Leave Record?', 'This leave record will be permanently removed.', 'warning', 'Yes, delete', '#dc2626')">Del</button>
+            <button type="submit" class="btn sm" style="font-size:10px;padding:3px 8px;color:var(--red)">Del</button>
           </form>
         </td>
       </tr>
@@ -166,18 +165,16 @@
         <th>End Date</th>
         <th>Team Leader</th>
         <th>Reason Type</th>
-        <th></th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
       <?php $__currentLoopData = $spells; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $sp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-      <?php
-        $isSingle = $sp['start_date']->eq($sp['end_date']);
-      ?>
+      <?php $isSingle = $sp['start_date']->eq($sp['end_date']); ?>
       <tr>
         <td>
           <?php if($sp['employee']): ?>
-            <?php echo e($sp['employee']->first_name); ?> <?php echo e($sp['employee']->last_name); ?>
+            <?php echo e($sp['employee']->full_name); ?>
 
           <?php else: ?>
             <span style="color:var(--t3);font-style:italic"><?php echo e($sp['employee_name'] ?? '—'); ?></span>
@@ -185,17 +182,9 @@
           <?php endif; ?>
         </td>
         <td class="mono" style="font-size:11px"><?php echo e($sp['sheet_emp_id'] ?? '—'); ?></td>
-        <td>
-          <span class="bx" style="background:var(--acc2);color:var(--acc)"><?php echo e($sp['leave_type']); ?></span>
-        </td>
-        <td class="mono" style="text-align:center;font-weight:700">
-          <?php echo e($sp['day_count']); ?>
-
-        </td>
-        <td class="mono" style="white-space:nowrap">
-          <?php echo e($sp['start_date']->format('d M Y')); ?>
-
-        </td>
+        <td><span class="bx" style="background:var(--acc2);color:var(--acc)"><?php echo e($sp['leave_type']); ?></span></td>
+        <td class="mono" style="text-align:center;font-weight:700"><?php echo e($sp['day_count']); ?></td>
+        <td class="mono" style="white-space:nowrap"><?php echo e($sp['start_date']->format('d M Y')); ?></td>
         <td class="mono" style="white-space:nowrap;color:<?php echo e($isSingle ? 'var(--t3)' : 'inherit'); ?>">
           <?php echo e($isSingle ? '—' : $sp['end_date']->format('d M Y')); ?>
 
@@ -205,9 +194,20 @@
           <?php echo e(str_replace('_', ' ', $sp['reason_type'] ?? '—')); ?>
 
         </td>
-        <td>
+        <td style="white-space:nowrap;text-align:center">
+          
           <a href="<?php echo e(route('leave.tracker', ['view' => 'daily', 'emp_id' => $sp['sheet_emp_id'], 'leave_type' => $sp['leave_type'], 'date_from' => $sp['start_date']->format('Y-m-d'), 'date_to' => $sp['end_date']->format('Y-m-d')])); ?>"
-             class="btn sm" style="font-size:10px"><?php echo e($sp['day_count']); ?> Days →</a>
+             class="btn sm" style="font-size:10px;padding:3px 8px"><?php echo e($sp['day_count']); ?> Days →</a>
+          
+          <form method="POST" action="<?php echo e(route('leave.tracker.bulk_destroy')); ?>" style="display:inline"
+                onsubmit="return confirm('Delete all <?php echo e($sp['day_count']); ?> day(s) of <?php echo e($sp['leave_type']); ?> for this employee?')">
+            <?php echo csrf_field(); ?>
+            <input type="hidden" name="sheet_emp_id" value="<?php echo e($sp['sheet_emp_id']); ?>">
+            <input type="hidden" name="leave_type"   value="<?php echo e($sp['leave_type']); ?>">
+            <input type="hidden" name="date_from"    value="<?php echo e($sp['start_date']->format('Y-m-d')); ?>">
+            <input type="hidden" name="date_to"      value="<?php echo e($sp['end_date']->format('Y-m-d')); ?>">
+            <button type="submit" class="btn sm" style="font-size:10px;padding:3px 8px;color:var(--red)">Del Spell</button>
+          </form>
         </td>
       </tr>
       <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
@@ -284,69 +284,25 @@
 </div>
 
 
-<div class="modal" id="tracker-edit-modal">
-  <div class="mb">
-    <div class="mh">
-      <span class="mt">Edit Leave Record</span>
-      <button class="mc" onclick="cm('tracker-edit-modal')">✕</button>
-    </div>
-    <form method="POST" id="tracker-edit-form">
-      <?php echo csrf_field(); ?>
-      <div class="fg2">
-        <div class="fld">
-          <label>Leave Date *</label>
-          <input type="date" name="leave_date" id="edit-leave-date" required>
-        </div>
-        <div class="fld">
-          <label>Leave Type *</label>
-          <select name="leave_type" id="edit-leave-type" required>
-            <?php $__currentLoopData = $leaveTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $lt): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-            <option value="<?php echo e($lt); ?>"><?php echo e($lt); ?></option>
-            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-            <option value="LOP">LOP (Loss of Pay)</option>
-            <option value="WFH">WFH</option>
-          </select>
-        </div>
-        <div class="fld">
-          <label>Approval Status</label>
-          <select name="is_approved" id="edit-is-approved">
-            <option value="1">Approved</option>
-            <option value="0">Not Approved (counts as LOP)</option>
-          </select>
-        </div>
-        <div class="fld">
-          <label>Team Leader</label>
-          <input type="text" name="team_leader_name" id="edit-team-leader">
-        </div>
-        <div class="fld">
-          <label>Reason Type</label>
-          <input type="text" name="reason_type" id="edit-reason-type">
-        </div>
-        <div class="fld full">
-          <label>Reason</label>
-          <input type="text" name="reason" id="edit-reason">
-        </div>
-      </div>
-      <div class="mf">
-        <button type="button" class="btn" onclick="cm('tracker-edit-modal')">Cancel</button>
-        <button type="submit" class="btn acc">Save Changes</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-
 <div class="modal" id="tracker-import-modal">
   <div class="mb">
     <div class="mh">
       <span class="mt">Import Leave Tracker</span>
       <button class="mc" onclick="cm('tracker-import-modal')">✕</button>
     </div>
+    <div style="background:var(--acc2);border:1px solid var(--acc);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">📥</span>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:12px;margin-bottom:2px">Download Template</div>
+        <div style="font-size:11px;color:var(--t3)">Fill in this Excel template and upload it below.</div>
+      </div>
+      <a href="<?php echo e(route('leave.tracker.template')); ?>" class="btn acc sm" style="white-space:nowrap">Get Template</a>
+    </div>
     <div style="background:var(--acc2);border:1px solid var(--acc);border-radius:8px;
                 padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.6;color:var(--t2)">
       <strong>Upload the Leave Tracker .xlsm file</strong><br>
-      Reads the <strong>"Mark Leave"</strong> sheet. Each row = one day of leave.<br>
-      Re-importing is safe — existing records are updated, not duplicated.
+      Reads the <strong>"Mark Leave"</strong> sheet. If the file has a single sheet, any sheet name is accepted.<br>
+      Each row = one day of leave. Re-importing is safe — existing records are updated, not duplicated.
     </div>
     <form method="POST" action="<?php echo e(route('leave.tracker.import')); ?>" enctype="multipart/form-data">
       <?php echo csrf_field(); ?>
@@ -371,20 +327,75 @@
   </div>
 </div>
 
+
+<div class="modal" id="tracker-edit-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">Edit Leave Record</span>
+      <button class="mc" onclick="cm('tracker-edit-modal')">✕</button>
+    </div>
+    <form method="POST" id="tracker-edit-form" action="">
+      <?php echo csrf_field(); ?>
+      <div class="fg2">
+        <div class="fld">
+          <label>Leave Date *</label>
+          <input type="date" name="leave_date" id="edit-leave-date" required>
+        </div>
+        <div class="fld">
+          <label>Leave Type *</label>
+          <select name="leave_type" id="edit-leave-type" required>
+            <?php $__currentLoopData = $leaveTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $lt): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+              <option value="<?php echo e($lt); ?>"><?php echo e($lt); ?></option>
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+            <option value="LOP">LOP (Loss of Pay)</option>
+            <option value="WFH">WFH</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label>Team Leader</label>
+          <input type="text" name="team_leader_name" id="edit-team-leader">
+        </div>
+        <div class="fld">
+          <label>Reason Type</label>
+          <input type="text" name="reason_type" id="edit-reason-type" placeholder="e.g. Personal, Medical">
+        </div>
+        <div class="fld full">
+          <label>Reason</label>
+          <input type="text" name="reason" id="edit-reason">
+        </div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('tracker-edit-modal')">Cancel</button>
+        <button type="submit" class="btn acc">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<?php $__env->startPush('scripts'); ?>
 <script>
-function openEditModal(id, date, type, leader, reasonType, reason, isApproved) {
+function openTrackerEdit(id, date, leaveType, teamLeader, reasonType, reason) {
   document.getElementById('tracker-edit-form').action = '/leave/tracker/' + id;
+  document.getElementById('edit-leave-date').value    = date;
+  document.getElementById('edit-team-leader').value   = teamLeader;
+  document.getElementById('edit-reason-type').value   = reasonType;
+  document.getElementById('edit-reason').value        = reason;
   om('tracker-edit-modal');
+  // Set <select> AFTER the modal is in the render tree (display:none→flex resets <select>
+  // to its first option in Chrome). Use requestAnimationFrame so the element is painted
+  // before we write to it, and set option.selected directly to bypass the .value reset.
   requestAnimationFrame(function() {
-    document.getElementById('edit-leave-date').value   = date || '';
-    document.getElementById('edit-leave-type').value   = type || '';
-    document.getElementById('edit-is-approved').value  = (isApproved == 0) ? '0' : '1';
-    document.getElementById('edit-team-leader').value  = leader || '';
-    document.getElementById('edit-reason-type').value  = reasonType || '';
-    document.getElementById('edit-reason').value       = reason || '';
+    const sel    = document.getElementById('edit-leave-type');
+    const target = (leaveType || '').toUpperCase();
+    Array.from(sel.options).forEach(function(opt) {
+      opt.selected = opt.value.toUpperCase() === target;
+    });
+    if (sel._ssSync) sel._ssSync(); // refresh the searchable-select display input
   });
 }
 </script>
+<?php $__env->stopPush(); ?>
+
 <?php $__env->stopSection(); ?>
 
 <?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH D:\hrms-payroll\resources\views/leave/tracker.blade.php ENDPATH**/ ?>

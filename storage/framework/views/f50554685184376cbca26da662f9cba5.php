@@ -91,7 +91,7 @@
           <form method="POST" action="<?php echo e(route('salary.report.download')); ?>" style="display:inline">
             <?php echo csrf_field(); ?>
             <input type="hidden" name="month" value="<?php echo e($rep['year_month']); ?>">
-            <input type="hidden" name="entity_id" value="0">
+            <input type="hidden" name="company_id" value="0">
             <button type="submit" class="btn sm" style="background:var(--grn2);color:var(--grn)">
               📥 Excel
             </button>
@@ -100,7 +100,7 @@
           <form method="POST" action="<?php echo e(route('salary.report.unlock')); ?>" style="display:inline">
             <?php echo csrf_field(); ?>
             <input type="hidden" name="month" value="<?php echo e($rep['year_month']); ?>">
-            <input type="hidden" name="entity_id" value="0">
+            <input type="hidden" name="company_id" value="0">
             <button type="button" class="btn sm" style="background:#fff7ed;color:#c2410c"
               onclick="swConfirm(this.closest('form'),
                 'Unlock <?php echo e($repLabel); ?>?',
@@ -218,7 +218,7 @@
         <label>Firm</label>
         <select id="gen-entity">
           <option value="0">All Firms</option>
-          <?php $__currentLoopData = $entities; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ent): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+          <?php $__currentLoopData = $companies; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ent): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
           <option value="<?php echo e($ent->id); ?>"><?php echo e($ent->short_name ?? $ent->name); ?></option>
           <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </select>
@@ -311,7 +311,7 @@ function goToReport() {
   const month  = document.getElementById('gen-month').value;
   const entity = document.getElementById('gen-entity').value;
   if (!month) { alert('Please select a month.'); return; }
-  window.location.href = '<?php echo e(route('salary.report')); ?>?month=' + month + '&entity_id=' + entity;
+  window.location.href = '<?php echo e(route('salary.report')); ?>?month=' + month + '&company_id=' + entity;
 }
 </script>
 <?php $__env->stopPush(); ?>

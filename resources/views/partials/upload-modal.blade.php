@@ -5,7 +5,7 @@ $uploadRoute — named route for POST upload (required)
 $templateRoute — named route for GET template (optional, shows download button)
 $uploadTitle — modal heading text (default: "Bulk Upload")
 $uploadHint — instructions paragraph (optional)
-$uploadFields — array of extra hidden fields (optional, e.g. ['entity_id' => 1])
+$uploadFields — array of extra hidden fields (optional, e.g. ['company_id' => 1])
 --}}
 @php
   $uploadTitle = $uploadTitle ?? 'Bulk Upload';

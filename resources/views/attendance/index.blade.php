@@ -5,6 +5,7 @@
   <button class="btn acc" onclick="om('att-modal')">✔ Mark Attendance</button>
   <button class="btn" onclick="om('punch-add-modal')">+ Add Punch</button>
   <button class="btn" onclick="om('biometric-upload-modal')">🖱 Bulk Upload</button>
+  <a href="{{ route('attendance.export') . '?' . http_build_query(request()->only('company_id','year','month')) }}" class="btn">⬇ Export</a>
 @endsection
 
 @section('content')
@@ -32,19 +33,19 @@
   {{-- Month / Entity filter --}}
   <form method="GET" action="{{ route('attendance') }}" class="card"
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-    @if($entities->count() > 1)
+    @if($companies->count() > 1)
     <div class="fld" style="min-width:200px">
       <label>Entity / Company</label>
-      <select name="entity_id">
-        @foreach($entities as $ent)
-          <option value="{{ $ent->id }}" {{ $entityId == $ent->id ? 'selected' : '' }}>
+      <select name="company_id">
+        @foreach($companies as $ent)
+          <option value="{{ $ent->id }}" {{ $companyId == $ent->id ? 'selected' : '' }}>
             {{ $ent->name }}
           </option>
         @endforeach
       </select>
     </div>
     @else
-      <input type="hidden" name="entity_id" value="{{ $entityId }}">
+      <input type="hidden" name="company_id" value="{{ $companyId }}">
     @endif
     <div class="fld">
       <label>Year</label>
@@ -74,7 +75,7 @@
     @endif
   </form>
 
-  <div class="card">
+  <div class="card d-none" style="display: none !important;">
     <div class="ch">
       <div class="ct">Attendance — {{ \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y') }}</div>
     </div>
@@ -152,7 +153,7 @@
                 $present = 0; $absent = 0; $leave = 0;
               @endphp
               <tr>
-                <td style="white-space:nowrap;font-size:12px">{{ $emp->first_name }} {{ $emp->last_name }}</td>
+                <td style="white-space:nowrap;font-size:12px">{{ $emp->full_name }}</td>
                 <td style="font-size:11px;color:var(--t3)">{{ $emp->department?->name ?? '—' }}</td>
                 @for($d = 1; $d <= $days; $d++)
                   @php
@@ -208,6 +209,7 @@
           </tbody>
         </table>
       </div>
+      <div style="margin-top:14px">{{ $employees->links() }}</div>
     @else
       <div class="empty">
         <div class="ico">🕐</div>
@@ -220,10 +222,11 @@
   </div>
 
   {{-- Biometric Punch Records --}}
-  @if($rawPunches->isNotEmpty())
+  @if($rawPunchesPaginated->isNotEmpty())
   <div class="card" style="margin-top:20px">
     <div class="ch">
       <div class="ct">Biometric Punch Records — {{ \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y') }}</div>
+      <div style="font-size:11px;color:var(--t3)">{{ number_format($rawPunchesPaginated->total()) }} records</div>
     </div>
     <div style="overflow-x:auto">
       <table>
@@ -241,58 +244,57 @@
           </tr>
         </thead>
         <tbody>
-          @foreach($employees as $emp)
-            @php $empPunches = $rawPunches[$emp->id] ?? collect(); @endphp
-            @foreach($empPunches as $punch)
-              @php
-                $hours = null;
-                if ($punch->check_in && $punch->check_out) {
-                  $in  = \Carbon\Carbon::parse($punch->check_in);
-                  $out = \Carbon\Carbon::parse($punch->check_out);
-                  $diff = $in->diffInMinutes($out);
-                  $hours = sprintf('%dh %02dm', intdiv($diff, 60), $diff % 60);
-                }
-              @endphp
-              <tr>
-                <td style="white-space:nowrap">{{ $emp->first_name }} {{ $emp->last_name }}</td>
-                <td>{{ \Carbon\Carbon::parse($punch->attendance_date)->format('d M') }}</td>
-                <td style="font-size:11px;color:var(--t3)">{{ $punch->machine_name ?? '—' }}</td>
-                <td style="font-size:11px;color:var(--t3)">{{ $punch->bio_id_full ?? '—' }}</td>
-                <td style="color:var(--grn);font-weight:600">
-                  {{ $punch->check_in ? \Carbon\Carbon::parse($punch->check_in)->format('H:i') : '—' }}
-                </td>
-                <td style="color:var(--red)">
-                  {{ $punch->check_out ? \Carbon\Carbon::parse($punch->check_out)->format('H:i') : '—' }}
-                </td>
-                <td style="font-size:11px">{{ $hours ?? '—' }}</td>
-                <td>
-                  @if($punch->is_absent)
-                    <span style="color:var(--red);font-size:11px;font-weight:600">Absent</span>
-                  @elseif($punch->check_in && $punch->check_out)
-                    <span style="color:var(--grn);font-size:11px;font-weight:600">Present</span>
-                  @elseif($punch->check_in)
-                    <span style="color:var(--yel);font-size:11px">In only</span>
-                  @else
-                    <span style="color:var(--t4);font-size:11px">—</span>
-                  @endif
-                </td>
-                <td style="white-space:nowrap">
-                  <button class="btn sm" style="font-size:10px"
-                    onclick="openPunchEdit({{ $punch->id }}, '{{ substr($punch->check_in ?? '', 0, 5) }}', '{{ substr($punch->check_out ?? '', 0, 5) }}', '{{ $punch->machine_name ?? '' }}')">
-                    Edit
-                  </button>
-                  <form method="POST" action="{{ route('attendance.punch.destroy', $punch) }}" style="display:inline">
-                    @csrf @method('DELETE')
-                    <button type="button" class="btn sm" style="font-size:10px;color:var(--red)"
-                      onclick="swConfirm(this.closest('form'), 'Delete Punch Record?', 'This punch record will be permanently removed.', 'warning', 'Yes, delete', '#dc2626')">Del</button>
-                  </form>
-                </td>
-              </tr>
-            @endforeach
+          @foreach($rawPunchesPaginated as $punch)
+            @php
+              $pEmp  = $punch->employee;
+              $hours = null;
+              if ($punch->check_in && $punch->check_out) {
+                $in   = \Carbon\Carbon::parse($punch->check_in);
+                $out  = \Carbon\Carbon::parse($punch->check_out);
+                $diff = $in->diffInMinutes($out);
+                $hours = sprintf('%dh %02dm', intdiv($diff, 60), $diff % 60);
+              }
+            @endphp
+            <tr>
+              <td style="white-space:nowrap">{{ $pEmp?->full_name }}</td>
+              <td>{{ \Carbon\Carbon::parse($punch->attendance_date)->format('d M') }}</td>
+              <td style="font-size:11px;color:var(--t3)">{{ $punch->machine_name ?? '—' }}</td>
+              <td style="font-size:11px;color:var(--t3)">{{ $punch->bio_id_full ?? '—' }}</td>
+              <td style="color:var(--grn);font-weight:600">
+                {{ $punch->check_in ? \Carbon\Carbon::parse($punch->check_in)->format('H:i') : '—' }}
+              </td>
+              <td style="color:var(--red)">
+                {{ $punch->check_out ? \Carbon\Carbon::parse($punch->check_out)->format('H:i') : '—' }}
+              </td>
+              <td style="font-size:11px">{{ $hours ?? '—' }}</td>
+              <td>
+                @if($punch->is_absent)
+                  <span style="color:var(--red);font-size:11px;font-weight:600">Absent</span>
+                @elseif($punch->check_in && $punch->check_out)
+                  <span style="color:var(--grn);font-size:11px;font-weight:600">Present</span>
+                @elseif($punch->check_in)
+                  <span style="color:var(--yel);font-size:11px">In only</span>
+                @else
+                  <span style="color:var(--t4);font-size:11px">—</span>
+                @endif
+              </td>
+              <td style="white-space:nowrap">
+                <button class="btn sm" style="font-size:10px"
+                  onclick="openPunchEdit({{ $punch->id }}, '{{ substr($punch->check_in ?? '', 0, 5) }}', '{{ substr($punch->check_out ?? '', 0, 5) }}', '{{ $punch->machine_name ?? '' }}')">
+                  Edit
+                </button>
+                <form method="POST" action="{{ route('attendance.punch.destroy', $punch) }}" style="display:inline">
+                  @csrf @method('DELETE')
+                  <button type="button" class="btn sm" style="font-size:10px;color:var(--red)"
+                    onclick="swConfirm(this.closest('form'), 'Delete Punch Record?', 'This punch record will be permanently removed.', 'warning', 'Yes, delete', '#dc2626')">Del</button>
+                </form>
+              </td>
+            </tr>
           @endforeach
         </tbody>
       </table>
     </div>
+    <div style="margin-top:14px">{{ $rawPunchesPaginated->links() }}</div>
   </div>
   @endif
 
@@ -324,7 +326,7 @@
               @foreach($employees as $i => $emp)
                 <input type="hidden" name="records[{{ $i }}][emp_id]" value="{{ $emp->id }}">
                 <tr>
-                  <td>{{ $emp->first_name }} {{ $emp->last_name }}</td>
+                  <td>{{ $emp->full_name }}</td>
                   <td>{{ $emp->department?->name ?? '—' }}</td>
                   <td>
                     <select name="records[{{ $i }}][status]"
@@ -366,7 +368,7 @@
   </div>
 @endsection
 
-{{-- Attendance Upload Modal (needs year + month extra fields) --}}
+{{-- Attendance Upload Modal --}}
 <div class="modal" id="upload-modal">
   <div class="mb">
     <div class="mh">
@@ -375,24 +377,13 @@
     </div>
     <form method="POST" action="{{ route('attendance.import') }}" enctype="multipart/form-data">
       @csrf
-      <div class="fg2">
-        <div class="fld">
-          <label>Year *</label>
-          <input type="number" name="year" required value="{{ now()->year }}">
-        </div>
-        <div class="fld">
-          <label>Month *</label>
-          <select name="month" required>
-            @foreach(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as $i => $m)
-              <option value="{{ $i + 1 }}" {{ now()->month == $i + 1 ? 'selected' : '' }}>{{ $m }}</option>
-            @endforeach
-          </select>
-        </div>
-        <div class="fld full">
-          <label>Excel File (.xlsx / .xls) *</label>
-          <input type="file" name="file" accept=".xlsx,.xls" required multiple
-            style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
-        </div>
+      <div style="font-size:12px;color:var(--t2);background:var(--s2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        The attendance date is read directly from the Excel sheet. No month selection needed.
+      </div>
+      <div class="fld" style="margin-bottom:14px">
+        <label>Excel File (.xlsx / .xls) *</label>
+        <input type="file" name="file" accept=".xlsx,.xls" required multiple
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
       </div>
       <div class="mf">
         <button type="button" class="btn" onclick="cm('upload-modal')">Cancel</button>
@@ -425,13 +416,7 @@
           enctype="multipart/form-data" id="bio-import-form">
       @csrf
 
-      <div class="fg2" style="margin-bottom:10px">
-        <div class="fld">
-          <label>Attendance Month *</label>
-          <input type="month" name="import_month" required value="{{ now()->format('Y-m') }}"
-                 style="padding:9px 12px;border:1.5px solid var(--b1);border-radius:8px;background:#f9fafb;font-family:inherit;font-size:13px;color:var(--txt);outline:none;width:100%">
-          <span style="font-size:10px;color:var(--t3)">Month the attendance data belongs to</span>
-        </div>
+      <div style="margin-bottom:10px">
         <div class="fld">
           <label>Machine XLS Files (.xls) *</label>
           <input type="file" name="files[]" id="bio-files-input"
@@ -439,6 +424,9 @@
                  style="background:var(--s2);border:1.5px dashed var(--b2);
                         border-radius:8px;padding:10px;cursor:pointer;width:100%"
                  onchange="showBioFiles(this)">
+          <span style="font-size:11px;color:var(--t3);margin-top:4px;display:block">
+            Attendance dates are read directly from the file — no month selection needed.
+          </span>
         </div>
       </div>
 
@@ -466,14 +454,14 @@
       @csrf
       <input type="hidden" name="year" value="{{ $year }}">
       <input type="hidden" name="month" value="{{ $month }}">
-      <input type="hidden" name="entity_id" value="{{ $entityId }}">
+      <input type="hidden" name="company_id" value="{{ $companyId }}">
       <div class="fg2">
         <div class="fld full">
           <label>Employee *</label>
           <select name="employee_id" required>
             <option value="">Select employee</option>
             @foreach($employees as $emp)
-            <option value="{{ $emp->id }}">{{ $emp->employee_id }} — {{ $emp->first_name }} {{ $emp->last_name }}</option>
+            <option value="{{ $emp->id }}">{{ $emp->employee_id }} — {{ $emp->full_name }}</option>
             @endforeach
           </select>
         </div>
@@ -513,7 +501,7 @@
       @csrf
       <input type="hidden" name="year" value="{{ $year }}">
       <input type="hidden" name="month" value="{{ $month }}">
-      <input type="hidden" name="entity_id" value="{{ $entityId }}">
+      <input type="hidden" name="company_id" value="{{ $companyId }}">
       <div class="fg2">
         <div class="fld">
           <label>Check In (HH:MM)</label>

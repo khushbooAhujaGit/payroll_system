@@ -20,7 +20,7 @@ class ContractorController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $contractors = Contractor::where('entity_id', $request->entity_id)
+        $contractors = Contractor::where('company_id', $request->company_id)
             ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
             ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%")
                                                   ->orWhere('contractor_id', 'like', "%{$request->search}%"))
@@ -41,7 +41,7 @@ class ContractorController extends Controller
         $this->authorize('contractor.create');
 
         $validated = $request->validate([
-            'entity_id'          => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
             'name'               => 'required|string|max:200',
             'pan'                => 'nullable|string|size:10|regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/',
             'gstin'              => 'nullable|string|max:15',
@@ -54,7 +54,7 @@ class ContractorController extends Controller
             'contractor_type'    => 'required|in:individual,company',
         ]);
 
-        $validated['contractor_id'] = $this->generateContractorId($validated['entity_id']);
+        $validated['contractor_id'] = $this->generateContractorId($validated['company_id']);
         $contractor = Contractor::create($validated);
 
         return response()->json(['message' => 'Contractor created.', 'data' => $contractor], 201);
@@ -122,7 +122,7 @@ class ContractorController extends Controller
 
         $invoice = ContractorInvoice::create([
             'contractor_id'  => $contractor->id,
-            'entity_id'      => $contractor->entity_id,
+            'company_id' => $contractor->company_id,
             'invoice_number' => $validated['invoice_number'],
             'invoice_date'   => $validated['invoice_date'],
             'year'           => $validated['year'],
@@ -177,13 +177,13 @@ class ContractorController extends Controller
     {
         $this->authorize('contractor.view');
 
-        $request->validate(['entity_id' => 'required', 'year' => 'required|integer', 'quarter' => 'required|in:Q1,Q2,Q3,Q4']);
+        $request->validate(['company_id' => 'required', 'year' => 'required|integer', 'quarter' => 'required|in:Q1,Q2,Q3,Q4']);
 
         $monthRanges = ['Q1' => [4,6], 'Q2' => [7,9], 'Q3' => [10,12], 'Q4' => [1,3]];
         [$fromMonth, $toMonth] = $monthRanges[$request->quarter];
 
         $invoices = ContractorInvoice::with('contractor')
-            ->where('entity_id', $request->entity_id)
+            ->where('company_id', $request->company_id)
             ->where('year', $request->year)
             ->whereBetween('month', [$fromMonth, $toMonth])
             ->where('status', 'paid')
@@ -213,14 +213,14 @@ class ContractorController extends Controller
     {
         $request->validate([
             'file'      => 'required|file|mimes:xlsx,xls|max:10240',
-            'entity_id' => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
         ]);
 
         $result = $this->excelImportService->import(
             $request->file('file'),
             'contractor',
             \App\Imports\ContractorImporter::class,
-            ['entity_id' => $request->entity_id]
+            ['company_id' => $request->company_id]
         );
 
         return response()->json($result);
@@ -230,9 +230,9 @@ class ContractorController extends Controller
     // HELPERS
     // ─────────────────────────────────────────────
 
-    protected function generateContractorId(int $entityId): string
+    protected function generateContractorId(int $companyId): string
     {
-        $last = Contractor::where('entity_id', $entityId)->orderByDesc('id')->value('contractor_id');
+        $last = Contractor::where('company_id', $companyId)->orderByDesc('id')->value('contractor_id');
         $num  = 1;
         if ($last) {
             preg_match('/(\d+)$/', $last, $m);

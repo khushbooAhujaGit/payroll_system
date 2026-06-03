@@ -5,7 +5,7 @@
   <form method="POST" action="<?php echo e(route('salary.report.download')); ?>" style="display:inline">
     <?php echo csrf_field(); ?>
     <input type="hidden" name="month" value="<?php echo e($month); ?>">
-    <input type="hidden" name="entity_id" value="<?php echo e($entityId); ?>">
+    <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
     <button type="submit" class="btn acc">📥 Download 🔒 Excel</button>
   </form>
   <?php $deleteLabel = \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y'); ?>

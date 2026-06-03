@@ -16,6 +16,6 @@ use Carbon\Carbon;
 
 class HolidayCalendar extends Model
 {
-    protected $fillable = ['entity_id','name','year','region','is_active'];
+    protected $fillable = ['company_id','name','year','region','is_active'];
     public function holidays(): HasMany { return $this->hasMany(Holiday::class); }
 }

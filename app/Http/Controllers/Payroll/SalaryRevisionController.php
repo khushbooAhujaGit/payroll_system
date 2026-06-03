@@ -25,12 +25,12 @@ class SalaryRevisionController extends Controller
     public function index(Request $request): JsonResponse
     {
         $revisions = SalaryRevision::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
             'createdBy:id,name',
             'approvedBy:id,name',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->when($request->employee_id, fn($q) => $q->where('employee_id', $request->employee_id))
         ->orderByDesc('created_at')
@@ -201,14 +201,14 @@ class SalaryRevisionController extends Controller
 
         $request->validate([
             'file'      => 'required|file|mimes:xlsx,xls|max:10240',
-            'entity_id' => 'required|exists:entities,id',
+            'company_id' => 'required|exists:companies,id',
         ]);
 
         $result = $this->excelImportService->import(
             $request->file('file'),
             'salary_revision',
             SalaryRevisionImporter::class,
-            ['entity_id' => $request->entity_id]
+            ['company_id' => $request->company_id]
         );
 
         return response()->json($result);

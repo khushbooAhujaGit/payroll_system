@@ -131,10 +131,10 @@ class InvestmentDeclarationController extends Controller
         $this->authorize('investment_declaration.view');
 
         $declarations = InvestmentDeclaration::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
         ->where('financial_year', $request->get('fy', $this->currentFy()))
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->paginate(50);

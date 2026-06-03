@@ -28,12 +28,12 @@ class FullFinalSettlementController extends Controller
         $this->authorize('employee.view');
 
         $settlements = FullFinalSettlement::with([
-            'employee:id,employee_id,first_name,last_name,department_id',
+            'employee:id,employee_id,first_name,middle_name,last_name,department_id',
             'employee.department:id,name',
             'exitRequest',
             'approvedBy:id,name',
         ])
-        ->whereHas('employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('employee', fn($q) => $q->where('company_id', $request->company_id))
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->orderByDesc('created_at')
         ->paginate(25);
@@ -154,7 +154,7 @@ class FullFinalSettlementController extends Controller
         $netPayable    = round($totalPayable - $totalDeductible - $tdsOnFnf, 2);
 
         $computation = [
-            'employee'             => $employee->only('id', 'employee_id', 'first_name', 'last_name'),
+            'employee'             => $employee->only('id', 'employee_id', 'first_name', 'middle_name', 'last_name'),
             'service_years'        => $serviceYears,
             'last_working_date'    => $exitRequest->last_working_date,
             // Payable

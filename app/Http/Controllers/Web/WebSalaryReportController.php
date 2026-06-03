@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceApproval;
+use App\Models\Company;
 use App\Models\Entity;
 use App\Models\ReimbursementClaim;
 use App\Models\SalaryReportOverride;
@@ -43,43 +44,64 @@ class WebSalaryReportController extends Controller
 
     public function index(Request $request)
     {
-        // entity_id = 0 → All Firms (default when no param in URL).
-        // Explicit request param takes priority so admins can switch firms.
-        $entityId = $request->has('entity_id')
-            ? (int) $request->get('entity_id')
+        $companyId = $request->has('company_id')
+            ? (int) $request->get('company_id')
             : 0;
 
         $month = $request->get('month'); // YYYY-MM or null
         $rows    = [];
         $summary = null;
-        $isLocked            = false;
-        $snapshotCount       = 0;
-        $lockedAt            = null;
-        $isReadonly          = false;
-        $hasPendingOverrides = false;
+        $isLocked      = false;
+        $snapshotCount = 0;
+        $lockedAt      = null;
 
-        // Entities that have at least one active employee (for the selector dropdown)
-        $entities = Entity::whereHas('employees', fn($q) => $q->where('employee_status', 'active'))
+        $companies = Company::whereHas('employees', fn($q) => $q->where('employee_status', 'active'))
             ->orderBy('id')
             ->get(['id', 'name', 'short_name']);
 
         if ($month) {
-            // Always compute live data — the index page is a working view.
-            // The frozen snapshot is only used on the dedicated /view/{month} page.
-            $rows    = $this->compute($month, $entityId);
-            $summary = $this->summarise($rows);
-
-            // Check snapshot existence for UI state only (lock/re-lock button display)
             $snapshotCount = SalaryReportSnapshot::where('year_month', $month)->count();
             $isLocked      = $snapshotCount > 0;
-            $lockedAt      = $isLocked
-                ? SalaryReportSnapshot::where('year_month', $month)->max('locked_at')
-                : null;
+
+            // Auto-lock on first generation: compute + freeze immediately.
+            // Subsequent visits (snapshot already exists) skip this block.
+            // if (!$isLocked) {
+                $liveRows = $this->compute($month, $companyId);
+                if (!empty($liveRows)) {
+                    $this->performLock($month, $liveRows);
+                    $snapshotCount = count($liveRows);
+                    $isLocked      = true;
+                }
+            // }
+
+            // Always serve rows from the frozen snapshot (auto-locked or re-locked).
+            // if ($isLocked) {
+                $snapshots = SalaryReportSnapshot::where('year_month', $month)
+                    ->get()
+                    ->keyBy('employee_id');
+
+                if ($companyId !== 0) {
+                    $snapshots = $snapshots->filter(
+                        fn($s) => ($s->snapshot_data['company_id'] ?? 0) === $companyId
+                    );
+                }
+
+                $rows     = $snapshots->map(fn($s) => $s->snapshot_data)->values()->toArray();
+                $lockedAt = $snapshots->sortByDesc('locked_at')->first()?->locked_at;
+            // }
+
+            $summary = $this->summarise($rows);
         }
 
         return view('salary-report.index', compact(
-            'month', 'rows', 'summary', 'entityId', 'entities',
-            'isLocked', 'snapshotCount', 'lockedAt'
+            'month',
+            'rows',
+            'summary',
+            'companyId',
+            'companies',
+            'isLocked',
+            'snapshotCount',
+            'lockedAt'
         ));
     }
 
@@ -104,17 +126,24 @@ class WebSalaryReportController extends Controller
         $summary       = $this->summarise($rows);
         $snapshotCount = $snapshots->count();
         $lockedAt      = $snapshots->sortByDesc('locked_at')->first()->locked_at;
-        $entityId      = 0;
+        $companyId      = 0;
         $isLocked      = true;
         $isReadonly    = true;
 
-        $entities = Entity::whereHas('employees', fn($q) => $q->where('employee_status', 'active'))
+        $companies = Company::whereHas('employees', fn($q) => $q->where('employee_status', 'active'))
             ->orderBy('id')
             ->get(['id', 'name', 'short_name']);
 
         return view('salary-report.view', compact(
-            'month', 'rows', 'summary', 'entityId', 'entities',
-            'isLocked', 'snapshotCount', 'lockedAt', 'isReadonly'
+            'month',
+            'rows',
+            'summary',
+            'companyId',
+            'companies',
+            'isLocked',
+            'snapshotCount',
+            'lockedAt',
+            'isReadonly'
         ));
     }
 
@@ -125,8 +154,8 @@ class WebSalaryReportController extends Controller
     public function download(Request $request)
     {
         $request->validate(['month' => 'required|date_format:Y-m']);
-        $entityId = $request->has('entity_id')
-            ? (int) $request->get('entity_id')
+        $companyId = $request->has('company_id')
+            ? (int) $request->get('company_id')
             : 0;
 
         $month = $request->get('month');
@@ -135,15 +164,15 @@ class WebSalaryReportController extends Controller
         $snapshots = SalaryReportSnapshot::where('year_month', $month)->get()->keyBy('employee_id');
         if ($snapshots->isNotEmpty()) {
             $rows = $snapshots->map(fn($s) => $s->snapshot_data)->values()->toArray();
-            if ($entityId !== 0) {
-                $rows = array_values(array_filter($rows, fn($r) => ($r['entity_id'] ?? 0) === $entityId));
+            if ($companyId !== 0) {
+                $rows = array_values(array_filter($rows, fn($r) => ($r['company_id'] ?? 0) === $companyId));
             }
         } else {
-            $rows = $this->compute($month, $entityId);
+            $rows = $this->compute($month, $companyId);
         }
 
         $carbonMonth  = Carbon::createFromFormat('Y-m', $month);
-        $entitySuffix = $entityId === 0 ? 'All_Firms' : ('Entity_' . $entityId);
+        $entitySuffix = $companyId === 0 ? 'All_Firms' : ('Entity_' . $companyId);
         $filename     = 'Salary_Report_' . $carbonMonth->format('M_Y') . '_' . $entitySuffix . '.xlsx';
 
         $spreadsheet = $this->buildExcel($rows, $carbonMonth);
@@ -160,30 +189,59 @@ class WebSalaryReportController extends Controller
     // CORE COMPUTATION
     // ─────────────────────────────────────────────
 
-    private function compute(string $month, int $entityId): array
+    private function compute(string $month, int $companyId): array
     {
         [$year, $mon] = array_map('intval', explode('-', $month));
         $carbonMonth  = Carbon::createFromDate($year, $mon, 1);
         $monthDays    = $carbonMonth->daysInMonth;
         $monthLabel   = $carbonMonth->format('M Y');
 
-        // Active employees with salary — load all entities or one specific entity.
-        $employeeQuery = Employee::where('employee_status', 'active')
+        $monthStart = $carbonMonth->copy()->startOfMonth()->toDateString();
+        $monthEnd   = $carbonMonth->copy()->endOfMonth()->toDateString();
+
+        // Previous month end — used for the leave-LOP delta calculation.
+        // April is the first month of the FY so there is no prior FY month to compare against.
+        $prevMonthCarbon = $carbonMonth->copy()->subMonth();
+        $prevFyEnd = $mon === 4
+            ? null
+            : $prevMonthCarbon->copy()->endOfMonth()->toDateString();
+
+        // Ensure employee statuses / date_of_leaving are up to date before querying.
+        Employee::syncLeaverStatuses();
+
+        // Include employees who were employed AT ANY POINT during the report month:
+        //  • joined on or before the last day of the month
+        //  • AND either never left (date_of_leaving IS NULL)
+        //       OR left on/after the first day of the month
+        //         (i.e. they were still on payroll for at least part of the month)
+        //
+        // This correctly includes employees who have since become inactive but were
+        // active in the report month (e.g. left in May 2025 → still in Apr 2025 report).
+        $employeeQuery = Employee::where('date_of_joining', '<=', $monthEnd)
+            ->where(function ($q) use ($monthStart) {
+                $q->whereNull('date_of_leaving')
+                    ->orWhere('date_of_leaving', '>=', $monthStart);
+            })
             ->with(['designation:id,name', 'currentSalary', 'entity:id,name'])
-            ->orderBy('entity_id')
+            ->orderBy('company_id')
             ->orderBy('employee_id');
 
-        if ($entityId !== 0) {
-            $employeeQuery->where('entity_id', $entityId);
+        if ($companyId !== 0) {
+            $employeeQuery->where('company_id', $companyId);
         }
 
         $employees = $employeeQuery->get()->filter(fn($e) => $e->currentSalary);
 
         // Holiday dates per entity — loaded once, used per-employee in the loop.
         // Supports "All Firms" (entity_id = 0) without extra per-employee queries.
-        $entityIdsInScope = $employees->pluck('entity_id')->unique()->values()->all();
+        $companyIdsInScope = $employees->pluck('company_id')->unique()->values()->all();
 
-        $calendars = HolidayCalendar::whereIn('entity_id', $entityIdsInScope)->get()->keyBy('entity_id');
+        // Load calendars for this year; fall back to any active calendar for the company
+        $calendars = HolidayCalendar::whereIn('company_id', $companyIdsInScope)
+            ->where(fn($q) => $q->where('year', $year)->orWhereNull('year'))
+            ->orderByDesc('year')
+            ->get()
+            ->keyBy('company_id');   // first match per company wins (most specific year)
         $calendarIds = $calendars->map(fn($c) => $c->id)->all(); // entity_id → calendar_id
 
         // Load this month's holidays for all relevant calendars in one query.
@@ -193,21 +251,51 @@ class WebSalaryReportController extends Controller
             ->get()
             ->groupBy('holiday_calendar_id');
 
-        // Build: entity_id → [Y-m-d, ...]
-        $holidaysByEntity = [];
-        foreach ($entityIdsInScope as $eid) {
-            $calId = $calendarIds[$eid] ?? null;
-            $holidaysByEntity[$eid] = $calId
-                ? ($allHolidays[$calId] ?? collect())
-                    ->pluck('date')
-                    ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
-                    ->sort()->values()->all()
-                : [];
+        // ── All Sundays in the month (standard weekly off, always counted) ──────
+        $companiesById = Company::whereIn('id', $companyIdsInScope)
+            ->get(['id', 'name', 'short_name'])
+            ->keyBy('id');
+
+        $sundaysInMonth = [];
+        $saturdaysInMonth = [];
+        $d = $carbonMonth->copy()->startOfMonth();
+        while ($d->month === $mon) {
+            if ($d->dayOfWeek === Carbon::SUNDAY) {
+                $sundaysInMonth[] = $d->format('Y-m-d');
+            } elseif ($d->dayOfWeek === Carbon::SATURDAY) {
+                $saturdaysInMonth[] = $d->format('Y-m-d');
+            }
+            $d->addDay();
         }
 
-        // Month-level defaults: use the first entity's calendar for summary cards.
-        $firstEntityId      = $entityIdsInScope[0] ?? null;
-        $monthHolidayDates  = $firstEntityId ? ($holidaysByEntity[$firstEntityId] ?? []) : [];
+        // Build: company_id → [Y-m-d, ...] (Sundays + DB holidays, deduped, sorted)
+        $holidaysByCompany = [];
+        foreach ($companyIdsInScope as $compId) {
+            $calId = $calendarIds[$compId] ?? null;
+            $dbHolidays = $calId
+                ? ($allHolidays[$calId] ?? collect())
+                ->pluck('date')
+                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->all()
+                : [];
+
+            $company = $companiesById->get($compId);
+            $weeklyOffs = array_merge(
+                $sundaysInMonth,
+                $this->companySaturdayWeeklyOffs($company?->name, $company?->short_name, $saturdaysInMonth)
+            );
+
+            // Merge weekly offs + DB holidays, deduplicate, sort
+            $combined = array_values(array_unique(array_merge($weeklyOffs, $dbHolidays)));
+            sort($combined);
+            $holidaysByCompany[$compId] = $combined;
+        }
+
+        // Month-level defaults: use the first company's calendar for summary cards.
+        $firstCompanyId     = $companyIdsInScope[0] ?? null;
+        $monthHolidayDates  = $firstCompanyId
+            ? ($holidaysByCompany[$firstCompanyId] ?? $sundaysInMonth)
+            : $sundaysInMonth;
         $weekoffAndHolidays = count($monthHolidayDates);
         $workingDays        = max(1, $monthDays - $weekoffAndHolidays);
 
@@ -229,20 +317,40 @@ class WebSalaryReportController extends Controller
             ->map(fn($r) => (float) $r->amount);
 
         // ── Loan deduction logic ──────────────────────────────────────────
-        // Load ALL active loans for this employee set whose first_emi_month is on or
-        // before the end of this payroll month. This handles:
-        //   • Loans that started in a prior month (ongoing)
-        //   • Percent-based deductions (computed per-employee using payable_gross)
-        //   • Fixed-EMI loans (use emi_amount from the loan record)
+        // A loan qualifies for deduction in this month when ANY of these is true:
+        //   A) first_emi_month is on or before the end of this payroll month
+        //      (the normal case — EMI schedule starts at or before this month)
+        //   B) The loan has at least one PAID installment in any prior month
+        //      (catches loans whose first_emi_month was set to a future date but
+        //       were manually processed earlier — e.g. LN-2026-xxxx with Apr 2025 EMI)
         //
         // NOTE: We intentionally do NOT skip already-paid installments here.
         // compute() is a VIEW function — it always shows the full deduction for the
         // requested month regardless of lock state.  The $alreadyPaid guard inside
         // lockSnapshot() prevents double-processing at lock time independently.
+        $monthEndDate = $carbonMonth->copy()->endOfMonth()->toDateString();
+
+        // IDs of loans that already have a paid installment on or before this month
+        $loansWithPaidInstallments = LoanInstallment::where('status', 'paid')
+            ->where(function ($q) use ($year, $mon) {
+                $q->where('emi_year', '<', $year)
+                    ->orWhere(function ($q2) use ($year, $mon) {
+                        $q2->where('emi_year', $year)->where('emi_month', '<=', $mon);
+                    });
+            })
+            ->pluck('employee_loan_id')
+            ->unique()
+            ->all();
+
         $activeLoansMap = EmployeeLoan::whereIn('employee_id', $empIds)
             ->where('status', 'active')
             ->where('outstanding_amount', '>', 0)
-            ->where('first_emi_month', '<=', $carbonMonth->copy()->endOfMonth()->toDateString())
+            ->where(function ($q) use ($monthEndDate, $loansWithPaidInstallments) {
+                $q->where('first_emi_month', '<=', $monthEndDate);
+                if (!empty($loansWithPaidInstallments)) {
+                    $q->orWhereIn('id', $loansWithPaidInstallments);
+                }
+            })
             ->get()
             ->groupBy('employee_id');
 
@@ -270,9 +378,49 @@ class WebSalaryReportController extends Controller
             ->groupBy('employee_id')
             ->map(fn($g) => $g->count());
 
-        $lopDays = $empIds->mapWithKeys(fn($id) => [
-            $id => (int) ($notApprovedPunches[$id] ?? 0),
-        ]);
+        // Months that have a locked snapshot — attendance LOP in these months is
+        // considered already processed, so we exclude them from carry-forward.
+        $lockedPriorMonths = SalaryReportSnapshot::where('year_month', '<', $month)
+            ->distinct()
+            ->pluck('year_month')
+            ->all();
+
+        // Carry-forward: not_approved attendance from prior months that were NEVER locked.
+        // If a month has a snapshot, its LOP was already deducted — skip it.
+        $carryForwardLop = AttendanceApproval::where('punch_in_approval', 'not_approved')
+            ->where('attendance_date', '<', $monthStart)
+            ->whereIn('employee_id', $empIds)
+            ->get(['employee_id', 'attendance_date'])
+            ->filter(fn($r) => !in_array(
+                Carbon::parse($r->attendance_date)->format('Y-m'),
+                $lockedPriorMonths
+            ))
+            ->groupBy('employee_id')
+            ->map(fn($g) => $g->count());
+
+        // Deferred LOP from LOCKED prior months where the admin reduced the LOP via override
+        // (i.e. total_lop < computed_lop in the snapshot).
+        // Formula: sum(att_lop + leave_lop) − sum(total_lop) across all locked prior months.
+        // att_lop + leave_lop is the "fresh" LOP generated that month (excludes carry-forward
+        // already counted in carry_fwd_lop so there is no double-count across months).
+        // For snapshots created before this change, leave_lop defaults to 0 safely.
+        $deferredLopFromSnapshots = !empty($lockedPriorMonths)
+            ? SalaryReportSnapshot::where('year_month', '<', $month)
+                ->whereIn('employee_id', $empIds)
+                ->get(['employee_id', 'snapshot_data'])
+                ->groupBy('employee_id')
+                ->map(function ($snaps) {
+                    $originalLop = 0;
+                    $deductedLop = 0;
+                    foreach ($snaps as $snap) {
+                        $d = $snap->snapshot_data;
+                        $originalLop += (int)($d['att_lop']   ?? 0)
+                                      + (int)($d['leave_lop'] ?? 0);
+                        $deductedLop += (int)($d['total_lop'] ?? 0);
+                    }
+                    return max(0, $originalLop - $deductedLop);
+                })
+            : collect();
 
         // NOTE: Bonus For Diwali = CTC (Excel formula: each [CTC]).
         // Manual overrides are still supported via SalaryReportOverride.bonus_override.
@@ -318,6 +466,19 @@ class WebSalaryReportController extends Controller
         $coCodes = $ltByCategory->get('comp_off', collect())->pluck('code')->toArray(); // CO, HCO…
         $trackedLeaveCodes = array_merge($clCodes, $slCodes, $coCodes);
 
+        \Log::info('DEBUG: Leave Type Categories', [
+            'casual_codes' => $clCodes,
+            'sick_codes' => $slCodes,
+            'comp_off_codes' => $coCodes,
+        ]);
+
+        // Force write to file to verify code is executing
+        file_put_contents(
+            storage_path('logs/salary_report_debug.log'),
+            "[" . now()->format('Y-m-d H:i:s') . "] COMPUTE STARTED - Leave codes: CL=" . json_encode($clCodes) . ", SL=" . json_encode($slCodes) . "\n",
+            FILE_APPEND
+        );
+
         // Count leave taken from April 1 of this FY through end of report month.
         $fyLeaveAvailed = LeaveTrackerRecord::whereIn('employee_id', $empIds)
             ->whereIn('leave_type', $trackedLeaveCodes)
@@ -335,6 +496,61 @@ class WebSalaryReportController extends Controller
                 }
                 return compact('cl', 'sl', 'co');
             });
+
+        // Same leave query scoped to April 1 → previous month end (for the per-month LOP delta).
+        // Returns an empty collection when $prevFyEnd is null (i.e. April is selected).
+        $fyLeaveAvailedPrev = $prevFyEnd
+            ? LeaveTrackerRecord::whereIn('employee_id', $empIds)
+                ->whereIn('leave_type', $trackedLeaveCodes)
+                ->whereBetween('leave_date', [$fyStart, $prevFyEnd])
+                ->where('is_active', true)
+                ->get()
+                ->groupBy('employee_id')
+                ->map(function ($records) use ($clCodes, $slCodes, $coCodes) {
+                    $cl = $sl = $co = 0.0;
+                    foreach ($records as $r) {
+                        $units = str_starts_with($r->leave_type, 'H') ? 0.5 : 1.0;
+                        if (in_array($r->leave_type, $clCodes))      $cl += $units;
+                        elseif (in_array($r->leave_type, $slCodes))  $sl += $units;
+                        elseif (in_array($r->leave_type, $coCodes))  $co += $units;
+                    }
+                    return compact('cl', 'sl', 'co');
+                })
+            : collect();
+
+        // DEBUG: Log raw leave counts for specific employee
+        \Log::info('DEBUG: Raw FY Leave Counts', [
+            'employee_ids' => $empIds->toArray(),
+            'cl_codes' => $clCodes,
+            'sl_codes' => $slCodes,
+            'co_codes' => $coCodes,
+            'tracked_codes' => $trackedLeaveCodes,
+            'fy_start' => $fyStart,
+            'fy_end' => $fyEnd,
+            'fy_leave_availed_sample' => $fyLeaveAvailed->take(5)->toArray(),
+        ]);
+
+        // Force write employee 73 leave data to file
+        if ($fyLeaveAvailed->has(73)) {
+            $emp73Leaves = $fyLeaveAvailed->get(73);
+            $emp73LeavesPrev = $fyLeaveAvailedPrev->get(73) ?? ['cl' => 0, 'sl' => 0, 'co' => 0];
+            file_put_contents(
+                storage_path('logs/salary_report_debug.log'),
+                "[" . now()->format('Y-m-d H:i:s') . "] EMPLOYEE 73 FOUND - FY Leaves: " . json_encode($emp73Leaves) . ", Prev: " . json_encode($emp73LeavesPrev) . "\n",
+                FILE_APPEND
+            );
+            \Log::info('DEBUG: Employee 73 (Khushboo) FY Leaves', [
+                'employee_id' => 73,
+                'fy_leave_availed' => $emp73Leaves,
+                'fy_leave_availed_prev' => $emp73LeavesPrev,
+            ]);
+        } else {
+            file_put_contents(
+                storage_path('logs/salary_report_debug.log'),
+                "[" . now()->format('Y-m-d H:i:s') . "] EMPLOYEE 73 NOT FOUND in fyLeaveAvailed. Available keys: " . json_encode($fyLeaveAvailed->keys()->toArray()) . "\n",
+                FILE_APPEND
+            );
+        }
 
         // Active manual overrides for this month — keyed by employee_id
         $overrides = SalaryReportOverride::where('year_month', $month)
@@ -355,9 +571,124 @@ class WebSalaryReportController extends Controller
             // Apply any active manual override for this employee + month
             $override = $overrides->get($emp->id);
 
+            // ── DOJ / DOL — needed for both leave allocation and weekoff clipping ──
+            $doj = $emp->date_of_joining ? Carbon::parse($emp->date_of_joining) : null;
+            $dol = $emp->date_of_leaving  ? Carbon::parse($emp->date_of_leaving)  : null;
+
+            // ── Leave allocation — full annual entitlement, no pro-rating ──────
+            // Company policy: every employee receives the full annual CL and SL
+            // allocation regardless of their joining date within the FY.
+            // Pro-rating is NOT applied for new joiners.
+            // Exception: employees who LEFT during this FY get a reduced allocation
+            // proportional to their active period (they only earned leaves while employed).
+            $clAllocation = $clFullAllocation;
+            $slAllocation = $slFullAllocation;
+
+            if ($dol && $dol->gte($fyStartCarbon) && $dol->lt($fyEndCarbon)) {
+                $leaveStart    = ($doj && $doj->gt($fyStartCarbon)) ? $doj->copy()->startOfDay() : $fyStartCarbon->copy();
+                $daysWorked    = max(1, (int) $leaveStart->diffInDays($dol->copy()->startOfDay()) + 1);
+                $proRataFactor = min(1.0, $daysWorked / 365);
+                $clAllocation  = round($clFullAllocation * $proRataFactor, 1);
+                $slAllocation  = round($slFullAllocation * $proRataFactor, 1);
+            }
+
+            // ── FY-to-date leave balances (April 1 → end of selected month) ──
+            $fyLeaves  = $fyLeaveAvailed[$emp->id] ?? ['cl' => 0.0, 'sl' => 0.0, 'co' => 0.0];
+            $clAvailed = (float) $fyLeaves['cl'];
+            $slAvailed = (float) $fyLeaves['sl'];
+            $coAvailed = (float) $fyLeaves['co'];
+
+            // SL exhaustion → spills into CL, then CL excess → CO, remainder → LOP
+            $slExcess        = max(0.0, $slAvailed - $slAllocation);
+            $effectiveCLUsed = $clAvailed + $slExcess;
+            $clExcess          = max(0.0, $effectiveCLUsed - $clAllocation);
+            $coUsedForClExcess = min($coAvailed, $clExcess);
+            $coLop             = max(0.0, $clExcess - $coAvailed);
+
+            $closingCL = round(max(0.0, $clAllocation - $effectiveCLUsed), 1);
+            $closingSL = round(max(0.0, $slAllocation - $slAvailed), 1);
+            $closingCO = round(max(0.0, $coAvailed - $coUsedForClExcess), 1);
+
+            // Cumulative leave-based LOP from April 1 to end of selected month
+            $lopLeave = (int) max(0.0, $clExcess - $coAvailed);
+
+            // DEBUG: Log leave calculations for specific employees
+            if ($emp->employee_id === '202421013') {
+                file_put_contents(
+                    storage_path('logs/salary_report_debug.log'),
+                    "[" . now()->format('Y-m-d H:i:s') . "] CASCADE CALC - EmpID: {$emp->employee_id}, CL: {$clAvailed}/{$clAllocation}, SL: {$slAvailed}/{$slAllocation}, Excess: SL={$slExcess}, EffCL={$effectiveCLUsed}, CLExcess={$clExcess}, LOP={$lopLeave}\n",
+                    FILE_APPEND
+                );
+                \Log::info('DEBUG: Leave Cascade Calculation', [
+                    'employee_id' => $emp->employee_id,
+                    'employee_name' => $emp->full_name,
+                    'month' => $monthLabel,
+                    'cl_availed' => $clAvailed,
+                    'sl_availed' => $slAvailed,
+                    'co_availed' => $coAvailed,
+                    'cl_allocation' => $clAllocation,
+                    'sl_allocation' => $slAllocation,
+                    'sl_excess' => $slExcess,
+                    'effective_cl_used' => $effectiveCLUsed,
+                    'cl_excess' => $clExcess,
+                    'lop_leave' => $lopLeave,
+                ]);
+            }
+
+            // ── Leave-LOP delta: only the NEW leave-LOP days this specific month ──
+            // Compare cumulative LOP through this month vs. through previous month.
+            // The difference is what actually became LOP in the current month alone.
+            $fyLeavesPrev  = $fyLeaveAvailedPrev[$emp->id] ?? ['cl' => 0.0, 'sl' => 0.0, 'co' => 0.0];
+            $clAvailedPrev = (float) $fyLeavesPrev['cl'];
+            $slAvailedPrev = (float) $fyLeavesPrev['sl'];
+            $coAvailedPrev = (float) $fyLeavesPrev['co'];
+            $slExcessPrev        = max(0.0, $slAvailedPrev - $slAllocation);
+            $effectiveCLUsedPrev = $clAvailedPrev + $slExcessPrev;
+            $clExcessPrev        = max(0.0, $effectiveCLUsedPrev - $clAllocation);
+            $lopLeavePrev        = (int) max(0.0, $clExcessPrev - $coAvailedPrev);
+
+            $lopLeaveThisMonth = max(0, $lopLeave - $lopLeavePrev);
+
+            // DEBUG: Log delta calculation for specific employees
+            if ($emp->employee_id === '202421013') {
+                \Log::info('DEBUG: Leave LOP Delta Calculation', [
+                    'employee_id' => $emp->employee_id,
+                    'month' => $monthLabel,
+                    'lop_leave_cumulative' => $lopLeave,
+                    'lop_leave_prev_month' => $lopLeavePrev,
+                    'lop_leave_this_month_delta' => $lopLeaveThisMonth,
+                ]);
+            }
+
+            // ── Attendance LOP (this month's not-approved punches only) ──────
+            $lopAtt = (int) ($notApprovedPunches[$emp->id] ?? 0);
+
+            // ── Carry-forward LOP ─────────────────────────────────────────────
+            // Two sources (mutually exclusive by design, summed together):
+            //   1. Attendance not-approved from prior months that were NEVER locked
+            //   2. Deferred LOP from locked months where admin set override < computed
+            $carryFwdLop = (int) ($carryForwardLop[$emp->id]          ?? 0)
+                         + (int) ($deferredLopFromSnapshots[$emp->id] ?? 0);
+
+            // Total computed LOP = attendance (this month) + leave delta + carry-forward
+            $computedLop = $lopAtt + $lopLeaveThisMonth + $carryFwdLop;
+
+            // DEBUG: Log total LOP for specific employees
+            if ($emp->employee_id === '202421013') {
+                \Log::info('DEBUG: Total LOP Calculation', [
+                    'employee_id' => $emp->employee_id,
+                    'month' => $monthLabel,
+                    'attendance_lop' => $lopAtt,
+                    'leave_lop_delta' => $lopLeaveThisMonth,
+                    'carry_forward_lop' => $carryFwdLop,
+                    'computed_lop' => $computedLop,
+                    'has_override' => $override !== null,
+                ]);
+            }
+
             $empLop = $override && $override->lop_override !== null
                 ? (int) $override->lop_override
-                : (int) ($lopDays[$emp->id] ?? 0);
+                : $computedLop;
 
             // ── Per-employee WeekOff & Holidays (uses this employee's entity's calendar)
             //   • Joined mid-month → count holidays ON OR AFTER date_of_joining
@@ -365,11 +696,9 @@ class WebSalaryReportController extends Controller
             //   • Both apply simultaneously when joining and leaving are in the same month
             //   Excel: Working Days = Month Days − WeekOff&Holidays
             //   Excel: Net Paid Days = Working Days − Total LOP + WeekOff&Holidays
-            $empHolidayDates       = $holidaysByEntity[$emp->entity_id] ?? $monthHolidayDates;
+            // Falls back to month-level defaults (which always include Sundays)
+            $empHolidayDates       = $holidaysByCompany[$emp->company_id] ?? $monthHolidayDates;
             $empWeekoffAndHolidays = count($empHolidayDates);
-
-            $doj = $emp->date_of_joining ? Carbon::parse($emp->date_of_joining) : null;
-            $dol = $emp->date_of_leaving  ? Carbon::parse($emp->date_of_leaving)  : null;
 
             // Only clip if DOJ or DOL falls within this payroll month
             $dojInMonth = $doj && (int)$doj->format('Y') === $year && (int)$doj->format('n') === $mon && $doj->day > 1;
@@ -381,7 +710,7 @@ class WebSalaryReportController extends Controller
                 $empWeekoffAndHolidays = count(array_filter(
                     $empHolidayDates,
                     fn($d) => ($joiningDateStr === null || $d >= $joiningDateStr)
-                           && ($leavingDateStr === null || $d <= $leavingDateStr)
+                        && ($leavingDateStr === null || $d <= $leavingDateStr)
                 ));
             }
 
@@ -396,6 +725,11 @@ class WebSalaryReportController extends Controller
             $payableGross = $override && $override->payable_gross_override !== null
                 ? (int) $override->payable_gross_override
                 : $computedPayableGross;
+
+            // Explicit LOP deduction amount = per-day rate × LOP days
+            // This is already embedded in payable_gross (via reduced net_paid_days),
+            // but we surface it as a named field so the report makes the impact visible.
+            $lopAmount = (int) round(($grossMonthly / $monthDays) * $empLop);
 
             // ── Excel formula: Basic = Round(Payable Gross × 0.70, 0)
             //                  HRA   = Round(Basic × 0.40, 0)   [40% of Basic = 28% of Gross]
@@ -454,68 +788,20 @@ class WebSalaryReportController extends Controller
             $statutory = $statutoryMap->get($emp->id);
             $bank      = $bankMap->get($emp->id);
 
-            // ── Pro-rata CL / SL allocation ──────────────────────────────────
-            // Full FY = 365 days (Apr 1 – Mar 31).
-            // New joinee:      DOJ falls after Apr 1 of this FY  → effective start = DOJ
-            // Left employee:   DOL falls before Mar 31 of this FY → effective end   = DOL
-            // Both can apply together (joined and left in same FY).
-            $proStart = $fyStartCarbon->copy();
-            $proEnd   = $fyEndCarbon->copy();
-
-            // Only clip if DOJ is within the current FY (Apr 1 – Mar 31).
-            // A DOJ from a future FY (e.g. bad data entry like Dec 2026 for an Apr 2025 report)
-            // would invert the range and collapse the allocation to near-zero.
-            if ($doj && $doj->gt($fyStartCarbon) && $doj->lte($fyEndCarbon)) {
-                $proStart = $doj->copy()->startOfDay();
-            }
-            // Only clip the end date if DOL falls WITHIN the current FY.
-            // A date_of_leaving from a previous FY must not collapse the allocation to zero.
-            if ($dol && $dol->gte($fyStartCarbon) && $dol->lt($fyEndCarbon)) {
-                $proEnd = $dol->copy()->startOfDay();
-            }
-
-            // +1 to make the range inclusive (e.g. Apr 1–Mar 31 = 365 days)
-            $daysWorked    = max(1, (int) $proStart->diffInDays($proEnd) + 1);
-            $proRataFactor = min(1.0, $daysWorked / 365);
-            $clAllocation  = round($clFullAllocation * $proRataFactor, 1);
-            $slAllocation  = round($slFullAllocation * $proRataFactor, 1);
-
-            // ── FY-to-date leave balances ────────────────────────────────────
-            // Leaves taken from April 1 of this FY through the end of the selected month.
-            // dd($fyLeaveAvailed);
-            $fyLeaves  = $fyLeaveAvailed[$emp->id] ?? ['cl' => 0.0, 'sl' => 0.0, 'co' => 0.0];
-            $clAvailed = (float) $fyLeaves['cl'];
-            $slAvailed = (float) $fyLeaves['sl'];
-            $coAvailed = (float) $fyLeaves['co'];
-
-            // SL exhaustion → spills into CL:
-            //   If SL days taken > SL allocation, the excess is charged against the CL balance.
-            //   If CL is also exhausted after the SL spillover, the remaining deficit
-            //   becomes LOP (captured separately by the leave-tracker LOP records).
-            $slExcess        = max(0.0, $slAvailed - $slAllocation);
-            $effectiveCLUsed = $clAvailed + $slExcess;
-
-            $closingCL = max(0.0, $clAllocation - $effectiveCLUsed);
-            $closingSL = max(0.0, $slAllocation - $slAvailed);
-            $closingCO = $coAvailed; // CO has no fixed annual allocation — show count used
-
-            $lopLeave = 0; // leave tracker is informational only — does not affect LOP
-            $lopAtt   = (int) ($notApprovedPunches[$emp->id] ?? 0); // attendance not-approved punches
-
             $rows[] = [
                 // ── Override metadata (for edit UI) ──────────────────────────
                 'employee_db_id'    => $emp->id,
                 'has_override'      => $override !== null,
                 'override_id'       => $override?->id,
                 // Computed base values (before override — shown as "original" in edit modal)
-                'computed_lop'           => (int) ($lopDays[$emp->id] ?? 0),
+                'computed_lop'           => $computedLop,
                 'computed_incentive'     => (float) ($incentives->get($emp->id) ?? 0),
                 'computed_advance'       => $computedAdvance,
                 'computed_tds'           => (float) ($monthlyTds->get($emp->id) ?? 0),
                 'computed_payable_gross' => $computedPayableGross,
 
                 'emp_id'            => $emp->employee_id,
-                'name'              => trim($emp->first_name . ' ' . $emp->last_name),
+                'name'              => trim($emp->full_name),
                 'designation'       => $emp->designation?->name ?? '—',
                 'gross_salary'      => $grossMonthly,
                 'month'             => $monthLabel,
@@ -523,6 +809,7 @@ class WebSalaryReportController extends Controller
                 'weekoff_holidays'  => $empWeekoffAndHolidays,
                 'working_days'      => $empWorkingDays,
                 'total_lop'         => $empLop,
+                'lop_amount'        => $lopAmount,
                 'net_paid_days'     => $netPaidDays,
                 'payable_gross'     => $payableGross,
                 'basic_pay'         => $basic,
@@ -541,16 +828,17 @@ class WebSalaryReportController extends Controller
                 'bonus_diwali'      => $bonus,
                 'ctc_with_diwali'   => $ctcWithBonus,
                 'firm'              => $emp->entity?->name ?? '—',
-                'entity_id'         => $emp->entity_id,  // stored in snapshot for entity filtering
+                'company_id'        => $emp->company_id,
                 'pf_applicability'  => $pfApplicable ? 'Yes' : 'No',
                 // ── Additional columns ───────────────────────────────────────
                 'uan_number'        => $pfApplicable ? ($statutory?->uan_number ?? '') : '-',
                 'closing_cl'        => $closingCL,
                 'closing_sl'        => $closingSL,
                 'current_cp'        => $closingCO,
-                'current_lop'       => $lopLeave,
-                'att_lop'           => $lopAtt,
-                // 'total_lop' (above) = lopLeave + lopAtt — reused as "LOP" column
+                'current_lop'       => $lopLeave,        // cumulative FY leave-LOP (informational)
+                'att_lop'           => $lopAtt,           // attendance LOP this month
+                'leave_lop'         => $lopLeaveThisMonth, // leave-exhaustion LOP this month (delta)
+                'carry_fwd_lop'     => $carryFwdLop,      // undeducted LOP from prior unlocked months
                 'account_number'    => $bank?->account_number ?? '',
                 'ifsc_code'         => $bank?->ifsc_code ?? '',
                 'pan_number'        => $statutory?->pan_number ?? '',
@@ -627,7 +915,11 @@ class WebSalaryReportController extends Controller
 
             if ($currentSalary && $newGross !== $currentSalary->getGrossDecrypted()) {
                 \Illuminate\Support\Facades\DB::transaction(function () use (
-                    $validated, $newGross, $effectiveFrom, $effectiveTo, $currentSalary
+                    $validated,
+                    $newGross,
+                    $effectiveFrom,
+                    $effectiveTo,
+                    $currentSalary
                 ) {
                     // Query-builder update: deactivates ALL is_current=1 rows for this employee
                     // (same pattern as WebSalaryController, SalaryImporter, RevisionController)
@@ -676,22 +968,37 @@ class WebSalaryReportController extends Controller
     public function lockSnapshot(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
-            'month'     => 'required|date_format:Y-m',
-            'entity_id' => 'nullable|integer',
+            'month'      => 'required|date_format:Y-m',
+            'company_id' => 'nullable|integer',
         ]);
 
-        $month    = $request->get('month');
-        $entityId = (int) ($request->get('entity_id', 0));
+        $month     = $request->get('month');
+        $companyId = (int) ($request->get('company_id', 0));
 
-        // Compute live data for all employees in scope
-        $rows = $this->compute($month, $entityId);
+        $rows = $this->compute($month, $companyId);
 
         if (empty($rows)) {
             return redirect()->back()->with('error', 'No employee data found for this month. Cannot lock an empty report.');
         }
 
+        $this->performLock($month, $rows);
+
+        $count = count($rows);
+        return redirect()->route('salary.report', ['month' => $month, 'company_id' => $companyId])
+            ->with('success', "Report locked ✓ — {$count} employee rows frozen. Loan deductions recorded.");
+    }
+
+    // ─────────────────────────────────────────────
+    // SHARED LOCK LOGIC — called by both index() auto-lock and lockSnapshot()
+    // ─────────────────────────────────────────────
+
+    private function performLock(string $month, array $rows): void
+    {
         $now    = now();
         $userId = auth()->id();
+
+        [$lockYear, $lockMon] = array_map('intval', explode('-', $month));
+        $carbonLock = Carbon::createFromFormat('Y-m', $month);
 
         // ── Process loan/advance deductions FIRST ───────────────────────────
         // Snapshots are saved AFTER loan processing so that the frozen
@@ -699,18 +1006,33 @@ class WebSalaryReportController extends Controller
         // where compute() skips already-paid installments and returns advance = 0.
         DB::beginTransaction();
         try {
-            [$lockYear, $lockMon] = array_map('intval', explode('-', $month));
-            $carbonLock = Carbon::createFromFormat('Y-m', $month);
-
             foreach ($rows as $row) {
                 $empId   = $row['employee_db_id'] ?? null;
                 $advance = (float) ($row['advance_salary'] ?? 0);
                 if (!$empId || $advance <= 0) continue;
 
+                $lockMonthEnd = $carbonLock->copy()->endOfMonth()->toDateString();
+                $priorPaidIds = LoanInstallment::where('employee_id', $empId)
+                    ->where('status', 'paid')
+                    ->where(function ($q) use ($lockYear, $lockMon) {
+                        $q->where('emi_year', '<', $lockYear)
+                            ->orWhere(function ($q2) use ($lockYear, $lockMon) {
+                                $q2->where('emi_year', $lockYear)->where('emi_month', '<', $lockMon);
+                            });
+                    })
+                    ->pluck('employee_loan_id')
+                    ->unique()
+                    ->all();
+
                 $empLoans = EmployeeLoan::where('employee_id', $empId)
                     ->where('status', 'active')
                     ->where('outstanding_amount', '>', 0)
-                    ->where('first_emi_month', '<=', $carbonLock->copy()->endOfMonth()->toDateString())
+                    ->where(function ($q) use ($lockMonthEnd, $priorPaidIds) {
+                        $q->where('first_emi_month', '<=', $lockMonthEnd);
+                        if (!empty($priorPaidIds)) {
+                            $q->orWhereIn('id', $priorPaidIds);
+                        }
+                    })
                     ->orderBy('id')
                     ->get();
 
@@ -737,7 +1059,6 @@ class WebSalaryReportController extends Controller
                     $outBefore = (float) $loan->outstanding_amount;
                     $outAfter  = max(0.0, round($outBefore - $ded, 2));
 
-                    // Update existing pending installment for this month, or create one
                     $existing = LoanInstallment::where('employee_loan_id', $loan->id)
                         ->where('emi_year', $lockYear)
                         ->where('emi_month', $lockMon)
@@ -784,9 +1105,7 @@ class WebSalaryReportController extends Controller
         }
 
         // ── Read the ground-truth advance amounts from paid installments ─────
-        // This corrects snapshots on re-lock: compute() returns advance=0 for
-        // already-paid loans, but the installment records have the real amount.
-        $empIdsInScope = array_values(array_filter(array_column($rows, 'employee_db_id')));
+        $empIdsInScope   = array_values(array_filter(array_column($rows, 'employee_db_id')));
         $paidInstAmounts = LoanInstallment::where('emi_year', $lockYear)
             ->where('emi_month', $lockMon)
             ->where('status', 'paid')
@@ -800,21 +1119,20 @@ class WebSalaryReportController extends Controller
             $empId = $row['employee_db_id'] ?? null;
             if (!$empId) continue;
 
-            $row['entity_id'] = $row['entity_id'] ?? 0;
+            $row['company_id'] = $row['company_id'] ?? 0;
 
-            // Patch advance_salary from actual loan installments (handles re-lock)
             if ($paidInstAmounts->has($empId)) {
-                $trueAdvance           = (float) $paidInstAmounts->get($empId);
-                $row['advance_salary'] = $trueAdvance;
-                $row['total_deduction'] = (float)($row['employee_pf']       ?? 0)
-                                        + (float)($row['professional_tax']  ?? 0)
-                                        + $trueAdvance
-                                        + (float)($row['tds']               ?? 0);
+                $trueAdvance            = (float) $paidInstAmounts->get($empId);
+                $row['advance_salary']  = $trueAdvance;
+                $row['total_deduction'] = (float)($row['employee_pf']      ?? 0)
+                    + (float)($row['professional_tax'] ?? 0)
+                    + $trueAdvance
+                    + (float)($row['tds']              ?? 0);
                 $row['net_pay'] = (int) round(
-                    (float)($row['payable_gross']  ?? 0)
-                    + (float)($row['incentive']    ?? 0)
-                    + (float)($row['reimbursement']?? 0)
-                    - $row['total_deduction']
+                    (float)($row['payable_gross']   ?? 0)
+                        + (float)($row['incentive']     ?? 0)
+                        + (float)($row['reimbursement'] ?? 0)
+                        - $row['total_deduction']
                 );
             }
 
@@ -823,10 +1141,6 @@ class WebSalaryReportController extends Controller
                 ['snapshot_data' => $row, 'locked_at' => $now, 'locked_by' => $userId]
             );
         }
-
-        $count = count($rows);
-        return redirect()->route('salary.report', ['month' => $month, 'entity_id' => $entityId])
-            ->with('success', "Report locked ✓ — {$count} employee rows frozen. Loan deductions recorded.");
     }
 
     public function unlockSnapshot(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
@@ -834,7 +1148,7 @@ class WebSalaryReportController extends Controller
         $request->validate(['month' => 'required|date_format:Y-m']);
 
         $month    = $request->get('month');
-        $entityId = (int) ($request->get('entity_id', 0));
+        $companyId = (int) ($request->get('company_id', 0));
 
         // ── Reverse loan deductions for the unlocked month ──
         DB::beginTransaction();
@@ -870,7 +1184,7 @@ class WebSalaryReportController extends Controller
 
         $deleted = SalaryReportSnapshot::where('year_month', $month)->delete();
 
-        return redirect()->route('salary.report', ['month' => $month, 'entity_id' => $entityId])
+        return redirect()->route('salary.report', ['month' => $month, 'company_id' => $companyId])
             ->with('success', "Report unlocked — {$deleted} snapshots removed. Loan deductions reversed. Report will now be computed live from current source data.");
     }
 
@@ -907,7 +1221,7 @@ class WebSalaryReportController extends Controller
                     'total_gross'    => $rows->sum(fn($r) => $r['gross_salary'] ?? 0),
                     'total_payable'  => $rows->sum(fn($r) => $r['payable_gross'] ?? 0),
                     'total_net_pay'  => $rows->sum(fn($r) => $r['net_pay'] ?? 0),
-                    'total_deduction'=> $rows->sum(fn($r) => $r['total_deduction'] ?? 0),
+                    'total_deduction' => $rows->sum(fn($r) => $r['total_deduction'] ?? 0),
                 ];
             })
             ->values();
@@ -918,11 +1232,43 @@ class WebSalaryReportController extends Controller
         return view('salary-report.saved', compact('byMonth', 'users'));
     }
 
+    private function companySaturdayWeeklyOffs(?string $companyName, ?string $shortName, array $saturdaysInMonth): array
+    {
+        $name = strtolower(trim(($companyName ?? '') . ' ' . ($shortName ?? '')));
+        $isTnbtTech = str_contains($name, 'tnbt') && str_contains($name, 'tech');
+
+        $weeklyOffs = [
+            $saturdaysInMonth[1] ?? null, // second Saturday
+        ];
+
+        if ($isTnbtTech) {
+            $weeklyOffs[] = $saturdaysInMonth[3] ?? null; // fourth Saturday
+        }
+
+        return array_values(array_filter($weeklyOffs));
+    }
+
     private function summarise(array $rows): array
     {
-        $keys = ['gross_salary','payable_gross','basic_pay','hra','special_allowance',
-                 'incentive','reimbursement','employee_pf','professional_tax','advance_salary','tds',
-                 'total_deduction','net_pay','employer_pf','ctc','bonus_diwali','ctc_with_diwali'];
+        $keys = [
+            'gross_salary',
+            'payable_gross',
+            'basic_pay',
+            'hra',
+            'special_allowance',
+            'incentive',
+            'reimbursement',
+            'employee_pf',
+            'professional_tax',
+            'advance_salary',
+            'tds',
+            'total_deduction',
+            'net_pay',
+            'employer_pf',
+            'ctc',
+            'bonus_diwali',
+            'ctc_with_diwali'
+        ];
         $sum = array_fill_keys($keys, 0);
         foreach ($rows as $r) {
             foreach ($keys as $k) {
@@ -944,30 +1290,90 @@ class WebSalaryReportController extends Controller
         $ws->setTitle($month->format('M Y') . ' Salary');
 
         $headers = [
-            'Emp ID', 'Employee', 'Designation', 'Gross Salary', 'Month',
-            'Month Days', 'WeekOff & Holidays', 'Working Days', 'Total LOP',
-            'Net Paid Days', 'Payable Gross', 'Basic Pay', 'HRA',
-            'Special Allowance', 'Incentive', 'Reimbursement', 'Employee PF', 'Professional Tax',
-            'Advance Salary', 'TDS', 'Total Deduction', 'Net Pay',
-            'Employer PF', 'CTC', 'Bonus For Diwali', 'CTC with Diwali Bonus',
-            'Firm', 'PF Applicability',
+            'Emp ID',
+            'Employee',
+            'Designation',
+            'Gross Salary',
+            'Month',
+            'Month Days',
+            'WeekOff & Holidays',
+            'Working Days',
+            'Total LOP',
+            'LOP Amount',
+            'Net Paid Days',
+            'Payable Gross',
+            'Basic Pay',
+            'HRA',
+            'Special Allowance',
+            'Incentive',
+            'Reimbursement',
+            'Employee PF',
+            'Professional Tax',
+            'Advance Salary',
+            'TDS',
+            'Total Deduction',
+            'Net Pay',
+            'Employer PF',
+            'CTC',
+            'Bonus For Diwali',
+            'CTC with Diwali Bonus',
+            'Firm',
+            'PF Applicability',
             // Additional columns
-            'UAN Number', 'Closing CL', 'Closing SL', 'Current CP',
-            'Current LOP', 'Att LOP', 'LOP',
-            'Account Number', 'IFSC Code', 'PAN', 'RSC Mail ID',
+            'UAN Number',
+            'Closing CL',
+            'Closing SL',
+            'Current CP',
+            'Current LOP',
+            'Att LOP',
+            'LOP',
+            'Account Number',
+            'IFSC Code',
+            'PAN',
+            'RSC Mail ID',
         ];
         $keys = [
-            'emp_id','name','designation','gross_salary','month',
-            'month_days','weekoff_holidays','working_days','total_lop',
-            'net_paid_days','payable_gross','basic_pay','hra',
-            'special_allowance','incentive','reimbursement','employee_pf','professional_tax',
-            'advance_salary','tds','total_deduction','net_pay',
-            'employer_pf','ctc','bonus_diwali','ctc_with_diwali',
-            'firm','pf_applicability',
+            'emp_id',
+            'name',
+            'designation',
+            'gross_salary',
+            'month',
+            'month_days',
+            'weekoff_holidays',
+            'working_days',
+            'total_lop',
+            'lop_amount',
+            'net_paid_days',
+            'payable_gross',
+            'basic_pay',
+            'hra',
+            'special_allowance',
+            'incentive',
+            'reimbursement',
+            'employee_pf',
+            'professional_tax',
+            'advance_salary',
+            'tds',
+            'total_deduction',
+            'net_pay',
+            'employer_pf',
+            'ctc',
+            'bonus_diwali',
+            'ctc_with_diwali',
+            'firm',
+            'pf_applicability',
             // Additional columns
-            'uan_number','closing_cl','closing_sl','current_cp',
-            'current_lop','att_lop','total_lop',
-            'account_number','ifsc_code','pan_number','rsc_mail_id',
+            'uan_number',
+            'closing_cl',
+            'closing_sl',
+            'current_cp',
+            'current_lop',
+            'att_lop',
+            'total_lop',
+            'account_number',
+            'ifsc_code',
+            'pan_number',
+            'rsc_mail_id',
         ];
 
         // Header row
@@ -1005,10 +1411,10 @@ class WebSalaryReportController extends Controller
         ]);
         $ws->getRowDimension(1)->setRowHeight(28);
 
-        // Currency cols: D(4)=GrossSalary, K(11)=PayableGross, L-O(12-15)=Basic/HRA/Special/Incentive,
-        // P(16)=Reimbursement, Q(17)=EmpPF, R(18)=PT, S(19)=Advance, T(20)=TDS,
-        // U(21)=TotalDeduction, V(22)=NetPay, W(23)=EmplPF, X(24)=CTC, Y(25)=Bonus, Z(26)=CtcWithDiwali
-        $currencyCols = [4, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]; // 1-based
+        // Currency cols: D(4)=GrossSalary, J(10)=LopAmount, L(12)=PayableGross, M-P(13-16)=Basic/HRA/Special/Incentive,
+        // Q(17)=Reimbursement, R(18)=EmpPF, S(19)=PT, T(20)=Advance, U(21)=TDS,
+        // V(22)=TotalDeduction, W(23)=NetPay, X(24)=EmplPF, Y(25)=CTC, Z(26)=Bonus, AA(27)=CtcWithDiwali
+        $currencyCols = [4, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]; // 1-based
         if ($lastRow >= 2) {
             $dataRange = 'A2:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastCol) . $lastRow;
             $ws->getStyle($dataRange)->applyFromArray([
@@ -1037,8 +1443,46 @@ class WebSalaryReportController extends Controller
 
         // Column widths (28 original + 11 extra = 39 total — added Reimbursement col after Incentive)
         $widths = [
-            14, 26, 22, 14, 10, 11, 18, 13, 10, 13, 14, 12, 12, 18, 11, 15, 12, 17, 15, 10, 16, 12, 12, 14, 16, 20, 28, 16,
-            18, 12, 12, 12, 12, 10, 10, 22, 14, 14, 30,
+            14,
+            26,
+            22,
+            14,
+            10,
+            11,
+            18,
+            13,
+            10,
+            12,
+            13,
+            14,
+            12,
+            12,
+            18,
+            11,
+            15,
+            12,
+            17,
+            15,
+            10,
+            16,
+            12,
+            12,
+            14,
+            16,
+            20,
+            28,
+            16,
+            18,
+            12,
+            12,
+            12,
+            12,
+            10,
+            10,
+            22,
+            14,
+            14,
+            30,
         ];
         foreach ($widths as $ci => $w) {
             $ws->getColumnDimension(Coordinate::stringFromColumnIndex($ci + 1))->setWidth($w);

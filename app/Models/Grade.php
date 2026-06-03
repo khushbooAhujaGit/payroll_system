@@ -16,8 +16,8 @@ use Carbon\Carbon;
 
 class Grade extends Model
 {
-    protected $fillable = ['entity_id','name','code','level','min_ctc','max_ctc','is_active'];
+    protected $fillable = ['company_id','name','code','level','min_ctc','max_ctc','is_active'];
     protected $casts    = ['min_ctc' => 'decimal:2', 'max_ctc' => 'decimal:2'];
-    public function entity(): BelongsTo  { return $this->belongsTo(Entity::class); }
+    public function entity(): BelongsTo  { return $this->belongsTo(Company::class); }
     public function employees(): HasMany { return $this->hasMany(Employee::class); }
 }

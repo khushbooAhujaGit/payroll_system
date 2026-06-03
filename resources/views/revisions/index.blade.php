@@ -31,7 +31,7 @@
     <tbody>
       @foreach($revisions as $rev)
       <tr>
-        <td>{{ $rev->employee?->first_name }} {{ $rev->employee?->last_name }}<br>
+        <td>{{ $rev->employee?->full_name }}<br>
             <span style="font-size:10px;color:var(--t3)">{{ $rev->employee?->department?->name }}</span></td>
         <td>₹ {{ number_format($rev->old_ctc,0,'.',',') }}</td>
         <td>₹ {{ number_format($rev->new_ctc,0,'.',',') }}</td>
@@ -82,7 +82,7 @@
           <select name="employee_id" required @error('employee_id') class="inp-err" @enderror>
             <option value="">Select employee</option>
             @foreach($employees as $emp)
-            <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>{{ $emp->first_name }} {{ $emp->last_name }} ({{ $emp->employee_id }})</option>
+            <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>{{ $emp->full_name }} ({{ $emp->employee_id }})</option>
             @endforeach
           </select>
           @error('employee_id') <div class="ferr">{{ $message }}</div> @enderror

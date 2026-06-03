@@ -16,6 +16,6 @@ use Carbon\Carbon;
 
 class LwfSlab extends Model
 {
-    protected $fillable = ['entity_id','state','employee_contribution','employer_contribution','frequency','deduction_month','is_active'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    protected $fillable = ['company_id','state','employee_contribution','employer_contribution','frequency','deduction_month','is_active'];
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

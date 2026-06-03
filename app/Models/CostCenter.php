@@ -16,6 +16,6 @@ use Carbon\Carbon;
 
 class CostCenter extends Model
 {
-    protected $fillable = ['entity_id','name','code','type','is_active'];
-    public function entity(): BelongsTo { return $this->belongsTo(Entity::class); }
+    protected $fillable = ['company_id','name','code','type','is_active'];
+    public function entity(): BelongsTo { return $this->belongsTo(Company::class); }
 }

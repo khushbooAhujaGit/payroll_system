@@ -116,10 +116,10 @@ class PoiController extends Controller
         $this->authorize('poi.review');
 
         $submissions = PoiSubmission::with([
-            'investmentDeclaration.employee:id,employee_id,first_name,last_name',
+            'investmentDeclaration.employee:id,employee_id,first_name,middle_name,last_name',
             'declarationInvestment',
         ])
-        ->whereHas('investmentDeclaration.employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('investmentDeclaration.employee', fn($q) => $q->where('company_id', $request->company_id))
         ->where('financial_year', $request->get('fy', $this->currentFy()))
         ->when($request->status, fn($q) => $q->where('status', $request->status), fn($q) => $q->where('status', 'pending'))
         ->orderByDesc('created_at')
@@ -233,7 +233,7 @@ class PoiController extends Controller
             SUM(approved_amount) as total_approved
         ')
         ->where('financial_year', $fy)
-        ->whereHas('investmentDeclaration.employee', fn($q) => $q->where('entity_id', $request->entity_id))
+        ->whereHas('investmentDeclaration.employee', fn($q) => $q->where('company_id', $request->company_id))
         ->groupBy('status', 'section')
         ->get();
 
