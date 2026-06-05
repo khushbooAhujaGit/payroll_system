@@ -5,6 +5,7 @@
   <button class="btn" onclick="om('punch-add-modal')">+ Add Punch</button>
   <button class="btn" onclick="om('biometric-upload-modal')">🖱 Bulk Upload</button>
   <a href="<?php echo e(route('attendance.export') . '?' . http_build_query(request()->only('company_id','year','month'))); ?>" class="btn">⬇ Export</a>
+  <a href="<?php echo e(route('reports.attendance', ['month' => request('year', now()->year).'-'.str_pad(request('month', now()->month),2,'0',STR_PAD_LEFT)])); ?>" class="btn">📊 Attendance Report</a>
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('content'); ?>

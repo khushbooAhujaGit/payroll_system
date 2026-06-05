@@ -484,9 +484,13 @@ function openSalaryOverride(empId, empName, month,
       <input type="hidden" name="expected_month" value="<?php echo e($month); ?>">
       <div class="fld" style="margin-bottom:14px">
         <label class="req">Edited Excel File (.xlsx)</label>
-        <input type="file" name="file" accept=".xlsx,.xls" required
-          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
-        <div style="font-size:11px;color:var(--t3);margin-top:6px">
+        <input type="file" name="file" id="reupload-file-index" accept=".xlsx,.xls" required
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%"
+          onchange="verifyReuploadMonth(this, '<?php echo e($month); ?>')">
+        <div id="reupload-month-ok-index" style="display:none;margin-top:6px;font-size:11px;color:var(--grn);font-weight:600">
+          ✅ File month verified — matches <strong><?php echo e($month ? \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y') : ''); ?></strong>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">
           Upload the salary report Excel previously downloaded and edited.
           Month-year is read automatically from the <strong>Month</strong> column.
         </div>
