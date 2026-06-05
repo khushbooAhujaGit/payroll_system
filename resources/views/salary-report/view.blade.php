@@ -9,6 +9,7 @@
     <input type="hidden" name="company_id" value="{{ $companyId }}">
     <button type="submit" class="btn acc">📥 Download 🔒 Excel</button>
   </form>
+  <button class="btn" onclick="om('reupload-modal')" style="border-color:var(--acc)">📤 Re-upload Edited Report</button>
   @php $deleteLabel = \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y'); @endphp
   <form method="POST" action="{{ route('salary.report.delete') }}" style="display:inline">
     @csrf
@@ -66,14 +67,51 @@
   @endforeach
 </div>
 
-{{-- Table --}}
-<div class="card" style="overflow-x:auto">
+{{-- Search + Filter --}}
+<form method="GET" action="{{ route('salary.report.view', $month) }}"
+      class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+  <div class="fld" style="min-width:220px">
+    <label>Search Emp ID / Name</label>
+    <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="e.g. EMP001 or John…">
+  </div>
+  <div class="fld" style="min-width:160px">
+    <label>Filter by</label>
+    <select name="filter">
+      <option value="" {{ ($filter??'')==='' ? 'selected' : '' }}>— None —</option>
+      <option value="tds"       {{ ($filter??'')==='tds'       ? 'selected' : '' }}>Has TDS</option>
+      <option value="incentive" {{ ($filter??'')==='incentive' ? 'selected' : '' }}>Has Incentive</option>
+      <option value="loan"      {{ ($filter??'')==='loan'      ? 'selected' : '' }}>Has Loan / EMI</option>
+      <option value="lop"       {{ ($filter??'')==='lop'       ? 'selected' : '' }}>Has LOP</option>
+    </select>
+  </div>
+  <button type="submit" class="btn acc">Search</button>
+  @if(!empty($search) || !empty($filter))
+    <a href="{{ route('salary.report.view', $month) }}" class="btn">✕ Clear</a>
+    @if(!empty($search) || !empty($filter))
+      <span style="font-size:12px;color:var(--t2);padding-bottom:2px">
+        {{ $rows->total() }} result(s)
+        @if(!empty($filter))
+          @php $filterLabels = ['tds'=>'TDS','incentive'=>'Incentive','loan'=>'Loan/EMI','lop'=>'LOP']; @endphp
+          <span style="background:var(--acc2);color:var(--acc);padding:2px 6px;border-radius:4px;font-size:10px;margin-left:4px">
+            {{ $filterLabels[$filter] ?? $filter }}
+          </span>
+        @endif
+      </span>
+    @endif
+  @endif
+</form>
+
+<div class="card" style="overflow-x:auto;will-change:transform;-webkit-overflow-scrolling:touch">
   <div class="ch">
     <div class="ct">
       Salary Sheet — {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y') }} · All Firms
       <span style="background:#dcfce7;color:#166534;border-radius:4px;padding:2px 6px;font-size:10px;margin-left:8px">🔒 LOCKED</span>
     </div>
-    <div style="font-size:11px;color:var(--t3)">{{ count($rows) }} employees · Scroll right for full details</div>
+    <div style="font-size:11px;color:var(--t3)">
+      {{ $rows->total() }}{{ !empty($search) ? ' matching "'.e($search).'"' : '' }} of {{ $snapshotCount }} employees
+      @if($rows->lastPage() > 1) · Page {{ $rows->currentPage() }} / {{ $rows->lastPage() }} @endif
+      · Scroll right for full details
+    </div>
   </div>
   <table style="font-size:11px;min-width:2800px">
     <thead>
@@ -192,7 +230,7 @@
     </tbody>
     <tfoot>
       <tr style="background:var(--s2);font-weight:700;font-size:11px">
-        <td colspan="3" style="text-align:right;color:var(--t2)">TOTAL ({{ count($rows) }} employees)</td>
+        <td colspan="3" style="text-align:right;color:var(--t2)">TOTAL ({{ $snapshotCount }} employees)</td>
         <td style="text-align:right">{{ number_format($summary['gross_salary'],0) }}</td>
         <td colspan="6"></td>
         <td style="text-align:right">{{ number_format($summary['payable_gross'],0) }}</td>
@@ -215,6 +253,61 @@
       </tr>
     </tfoot>
   </table>
+  @if($rows->hasPages())
+    <div style="padding:14px 18px;border-top:1px solid var(--b1)">{{ $rows->links() }}</div>
+  @endif
+  @if(!empty($search) && $rows->total() === 0)
+    <div class="empty" style="padding:24px">
+      <div class="ico">🔍</div>
+      <p>No employees matching "{{ e($search) }}".</p>
+      <a href="{{ route('salary.report.view', $month) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+    </div>
+  @endif
+</div>
+
+{{-- Re-upload Modal --}}
+<div class="modal" id="reupload-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">📤 Re-upload Edited Salary Report</span>
+      <button class="mc" onclick="cm('reupload-modal')">✕</button>
+    </div>
+    <div style="background:#fefce8;border:1px solid #fde047;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#854d0e;line-height:1.6">
+      <strong style="font-size:11px">Only these columns are read from the file — all others are ignored:</strong>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px">
+        <span>✏ <strong>Payable Gross</strong> <span style="font-weight:400">(triggers recompute)</span></span>
+        <span>✏ <strong>Incentive</strong></span>
+        <span>✏ <strong>Advance Salary</strong> (Loan/EMI)</span>
+        <span>✏ <strong>TDS</strong></span>
+        <span>✏ <strong>Total LOP</strong></span>
+        <span>✏ <strong>Account No · IFSC · PAN · Email</strong> <span style="font-weight:400">(also updates employee master)</span></span>
+      </div>
+      <div style="margin-top:5px;color:#92400e;font-size:10px">
+        System auto-recomputes Basic, HRA, Spl Allow, PF, PT, Total Deduction, Net Pay, CTC after upload. · <strong>Do not change Emp ID or Month columns.</strong>
+      </div>
+    </div>
+    <form method="POST" action="{{ route('salary.report.reupload') }}" enctype="multipart/form-data">
+      @csrf
+      <input type="hidden" name="expected_month" value="{{ $month }}">
+      <div class="fld" style="margin-bottom:14px">
+        <label class="req">Edited Excel File (.xlsx)</label>
+        <input type="file" name="file" id="reupload-file-view" accept=".xlsx,.xls" required
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%"
+          onchange="verifyReuploadMonth(this, '{{ $month }}')">
+        <div id="reupload-month-ok-view" style="display:none;margin-top:6px;font-size:11px;color:var(--grn);font-weight:600">
+          ✅ File month verified — matches <strong>{{ \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y') }}</strong>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">
+          Upload the salary report Excel previously downloaded and edited.
+          Month-year is read automatically from the <strong>Month</strong> column.
+        </div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('reupload-modal')">Cancel</button>
+        <button type="submit" class="btn acc">📤 Replace Snapshot Data</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 @endsection

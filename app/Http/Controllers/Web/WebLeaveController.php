@@ -245,13 +245,13 @@ class WebLeaveController extends Controller
             $a->employee?->employee_id,
             $a->employee?->full_name,
             $a->leaveType?->code ?? $a->leaveType?->name,
-            $a->from_date?->format('d-m-Y'),
-            $a->to_date?->format('d-m-Y'),
+            $a->from_date,              // Carbon → Excel date
+            $a->to_date,                // Carbon → Excel date
             (float) $a->days,
             $a->is_half_day ? 'Yes' : 'No',
             $a->status,
             $a->reason,
-            $a->applied_at?->format('d-m-Y H:i'),
+            $a->applied_at,             // Carbon → Excel date
         ]);
 
         return $this->streamXlsx('leave_applications', $headers, $rows);
@@ -282,7 +282,7 @@ class WebLeaveController extends Controller
             $r->leave_ref_id,
             $r->sheet_emp_id,
             $r->employee ? ($r->employee->full_name) : $r->employee_name,
-            $r->leave_date?->format('d-m-Y'),
+            $r->leave_date,             // Carbon → Excel date
             $r->leave_type,
             $r->team_leader_name,
             $r->reason_type,

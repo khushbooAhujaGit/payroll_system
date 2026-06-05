@@ -191,6 +191,22 @@ class WebReimbursementReportController extends Controller
                 continue;
             }
 
+            // Pre-parse the date early so it can be used in image name suggestions
+            $rawDateEarly = $colDate !== false ? $clean($row[$colDate] ?? null) : null;
+            $expDateEarly = null;
+            if ($rawDateEarly !== null && $rawDateEarly !== '') {
+                $s = trim((string) $rawDateEarly);
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
+                    $expDateEarly = $s;
+                } elseif (is_numeric($rawDateEarly)) {
+                    try { $expDateEarly = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float)$rawDateEarly)->format('Y-m-d'); } catch (\Throwable) {}
+                } else {
+                    try { $expDateEarly = \Carbon\Carbon::parse($s)->format('Y-m-d'); } catch (\Throwable) {}
+                }
+            }
+            // Image filenames use date-time of upload for uniqueness (not the expense date from the template).
+            $dateLabelForSuggestion = now()->format('d-m-Y_H-i');
+
             $errs = [];
 
             if ($empName === '') {
@@ -201,16 +217,85 @@ class WebReimbursementReportController extends Controller
                 $errs[] = 'Amount must be a positive number';
             }
 
-            // Image uniqueness
+            // ── Image filename validation ─────────────────────────────────────
             $rawImage = $colImage !== false ? trim((string) ($clean($row[$colImage] ?? '') ?? '')) : '';
             if ($rawImage !== '') {
-                $imageKey = strtolower($rawImage);
-                if (isset($seenImages[$imageKey])) {
-                    $errs[] = "Image \"{$rawImage}\" is duplicated in this file (first seen on row {$seenImages[$imageKey]})";
-                } elseif (isset($existingImages[$imageKey])) {
-                    $errs[] = "Image \"{$rawImage}\" already exists for {$month} in the database";
+
+                // 1. No spaces allowed — use underscores (e.g. VADHER_NEHA_DIPAKBHAI_03-06-2026)
+                if (preg_match('/\s/', $rawImage)) {
+                    $suggested = preg_replace('/\s+/', '_', strtoupper(trim($rawImage)));
+                    $errs[] = "Image filename \"{$rawImage}\" must not contain spaces. "
+                            . "Use underscores instead (e.g. \"{$suggested}\")";
                 } else {
-                    $seenImages[$imageKey] = $rowNum;
+                    // 2. Filename must include the employee name (any part of it, underscore-separated)
+                    //    and a date segment so different records for the same employee are distinguishable.
+                    $imageUpper = strtoupper($rawImage);
+
+                    // Break employee name into parts and check at least one part exists in the filename
+                    $nameParts = array_filter(
+                        preg_split('/\s+/', strtoupper(trim($empName))),
+                        fn($p) => strlen($p) >= 3   // skip very short parts like initials
+                    );
+
+                    $nameFound = false;
+                    foreach ($nameParts as $part) {
+                        if (str_contains($imageUpper, $part)) {
+                            $nameFound = true;
+                            break;
+                        }
+                    }
+
+                    if (!$nameFound && !empty($nameParts)) {
+                        // Also accept emp_id as an alternative to name
+                        $empIdRaw = $colEmpId !== false ? trim((string) ($clean($row[$colEmpId] ?? '') ?? '')) : '';
+                        $nameFound = $empIdRaw !== '' && str_contains($imageUpper, strtoupper($empIdRaw));
+                    }
+
+                    // Build example once — used in both error messages below.
+                    // Extension is intentionally omitted from the pattern; any extension is accepted
+                    // (.jpg, .jpeg, .png, .pdf, .webp, etc.).
+                    $exampleBase = strtoupper(preg_replace('/\s+/', '_', trim($empName)))
+                                 . '_' . $dateLabelForSuggestion;
+
+                    if (!$nameFound && !empty($nameParts)) {
+                        $errs[] = "Image filename \"{$rawImage}\" must contain the employee name. "
+                                . "Format: EMPLOYEE_NAME_DD-MM-YYYY_HH-MM.<ext> "
+                                . "(e.g. \"{$exampleBase}.jpg\" or \"{$exampleBase}.png\" etc.)";
+                    }
+
+                    // 3. Must contain a date-TIME pattern so that multiple records for the same
+                    //    employee are always unique (date alone is not enough).
+                    //    Accepted formats (any file extension is fine):
+                    //      DD-MM-YYYY_HH-MM        e.g. 04-06-2026_10-30
+                    //      DD-MM-YYYY_HH-MM-SS     e.g. 04-06-2026_10-30-45
+                    //      YYYY-MM-DD_HH-MM        e.g. 2026-06-04_10-30
+                    //      YYYYMMDD_HHMMSS         e.g. 20260604_103045
+                    //      YYYYMMDDHHMMSS          e.g. 20260604103045
+                    $hasDateTime = (bool) preg_match(
+                        '/\d{2}[-_]\d{2}[-_]\d{4}[-_T]\d{2}[-:_]\d{2}'   // DD-MM-YYYY_HH-MM or variants
+                        . '|\d{4}[-_]\d{2}[-_]\d{2}[-_T]\d{2}[-:_]\d{2}' // YYYY-MM-DD_HH-MM
+                        . '|\d{8}[-_]\d{4,6}'                              // YYYYMMDD_HHMM or YYYYMMDD_HHMMSS
+                        . '|\d{14}/',                                       // YYYYMMDDHHmmSS
+                        $rawImage
+                    );
+                    if (!$hasDateTime) {
+                        $errs[] = "Image filename \"{$rawImage}\" must include a date AND time "
+                                . "(e.g. \"{$exampleBase}.jpg\") — any extension is fine (.jpg/.png/.pdf etc.), "
+                                . "but date alone is not enough to keep multiple records for the same employee unique";
+                    }
+
+                    // 4. Uniqueness — within this file and against the database
+                    if (empty($errs)) {      // only check uniqueness if format is valid
+                        $imageKey = strtolower($rawImage);
+                        if (isset($seenImages[$imageKey])) {
+                            $errs[] = "Image \"{$rawImage}\" is duplicated in this file "
+                                    . "(first seen on row {$seenImages[$imageKey]})";
+                        } elseif (isset($existingImages[$imageKey])) {
+                            $errs[] = "Image \"{$rawImage}\" already exists for {$month} in the database";
+                        } else {
+                            $seenImages[$imageKey] = $rowNum;
+                        }
+                    }
                 }
             }
 
@@ -374,8 +459,8 @@ class WebReimbursementReportController extends Controller
             $ws->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci + 1))->setWidth($w);
         }
 
-        // Sample row
-        $ws->fromArray([now()->toDateString(), 'EMP001', 'John Doe', 1800, 'Petrol & Recharge', 'receipt_john_jan.jpg'], null, 'A2');
+        // Sample row — image name: NAME_DD-MM-YYYY_HH-MM.<any-ext> — no spaces, includes datetime for uniqueness
+        $ws->fromArray([now()->toDateString(), 'EMP001', 'John Doe', 1800, 'Petrol & Recharge', 'JOHN_DOE_' . now()->format('d-m-Y_H-i') . '.png'], null, 'A2');
 
         $writer = new Xlsx($wb);
         return response()->streamDownload(function () use ($writer) {

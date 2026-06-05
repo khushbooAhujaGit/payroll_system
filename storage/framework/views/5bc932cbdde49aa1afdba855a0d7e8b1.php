@@ -63,7 +63,14 @@
         <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
       </select>
     </div>
+    <div class="fld" style="min-width:200px">
+      <label>Search Name / Emp ID</label>
+      <input type="text" name="search" value="<?php echo e($search ?? ''); ?>" placeholder="e.g. John or EMP001">
+    </div>
     <button type="submit" class="btn acc">Load</button>
+    <?php if(!empty($search)): ?>
+      <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn">✕ Clear</a>
+    <?php endif; ?>
     <?php if($biometricDataRange?->min_date): ?>
     <div style="font-size:11px;color:var(--t3);align-self:center;padding-bottom:2px">
       📡 Biometric data available:
@@ -77,9 +84,14 @@
     <?php endif; ?>
   </form>
 
-  <div class="card d-none" style="display: none !important;">
-    <div class="ch">
+  <div class="card" style="display:none !important;">
+    <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
       <div class="ct">Attendance — <?php echo e(\Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')); ?></div>
+      <div style="font-size:12px;color:var(--t3)">
+        <?php echo e(number_format($employees->total())); ?> employee(s)<?php echo e($search ? ' matching "'.e($search).'"' : ''); ?>
+
+        <?php if($employees->lastPage() > 1): ?> · Page <?php echo e($employees->currentPage()); ?>/<?php echo e($employees->lastPage()); ?> <?php endif; ?>
+      </div>
     </div>
     <?php
       // Legend note: bio = from biometric machine, manual = from attendance table
@@ -212,7 +224,15 @@
           </tbody>
         </table>
       </div>
-      <div style="margin-top:14px"><?php echo e($employees->links()); ?></div>
+      <?php if($employees->hasPages()): ?>
+        <div style="padding:14px 18px;border-top:1px solid var(--b1)"><?php echo e($employees->links()); ?></div>
+      <?php endif; ?>
+    <?php elseif($search): ?>
+      <div class="empty">
+        <div class="ico">🔍</div>
+        <p>No employees matching "<?php echo e(e($search)); ?>".</p>
+        <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn acc" style="margin-top:10px">Clear Search</a>
+      </div>
     <?php else: ?>
       <div class="empty">
         <div class="ico">🕐</div>
@@ -225,16 +245,21 @@
   </div>
 
   
-  <?php if($rawPunchesPaginated->isNotEmpty()): ?>
+  <?php if($rawPunchesPaginated->total() > 0 || $search): ?>
   <div class="card" style="margin-top:20px">
-    <div class="ch">
+    <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
       <div class="ct">Biometric Punch Records — <?php echo e(\Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')); ?></div>
-      <div style="font-size:11px;color:var(--t3)"><?php echo e(number_format($rawPunchesPaginated->total())); ?> records</div>
+      <div style="font-size:11px;color:var(--t3)">
+        <?php echo e(number_format($rawPunchesPaginated->total())); ?> record(s)<?php echo e($search ? ' matching "'.e($search).'"' : ''); ?>
+
+        <?php if($rawPunchesPaginated->lastPage() > 1): ?> · Page <?php echo e($rawPunchesPaginated->currentPage()); ?>/<?php echo e($rawPunchesPaginated->lastPage()); ?> <?php endif; ?>
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table>
         <thead>
           <tr>
+            <th>Emp ID</th>
             <th>Employee</th>
             <th>Date</th>
             <th>Machine</th>
@@ -259,6 +284,7 @@
               }
             ?>
             <tr>
+              <td class="mono" style="font-size:11px;color:var(--t3)"><?php echo e($pEmp?->employee_id ?? '—'); ?></td>
               <td style="white-space:nowrap"><?php echo e($pEmp?->full_name); ?></td>
               <td><?php echo e(\Carbon\Carbon::parse($punch->attendance_date)->format('d M')); ?></td>
               <td style="font-size:11px;color:var(--t3)"><?php echo e($punch->machine_name ?? '—'); ?></td>
@@ -299,7 +325,16 @@
         </tbody>
       </table>
     </div>
-    <div style="margin-top:14px"><?php echo e($rawPunchesPaginated->links()); ?></div>
+    <?php if($rawPunchesPaginated->hasPages()): ?>
+      <div style="padding:14px 18px;border-top:1px solid var(--b1)"><?php echo e($rawPunchesPaginated->links()); ?></div>
+    <?php endif; ?>
+    <?php if($search && $rawPunchesPaginated->total() === 0): ?>
+      <div class="empty" style="padding:24px">
+        <div class="ico">🔍</div>
+        <p>No biometric records matching "<?php echo e(e($search)); ?>" for <?php echo e(\Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')); ?>.</p>
+        <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn acc" style="margin-top:10px">Clear Search</a>
+      </div>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 

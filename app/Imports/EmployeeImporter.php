@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Imports\Concerns\ParsesExcelDates;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
@@ -24,6 +25,7 @@ use Carbon\Exceptions\InvalidFormatException;
  */
 class EmployeeImporter extends BaseImporter
 {
+    use ParsesExcelDates;
     protected array $pendingEmployeeLinks = [];
 
     /**
@@ -524,98 +526,7 @@ class EmployeeImporter extends BaseImporter
         return [$first, $middle, $last];
     }
 
-    /**
-     * Parse date from any format Excel/user might supply.
-     *
-     * Handles:
-     *  • DateTimeInterface objects (PhpSpreadsheet date-formatted cells)
-     *  • Excel serial numbers (numeric cells with no date format)
-     *  • DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY  (Indian standard — tried first)
-     *  • YYYY-MM-DD / YYYY/MM/DD               (ISO)
-     *  • D-M-YYYY, D/M/YYYY                    (no leading zeros)
-     *  • DD-Mon-YYYY, DD Mon YYYY              (text month abbreviations)
-     *  • MM/DD/YYYY                            (US format — tried last to avoid ambiguity)
-     *
-     * Returns null on failure instead of throwing.
-     */
-    protected function parseDate($value): ?string
-    {
-        if ($value === null || $value === '') return null;
-
-        // ── DateTimeInterface (PhpSpreadsheet returns this for date-formatted cells) ──
-        if ($value instanceof \DateTimeInterface) {
-            return Carbon::instance($value)->format('Y-m-d');
-        }
-
-        // ── Excel serial number ───────────────────────────────────────────────────────
-        // Numeric value means the cell had NO date number-format applied in Excel.
-        // Use PhpSpreadsheet's own converter which correctly handles Excel's 1900
-        // leap-year bug (Excel incorrectly treats 1900 as a leap year).
-        if (is_numeric($value)) {
-            $serial = (float) $value;
-            if ($serial < 1 || $serial > 2958465) return null; // outside 1900–9999 range
-            try {
-                $dt = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($serial);
-                return Carbon::instance($dt)->format('Y-m-d');
-            } catch (\Throwable) {
-                return null;
-            }
-        }
-
-        $str = trim((string) $value);
-
-        // Fast bail: empty, "Working" sentinel, or no digits at all (e.g. "Jay Dave")
-        if ($str === '' || strtolower($str) === 'working') return null;
-        if (!preg_match('/\d/', $str)) return null;
-
-        // ── Try explicit formats — Indian standard (DD-MM-YYYY) first ────────────────
-        $formats = [
-            'd-m-Y',        // 19-12-2017    DD-MM-YYYY  ← primary Indian format
-            'd/m/Y',        // 19/12/2017    DD/MM/YYYY
-            'd.m.Y',        // 19.12.2017    DD.MM.YYYY
-            'Y-m-d',        // 2017-12-19    ISO 8601
-            'Y/m/d',        // 2017/12/19    ISO with slashes
-            'Y-m-d H:i:s',  // 2017-12-19 00:00:00
-            'Y-m-d\TH:i:s', // 2017-12-19T00:00:00
-            'd-m-y',        // 19-12-17      two-digit year
-            'd/m/y',        // 19/12/17
-            'd.m.y',        // 19.12.17
-            'j-n-Y',        // 1-2-2019      no leading zeros DD-MM
-            'j/n/Y',        // 1/2/2019
-            'j.n.Y',        // 1.2.2019
-            'd-M-Y',        // 19-Dec-2017   text month abbreviation
-            'd/M/Y',        // 19/Dec/2017
-            'd M Y',        // 19 Dec 2017
-            'j M Y',        // 1 Dec 2017
-            'd-F-Y',        // 19-December-2017
-            'd F Y',        // 19 December 2017
-            'j-n-y',        // 1-2-19
-            'm/d/Y',        // 12/19/2017    US format (tried last — ambiguous with DD/MM)
-        ];
-
-        foreach ($formats as $fmt) {
-            try {
-                $parsed = Carbon::createFromFormat($fmt, $str);
-                if ($parsed && $parsed->year >= 1900 && $parsed->year <= 2100) {
-                    return $parsed->format('Y-m-d');
-                }
-            } catch (\Throwable) {
-                // try next format
-            }
-        }
-
-        // ── Carbon::parse as last resort ─────────────────────────────────────────────
-        // Handles many edge cases (e.g. "December 19, 2017") but is more permissive,
-        // so only reached after all explicit formats fail.
-        try {
-            $parsed = Carbon::parse($str);
-            if ($parsed->year >= 1900 && $parsed->year <= 2100) {
-                return $parsed->format('Y-m-d');
-            }
-        } catch (\Throwable) {}
-
-        return null;
-    }
+    // parseDate() provided by ParsesExcelDates trait
 
     protected function parseBool($value): bool
     {

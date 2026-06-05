@@ -6,6 +6,7 @@
   <button class="btn" onclick="om('punch-add-modal')">+ Add Punch</button>
   <button class="btn" onclick="om('biometric-upload-modal')">🖱 Bulk Upload</button>
   <a href="{{ route('attendance.export') . '?' . http_build_query(request()->only('company_id','year','month')) }}" class="btn">⬇ Export</a>
+  <a href="{{ route('reports.attendance', ['month' => request('year', now()->year).'-'.str_pad(request('month', now()->month),2,'0',STR_PAD_LEFT)]) }}" class="btn">📊 Attendance Report</a>
 @endsection
 
 @section('content')
@@ -63,7 +64,14 @@
         @endforeach
       </select>
     </div>
+    <div class="fld" style="min-width:200px">
+      <label>Search Name / Emp ID</label>
+      <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="e.g. John or EMP001">
+    </div>
     <button type="submit" class="btn acc">Load</button>
+    @if(!empty($search))
+      <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn">✕ Clear</a>
+    @endif
     @if($biometricDataRange?->min_date)
     <div style="font-size:11px;color:var(--t3);align-self:center;padding-bottom:2px">
       📡 Biometric data available:
@@ -75,9 +83,13 @@
     @endif
   </form>
 
-  <div class="card d-none" style="display: none !important;">
-    <div class="ch">
+  <div class="card" style="display:none !important;">
+    <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
       <div class="ct">Attendance — {{ \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y') }}</div>
+      <div style="font-size:12px;color:var(--t3)">
+        {{ number_format($employees->total()) }} employee(s){{ $search ? ' matching "'.e($search).'"' : '' }}
+        @if($employees->lastPage() > 1) · Page {{ $employees->currentPage() }}/{{ $employees->lastPage() }} @endif
+      </div>
     </div>
     @php
       // Legend note: bio = from biometric machine, manual = from attendance table
@@ -209,7 +221,15 @@
           </tbody>
         </table>
       </div>
-      <div style="margin-top:14px">{{ $employees->links() }}</div>
+      @if($employees->hasPages())
+        <div style="padding:14px 18px;border-top:1px solid var(--b1)">{{ $employees->links() }}</div>
+      @endif
+    @elseif($search)
+      <div class="empty">
+        <div class="ico">🔍</div>
+        <p>No employees matching "{{ e($search) }}".</p>
+        <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+      </div>
     @else
       <div class="empty">
         <div class="ico">🕐</div>
@@ -222,16 +242,20 @@
   </div>
 
   {{-- Biometric Punch Records --}}
-  @if($rawPunchesPaginated->isNotEmpty())
+  @if($rawPunchesPaginated->total() > 0 || $search)
   <div class="card" style="margin-top:20px">
-    <div class="ch">
+    <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
       <div class="ct">Biometric Punch Records — {{ \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y') }}</div>
-      <div style="font-size:11px;color:var(--t3)">{{ number_format($rawPunchesPaginated->total()) }} records</div>
+      <div style="font-size:11px;color:var(--t3)">
+        {{ number_format($rawPunchesPaginated->total()) }} record(s){{ $search ? ' matching "'.e($search).'"' : '' }}
+        @if($rawPunchesPaginated->lastPage() > 1) · Page {{ $rawPunchesPaginated->currentPage() }}/{{ $rawPunchesPaginated->lastPage() }} @endif
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table>
         <thead>
           <tr>
+            <th>Emp ID</th>
             <th>Employee</th>
             <th>Date</th>
             <th>Machine</th>
@@ -256,6 +280,7 @@
               }
             @endphp
             <tr>
+              <td class="mono" style="font-size:11px;color:var(--t3)">{{ $pEmp?->employee_id ?? '—' }}</td>
               <td style="white-space:nowrap">{{ $pEmp?->full_name }}</td>
               <td>{{ \Carbon\Carbon::parse($punch->attendance_date)->format('d M') }}</td>
               <td style="font-size:11px;color:var(--t3)">{{ $punch->machine_name ?? '—' }}</td>
@@ -294,7 +319,16 @@
         </tbody>
       </table>
     </div>
-    <div style="margin-top:14px">{{ $rawPunchesPaginated->links() }}</div>
+    @if($rawPunchesPaginated->hasPages())
+      <div style="padding:14px 18px;border-top:1px solid var(--b1)">{{ $rawPunchesPaginated->links() }}</div>
+    @endif
+    @if($search && $rawPunchesPaginated->total() === 0)
+      <div class="empty" style="padding:24px">
+        <div class="ico">🔍</div>
+        <p>No biometric records matching "{{ e($search) }}" for {{ \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y') }}.</p>
+        <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+      </div>
+    @endif
   </div>
   @endif
 

@@ -311,26 +311,22 @@ class WebEmployeeController extends Controller
             $i + 1,
             trim(implode(' ', array_filter([$e->first_name, $e->middle_name, $e->last_name]))),
             $e->employee_status,
-            $e->date_of_leaving ? $e->date_of_leaving->format('d-m-Y') : 'Working',
-            $e->reportingManager
-                ? $e->reportingManager->full_name
-                : null,
-            $e->teamLeader
-                ? $e->teamLeader->full_name
-                : null,
+            $e->date_of_leaving,        // Carbon → Excel date (null = empty cell)
+            $e->reportingManager?->full_name,
+            $e->teamLeader?->full_name,
             $e->attendance_group,
             $e->branch?->name,
             $e->mobile,
             $e->statutoryDetails?->pan_number,
             $e->marital_status,
             $e->gender,
-            $e->date_of_birth?->format('d-m-Y'),
-            $e->date_of_joining?->format('d-m-Y'),
+            $e->date_of_birth,          // Carbon → Excel date via streamXlsx
+            $e->date_of_joining,        // Carbon → Excel date via streamXlsx
             $e->department?->name,
             $e->designation?->name,
             $e->current_city,
             $e->statutoryDetails?->pf_number,
-            $e->statutoryDetails?->uan_number,   // UAN No (if applicable) — legacy column
+            $e->statutoryDetails?->uan_number,
             $e->statutoryDetails?->esic_number,
             $e->primaryBank?->bank_name,
             $e->primaryBank?->account_number,
@@ -343,11 +339,35 @@ class WebEmployeeController extends Controller
             $e->entity?->name,
             $e->is_pf_applicable ? 'Yes' : 'No',
             $e->statutoryDetails?->uan_number,
-            $e->offer_letter_date?->format('d-m-Y'),
+            $e->offer_letter_date,      // Carbon → Excel date via streamXlsx
             null,   // Left Type — not stored
         ]);
 
         return $this->streamXlsx('employees', $headers, $rows);
+    }
+
+    public function masterHistory(\Illuminate\Http\Request $request)
+    {
+        $search     = trim((string) $request->get('search', ''));
+        $fieldType  = $request->get('field_type', ''); // bank_details | pan | email
+        $changedVia = $request->get('changed_via', '');
+
+        $history = \App\Models\EmployeeMasterHistory::with([
+                'employee:id,employee_id,first_name,middle_name,last_name',
+                'changedBy:id,name',
+            ])
+            ->when($fieldType !== '', fn($q) => $q->where('field_type', $fieldType))
+            ->when($changedVia !== '', fn($q) => $q->where('changed_via', $changedVia))
+            ->when($search !== '', fn($q) => $q->whereHas('employee', fn($eq) =>
+                $eq->where('employee_id', 'like', "%{$search}%")
+                   ->orWhere('first_name',  'like', "%{$search}%")
+                   ->orWhere('last_name',   'like', "%{$search}%")
+            ))
+            ->orderByDesc('created_at')
+            ->paginate(30)
+            ->withQueryString();
+
+        return view('employees.master-history', compact('history', 'search', 'fieldType', 'changedVia'));
     }
 
     public function destroy(Employee $employee)

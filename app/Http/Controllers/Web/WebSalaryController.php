@@ -158,6 +158,48 @@ class WebSalaryController extends Controller
         return redirect()->route('salary')->with('success', 'Salary record deleted.');
     }
 
+    public function bulkDestroySalary(Request $request)
+    {
+        $selectAll  = $request->boolean('select_all');
+        $companyId  = $this->resolveCompanyId($request);
+        $search     = $request->input('search', '');
+        $monthParam = $request->input('month_param', '');
+
+        if ($selectAll) {
+            // Resolve ALL salary IDs matching the same filter as the current view
+            $query = Employee::currentlyEmployed()
+                ->when($search, fn($q) => $q->where(fn($sq) =>
+                    $sq->where('first_name',  'like', "%{$search}%")
+                       ->orWhere('last_name',  'like', "%{$search}%")
+                       ->orWhere('employee_id','like', "%{$search}%")
+                ))
+                ->pluck('id');
+
+            if ($monthParam && preg_match('/^\d{4}-\d{2}$/', $monthParam)) {
+                $asOf = \Carbon\Carbon::parse($monthParam . '-01')->endOfMonth()->toDateString();
+                $deleted = EmployeeSalary::whereIn('employee_id', $query)
+                    ->where('effective_from', '<=', $asOf)
+                    ->delete();
+            } else {
+                $deleted = EmployeeSalary::whereIn('employee_id', $query)
+                    ->where('is_current', true)
+                    ->delete();
+            }
+        } else {
+            $ids = array_filter(array_map('intval', (array) $request->input('salary_ids', [])));
+            if (empty($ids)) {
+                return redirect()->route('salary')->with('error', 'No records selected.');
+            }
+            $deleted = EmployeeSalary::whereIn('id', $ids)->delete();
+        }
+
+        return redirect()->route('salary', array_filter([
+            'search'     => $search ?: null,
+            'month'      => $monthParam ?: null,
+            'company_id' => $companyId ?: null,
+        ]))->with('success', "{$deleted} salary record(s) deleted.");
+    }
+
     public function template(Request $request)
     {
         $companyId = $this->resolveCompanyId($request);

@@ -58,6 +58,7 @@ Route::middleware('auth')->group(function () {
 
     // ── Employees ──────────────────────────────────
     Route::get('/employees',                          [WebEmployeeController::class, 'index'])->name('employees');
+    Route::get('/employees/master-history',           [WebEmployeeController::class, 'masterHistory'])->name('employees.master_history');
     Route::post('/employees',                         [WebEmployeeController::class, 'store'])->name('employees.store');
     Route::get('/employees/template',                 [WebEmployeeController::class, 'template'])->name('employees.template');
     Route::get('/employees/export',                   [WebEmployeeController::class, 'export'])->name('employees.export');
@@ -125,6 +126,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/salary',                         [WebSalaryController::class, 'index'])->name('salary');
     Route::post('/salary/{employee}/set',         [WebSalaryController::class, 'setSalary'])->name('salary.set');
     Route::delete('/salary/{salary}',             [WebSalaryController::class, 'destroySalary'])->name('salary.destroy');
+    Route::post('/salary/bulk-destroy',           [WebSalaryController::class, 'bulkDestroySalary'])->name('salary.bulk_destroy');
     Route::get('/salary/template',                [WebSalaryController::class, 'template'])->name('salary.template');
     Route::post('/salary/import',                 [WebSalaryController::class, 'import'])->name('salary.import');
 
@@ -153,6 +155,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/salary-report/lock',            [WebSalaryReportController::class, 'lockSnapshot'])->name('salary.report.lock');
     Route::post('/salary-report/unlock',          [WebSalaryReportController::class, 'unlockSnapshot'])->name('salary.report.unlock');
     Route::post('/salary-report/delete-snapshot', [WebSalaryReportController::class, 'deleteSnapshot'])->name('salary.report.delete');
+    Route::post('/salary-report/reupload',        [WebSalaryReportController::class, 'reuploadSnapshot'])->name('salary.report.reupload');
 
     // ── Salary Revisions ───────────────────────────
     Route::get('/revisions',                      [WebRevisionController::class, 'index'])->name('revisions');
@@ -211,11 +214,12 @@ Route::middleware('auth')->group(function () {
     Route::delete('/tds/{slab}',     [WebTdsController::class, 'destroy'])->name('tds.destroy');
 
     // ── Holidays ───────────────────────────────────
-    Route::get('/holidays',               [WebHolidayController::class, 'index'])->name('holidays');
-    Route::post('/holidays',              [WebHolidayController::class, 'store'])->name('holidays.store');
-    Route::delete('/holidays/{holiday}',  [WebHolidayController::class, 'destroy'])->name('holidays.destroy');
-    Route::get('/holidays/template',      [WebHolidayController::class, 'template'])->name('holidays.template');
-    Route::post('/holidays/import',       [WebHolidayController::class, 'import'])->name('holidays.import');
+    Route::get('/holidays',                [WebHolidayController::class, 'index'])->name('holidays');
+    Route::post('/holidays',               [WebHolidayController::class, 'store'])->name('holidays.store');
+    Route::post('/holidays/weekoffs',      [WebHolidayController::class, 'storeWeekoffs'])->name('holidays.weekoffs');
+    Route::delete('/holidays/{holiday}',   [WebHolidayController::class, 'destroy'])->name('holidays.destroy');
+    Route::get('/holidays/template',       [WebHolidayController::class, 'template'])->name('holidays.template');
+    Route::post('/holidays/import',        [WebHolidayController::class, 'import'])->name('holidays.import');
 
     // ── Helpdesk ───────────────────────────────────
     Route::get('/helpdesk',                         [WebHelpdeskController::class, 'index'])->name('helpdesk');
@@ -229,6 +233,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/attendance',                   [WebReportController::class, 'attendance'])->name('reports.attendance');
     Route::get('/reports/attendance/export',            [WebReportController::class, 'attendanceExport'])->name('reports.attendance.export');
     Route::post('/reports/attendance/approve',          [WebReportController::class, 'updateApproval'])->name('reports.attendance.approve');
+    Route::post('/reports/attendance/reupload',         [WebReportController::class, 'reuploadAttendance'])->name('reports.attendance.reupload');
 
     // ── Masters ────────────────────────────────────
     Route::get('/masters',                           [WebMasterController::class, 'index'])->name('masters');

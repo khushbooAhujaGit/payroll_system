@@ -18,4 +18,9 @@ class Holiday extends Model
 {
     protected $fillable = ['holiday_calendar_id','date','name','type','description'];
     protected $casts    = ['date' => 'date'];
+
+    public function calendar(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(HolidayCalendar::class, 'holiday_calendar_id');
+    }
 }

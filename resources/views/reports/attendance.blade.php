@@ -4,6 +4,7 @@
 @section('page_actions')
   <a href="{{ route('reports') }}" class="btn">← Reports</a>
   @if($from && count($rows))
+  <button class="btn" onclick="om('att-reupload-modal')">📤 Re-upload Approvals</button>
   <a href="{{ route('reports.attendance.export', array_filter(['month' => $monthStr, 'emp_id' => $empFilter])) }}"
      class="btn acc">📥 Export Excel</a>
   @endif
@@ -89,24 +90,26 @@
 <div class="card" style="padding:0;overflow:hidden">
   <div style="overflow-x:auto;max-height:75vh;overflow-y:auto">
     <table style="font-size:11px;min-width:1500px;border-collapse:collapse">
-      <thead style="position:sticky;top:0;z-index:5">
-        <tr style="background:#3b7de8;color:#fff">
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Month</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Date</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Day Name</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">New Emp ID</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Employee Name</th>
-          <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">TimeIn</th>
-          <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">TimeOut</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Punch In Type</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Punch Out Type</th>
-          <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Clocked Time</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">CT_Remark</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Leave Type</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Reason For Leave</th>
-          <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Punch Deviation</th>
-          <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#ffffff;border-right:1px solid rgba(255,255,255,.2)">Punch In Approval</th>
-          <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#ffffff">Punch Out Approval</th>
+      {{-- Explicit background on every th overrides the global sticky-th CSS background --}}
+      @php $thStyle = 'padding:8px 10px;white-space:nowrap;background:#3b7de8;color:#fff;border-right:1px solid rgba(255,255,255,.2);text-align:left'; @endphp
+      <thead>
+        <tr>
+          <th style="{{ $thStyle }}">Month</th>
+          <th style="{{ $thStyle }}">Date</th>
+          <th style="{{ $thStyle }}">Day Name</th>
+          <th style="{{ $thStyle }}">New Emp ID</th>
+          <th style="{{ $thStyle }}">Employee Name</th>
+          <th style="{{ $thStyle }};text-align:center">TimeIn</th>
+          <th style="{{ $thStyle }};text-align:center">TimeOut</th>
+          <th style="{{ $thStyle }}">Punch In Type</th>
+          <th style="{{ $thStyle }}">Punch Out Type</th>
+          <th style="{{ $thStyle }};text-align:center">Clocked Time</th>
+          <th style="{{ $thStyle }}">CT_Remark</th>
+          <th style="{{ $thStyle }}">Leave Type</th>
+          <th style="{{ $thStyle }}">Reason For Leave</th>
+          <th style="{{ $thStyle }};text-align:center">Punch Deviation</th>
+          <th style="{{ $thStyle }};text-align:center">Punch In Approval</th>
+          <th style="{{ $thStyle }};text-align:center;border-right:none">Punch Out Approval</th>
         </tr>
       </thead>
       <tbody>
@@ -208,6 +211,41 @@
 </div>
 
 @endif {{-- end rows --}}
+
+{{-- Re-upload Approvals Modal --}}
+<div class="modal" id="att-reupload-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">📤 Re-upload Attendance Approvals</span>
+      <button class="mc" onclick="cm('att-reupload-modal')">✕</button>
+    </div>
+    <div style="background:#fefce8;border:1px solid #fde047;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#854d0e;line-height:1.6">
+      <strong>Only these two columns are updated from the file — all others are ignored:</strong><br>
+      ✏ <strong>Punch In Approval</strong> &nbsp;·&nbsp; ✏ <strong>Punch Out Approval</strong><br>
+      <span style="font-size:10px;color:#92400e">
+        Accepted values: <strong>Approved</strong> or <strong>Not Approved</strong> (use the dropdown in the Excel file).
+        Rows are matched by <strong>New Emp ID + Date</strong>. Month must match {{ $monthStr ? \Carbon\Carbon::createFromFormat('Y-m',$monthStr)->format('F Y') : 'the selected month' }}.
+      </span>
+    </div>
+    <form method="POST" action="{{ route('reports.attendance.reupload') }}" enctype="multipart/form-data">
+      @csrf
+      <input type="hidden" name="expected_month" value="{{ $monthStr }}">
+      <div class="fld" style="margin-bottom:14px">
+        <label class="req">Edited Excel File (.xlsx)</label>
+        <input type="file" name="file" accept=".xlsx,.xls" required
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
+        <div style="font-size:11px;color:var(--t3);margin-top:5px">
+          Upload the attendance Excel that was exported and edited. The <strong>New Emp ID</strong>, <strong>Date</strong>, and the two approval columns must be intact.
+        </div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('att-reupload-modal')">Cancel</button>
+        <button type="submit" class="btn acc">📤 Update Approvals</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 @endsection
 
 @push('scripts')

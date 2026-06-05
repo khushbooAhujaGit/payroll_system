@@ -2,11 +2,13 @@
 
 namespace App\Imports;
 
+use App\Imports\Concerns\ParsesExcelDates;
 use App\Models\Employee;
 use App\Models\Attendance;
 
 class AttendanceImporter extends BaseImporter
 {
+    use ParsesExcelDates;
     protected function getRequiredHeaders(): array
     {
         return ['Employee ID', 'Attendance Date', 'Status'];
@@ -134,26 +136,7 @@ class AttendanceImporter extends BaseImporter
         return ['success' => $success, 'errors' => $errors];
     }
 
-    private function parseDate(string $raw): ?string
-    {
-        if (empty($raw)) return null;
-
-        // Try DD-MM-YYYY first
-        if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $raw, $m)) {
-            return "{$m[3]}-{$m[2]}-{$m[1]}";
-        }
-
-        // Try YYYY-MM-DD
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
-            return $raw;
-        }
-
-        try {
-            return \Carbon\Carbon::parse($raw)->format('Y-m-d');
-        } catch (\Throwable) {
-            return null;
-        }
-    }
+    // parseDate() provided by ParsesExcelDates trait
 
     private function parseTime(?string $raw): ?string
     {

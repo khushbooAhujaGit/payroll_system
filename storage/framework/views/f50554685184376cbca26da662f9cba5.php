@@ -2,7 +2,7 @@
 
 <?php $__env->startSection('page_actions'); ?>
   <button class="btn acc" onclick="om('gen-modal')">📊 Generate Report</button>
-  <button class="btn" onclick="om('period-modal')">+ New Period</button>
+  <button class="btn" onclick="om('period-modal')" style="display:none !important;">+ New Period</button>
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('content'); ?>

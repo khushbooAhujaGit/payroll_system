@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Imports\Concerns\ParsesExcelDates;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveTrackerRecord;
@@ -45,6 +46,7 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
  */
 class LeaveTrackerImporter extends BaseImporter
 {
+    use ParsesExcelDates;
     /** Cache: sheet_emp_id => Employee model (or null for unmatched) */
     protected array $empCache = [];
 
@@ -303,51 +305,7 @@ class LeaveTrackerImporter extends BaseImporter
     }
 
     /**
-     * Parse a date value that may arrive in several forms from PhpSpreadsheet:
-     *
-     *   • PHP DateTime / Carbon object
-     *   • Formatted date string: "04-03-2024", "3/4/2024", "2024-03-04", "04-Mar-2024"
-     *   • Excel date serial as float or int: 45354 → 2024-03-04
-     *   • Numeric string that looks like an Excel serial: "45354"
-     *
-     * Returns "Y-m-d" string or null on failure.
-     */
-    protected function parseDate(mixed $value): ?string
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        // DateTime / Carbon
-        if ($value instanceof \DateTime) {
-            return Carbon::instance($value)->format('Y-m-d');
-        }
-
-        // Numeric — could be Excel date serial
-        if (is_numeric($value)) {
-            $val = (float) $value;
-            // Excel date serials start at 1 (1900-01-01). Realistic range: 30000–60000
-            if ($val >= 1 && $val < 100000) {
-                try {
-                    $dt = ExcelDate::excelToDateTimeObject($val);
-                    return Carbon::instance($dt)->format('Y-m-d');
-                } catch (\Throwable) {
-                    // fall through to Carbon::parse
-                }
-            }
-        }
-
-        // String — try Carbon parsing (handles many formats)
-        try {
-            $str = trim((string) $value);
-            if ($str === '') {
-                return null;
-            }
-            return Carbon::parse($str)->format('Y-m-d');
-        } catch (\Throwable) {
-            return null;
-        }
-    }
+    // parseDate() provided by ParsesExcelDates trait
 
     /**
      * Check if the entire row is effectively empty (all mapped fields are null/empty).

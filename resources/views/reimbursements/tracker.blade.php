@@ -249,7 +249,10 @@
           <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
           <div style="font-size:11px;color:var(--t3);margin-top:4px">
             Columns: <strong>Date, Emp ID, Employee Name, Amount, Remarks, Image</strong>
-            — <a href="{{ route('reimbursements.tracker.template') }}" style="color:var(--acc)">Download Template</a>
+            — <a href="{{ route('reimbursements.tracker.template') }}" style="color:var(--acc)">Download Template</a><br>
+            <strong>Image naming rules:</strong> No spaces · Must contain employee name · Must include date &amp; time · Any extension (.jpg .png .pdf etc.)<br>
+            Example: <code style="background:var(--s2);padding:1px 5px;border-radius:3px">VADHER_NEHA_DIPAKBHAI_03-06-2026_10-30.png</code>
+            <span style="color:var(--t3)">— underscore (_) as separator, any valid extension</span>
           </div>
         </div>
       </div>

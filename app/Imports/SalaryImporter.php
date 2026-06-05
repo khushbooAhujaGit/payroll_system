@@ -17,13 +17,13 @@ use Illuminate\Support\Facades\Crypt;
  */
 class SalaryImporter extends BaseImporter
 {
-    protected array $empCache = [];
+    protected array $empCache = []; 
 
     public function getTemplateHeaders(): array
     {
         // Matches the user's standard salary upload template exactly:
-        //   Employee Name | Emp ID | Gross Salary
-        return ['Employee Name', 'Emp ID', 'Gross Salary'];
+        //   Employee Name | Emp ID | Gross Salary (Monthly)
+        return ['Employee Name', 'Emp ID', 'Gross Salary (Monthly)'];
     }
 
     public function getSampleRows(): array
@@ -37,25 +37,27 @@ class SalaryImporter extends BaseImporter
     public function getColumnValidations(): array
     {
         return [
-            'Employee Name' => ['required' => false, 'format' => 'For reference only',     'example' => 'Vadher Neha'],
-            'Emp ID'        => ['required' => true,  'format' => 'Company employee_id',    'example' => '202118007'],
-            'Gross Salary'  => ['required' => true,  'format' => 'Monthly gross (numeric)','example' => '25000'],
+            'Employee Name'          => ['required' => false, 'format' => 'For reference only',                          'example' => 'Vadher Neha'],
+            'Emp ID'                 => ['required' => true,  'format' => 'Company employee_id',                         'example' => '202118007'],
+            'Gross Salary (Monthly)' => ['required' => true,  'format' => 'Monthly gross salary in ₹ (numbers only)',   'example' => '25000'],
         ];
     }
 
     protected function getRequiredHeaders(): array
     {
-        return ['Emp ID', 'Gross Salary'];
+        return ['Emp ID']; // Gross Salary header is flexible (old/new name both accepted)
     }
 
     public function mapRow(array $row, array $headers): array
     {
         $fieldMap = [
-            'emp id'             => 'emp_id',
-            'employee name'      => 'full_name',   // user's template column name
-            'employee full name' => 'full_name',   // backward-compat with old uploads
-            'gross salary'       => 'gross_salary',
-            'effective from'     => 'effective_from',
+            'emp id'                  => 'emp_id',
+            'employee name'           => 'full_name',
+            'employee full name'      => 'full_name',
+            'gross salary'            => 'gross_salary',   // old header — backward compat
+            'gross salary (monthly)'  => 'gross_salary',   // new explicit header
+            'monthly gross'           => 'gross_salary',   // alternate
+            'effective from'          => 'effective_from',
         ];
 
         $mapped = [];

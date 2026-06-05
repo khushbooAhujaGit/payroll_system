@@ -2,6 +2,7 @@
 @section('title', 'Employees')
 
 @section('page_actions')
+  <a href="{{ route('employees.master_history') }}" class="btn">📋 Master History</a>
   <button class="btn acc" onclick="om('emp-modal')">+ Add Employee</button>
   <button class="btn" onclick="om('upload-modal')">📤 Bulk Upload</button>
   <button class="btn" onclick="om('bioid-upload-modal')">🔖 Upload Bio IDs</button>
@@ -832,39 +833,44 @@
     empIdInput.placeholder = suggested || 'e.g. 202618053';
   }
 
-  // ── Bulk selection ───────────────────────────────────────────────────────
-  // _selectAllPages is ONLY set to true when the user explicitly clicks the
-  // "Select all N employees" banner — the header checkbox NEVER triggers it.
+  // ── Cross-page bulk selection (sessionStorage) ───────────────────────────
+  // Selections persist across paginated page-loads. IDs stored per filter scope.
+  const _totalCount = {{ $employees->total() }};
+  const _pageCount  = {{ $employees->count() }};
+  const _empStoreKey = 'emp_bulk_{{ md5(request("search","")."|".request("department_id","")."|".request("status","")."|".request("company_id","0")) }}';
   let _selectAllPages = false;
-  const _totalCount   = {{ $employees->total() }};
-  const _pageCount    = {{ $employees->count() }};
 
-  function getChecked() {
-    return [...document.querySelectorAll('.emp-chk:checked')].map(c => c.value);
+  function _empGetStored()       { try { return new Set(JSON.parse(sessionStorage.getItem(_empStoreKey)||'[]')); } catch { return new Set(); } }
+  function _empSaveStored(set)   { sessionStorage.setItem(_empStoreKey, JSON.stringify([...set])); }
+  function _empClearStored()     { sessionStorage.removeItem(_empStoreKey); _selectAllPages = false; }
+
+  function restoreEmpSelections() {
+    const stored = _empGetStored();
+    if (!stored.size) return;
+    document.querySelectorAll('.emp-chk').forEach(cb => { if (stored.has(cb.value)) cb.checked = true; });
+    updateBulkBar();
   }
 
   function updateBulkBar() {
-    const ids    = getChecked();
-    const count  = _selectAllPages ? _totalCount : ids.length;
+    const stored = _empGetStored();
+    const count  = _selectAllPages ? _totalCount : stored.size;
     const bar    = document.getElementById('sel-bar');
     const summary= document.getElementById('sel-summary');
 
     bar.style.display = count > 0 ? 'flex' : 'none';
-    summary.textContent = (count === _totalCount && _selectAllPages)
-      ? 'All ' + count + ' employees selected'
-      : count + ' employee' + (count === 1 ? '' : 's') + ' selected (this page)';
+    summary.textContent = _selectAllPages
+      ? 'All ' + _totalCount + ' employees selected'
+      : count + ' employee' + (count === 1 ? '' : 's') + ' selected (across all pages)';
 
-    // Show "Select all pages" banner only when ALL current-page items are checked
-    // AND there are more employees on other pages — AND user hasn't already done it
     const allPageBanner = document.getElementById('sel-all-banner');
     const allPageActive = document.getElementById('sel-all-active');
-    const allOnPage     = ids.length === _pageCount && _pageCount > 0;
+    const pageChecked   = document.querySelectorAll('.emp-chk:checked').length;
+    const allOnPage     = pageChecked === _pageCount && _pageCount > 0;
 
     if (_selectAllPages) {
       allPageBanner.style.display = 'none';
       allPageActive.style.display = '';
     } else if (allOnPage && _totalCount > _pageCount) {
-      // Offer the option but don't activate it automatically
       allPageBanner.style.display = '';
       allPageActive.style.display = 'none';
     } else {
@@ -872,42 +878,61 @@
       allPageActive.style.display = 'none';
     }
 
-    // Sync header checkbox — reflects only current page selection, never "all pages"
     const all = document.querySelectorAll('.emp-chk');
     const hdr = document.getElementById('chk-all');
     if (hdr) {
-      const pageChecked = ids.length;
       hdr.indeterminate = pageChecked > 0 && pageChecked < all.length;
-      hdr.checked       = pageChecked === all.length && all.length > 0;
+      hdr.checked       = all.length > 0 && pageChecked === all.length;
     }
   }
 
-  // Header checkbox: select / deselect CURRENT PAGE ONLY
-  // Never auto-selects other pages — that requires an explicit click on the banner.
   function toggleAll(hdr) {
-    _selectAllPages = false;   // always reset cross-page selection
-    document.querySelectorAll('.emp-chk').forEach(c => c.checked = hdr.checked);
+    _selectAllPages = false;
+    const stored = _empGetStored();
+    document.querySelectorAll('.emp-chk').forEach(c => {
+      c.checked = hdr.checked;
+      hdr.checked ? stored.add(c.value) : stored.delete(c.value);
+    });
+    _empSaveStored(stored);
     updateBulkBar();
   }
 
-  // Explicit "Select all X employees" banner click → cross-page selection
+  // Each individual checkbox change
+  document.addEventListener('change', function(e) {
+    if (!e.target.classList.contains('emp-chk')) return;
+    _selectAllPages = false;
+    const stored = _empGetStored();
+    e.target.checked ? stored.add(e.target.value) : stored.delete(e.target.value);
+    _empSaveStored(stored);
+    updateBulkBar();
+  });
+
   function selectAllPages() {
     _selectAllPages = true;
-    document.querySelectorAll('.emp-chk').forEach(c => c.checked = true);
+    const stored = _empGetStored();
+    document.querySelectorAll('.emp-chk').forEach(c => { c.checked = true; stored.add(c.value); });
+    _empSaveStored(stored);
     updateBulkBar();
   }
 
   function clearAllPages() {
-    _selectAllPages = false;
     document.querySelectorAll('.emp-chk').forEach(c => c.checked = false);
     const hdr = document.getElementById('chk-all');
     if (hdr) { hdr.checked = false; hdr.indeterminate = false; }
+    _empClearStored();
     updateBulkBar();
   }
 
+  // Clear storage after successful delete redirect
+  @if(session('success') && (str_contains(session('success'), 'deleted') || str_contains(session('success'), 'archived')))
+  _empClearStored();
+  @endif
+
+  document.addEventListener('DOMContentLoaded', restoreEmpSelections);
+
   function submitBulk(action) {
-    const ids   = getChecked();
-    const count = _selectAllPages ? _totalCount : ids.length;
+    const stored = _empGetStored();
+    const count  = _selectAllPages ? _totalCount : stored.size;
     if (count === 0) return;
 
     if (action === 'delete') {
@@ -951,7 +976,6 @@
   }
 
   function _doSubmitBulk(action) {
-    // Build the form
     document.getElementById('bulk-action').value     = action;
     document.getElementById('bulk-select-all').value = _selectAllPages ? '1' : '0';
 
@@ -959,7 +983,9 @@
     container.innerHTML = '';
 
     if (!_selectAllPages) {
-      ids.forEach(id => {
+      // Inject ALL stored IDs (across all pages visited, not just current DOM)
+      const stored = _empGetStored();
+      stored.forEach(id => {
         const inp = document.createElement('input');
         inp.type  = 'hidden';
         inp.name  = 'ids[]';
@@ -968,6 +994,7 @@
       });
     }
 
+    _empClearStored(); // clear storage before submit
     document.getElementById('bulk-form').submit();
   }  // end _doSubmitBulk
   </script>

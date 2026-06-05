@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -253,12 +254,22 @@ class Employee extends Model
     // Accessors
     // ──────────────────────────────────────────
 
-    public function getFullNameAttribute(): string
+    /**
+     * Full name accessor — uses the modern Attribute::make() syntax so it is
+     * reliably resolved on all environments (local, production, OPcache, etc.).
+     *
+     * Equivalent to the old getFullNameAttribute() but registered through
+     * Eloquent's attribute cache, which avoids issues on Hostinger/shared
+     * hosting where OPcache can serve stale magic-method resolution tables.
+     */
+    protected function fullName(): Attribute
     {
-        return trim(implode(' ', array_filter(
-            [$this->first_name, $this->middle_name, $this->last_name],
-            fn($v) => $v !== null && $v !== ''
-        )));
+        return Attribute::make(
+            get: fn() => trim(implode(' ', array_filter(
+                [$this->first_name, $this->middle_name, $this->last_name],
+                fn($v) => $v !== null && $v !== ''
+            )))
+        );
     }
 
     public function getAgeAttribute(): ?int

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Imports\Concerns\ParsesExcelDates;
 use App\Models\Company;
 use App\Models\Holiday;
 use App\Models\HolidayCalendar;
@@ -16,79 +17,163 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class WebHolidayController extends Controller
 {
+    use ParsesExcelDates;
     public function index(Request $request)
     {
-        $year       = (int) $request->get('year', now()->year);
-        $companyFilter = $request->get('company_id'); // null = all companies
+        $year          = (int) $request->get('year', now()->year);
+        $companyFilter = $request->get('company_id');
+        $searchName    = trim((string) $request->get('search_name', ''));
+        $searchDate    = trim((string) $request->get('search_date', ''));
 
-        // All active companies (for filter bar)
+        // All active companies (for filter bar and modals)
         $companies = Company::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
-        // Load all calendars for the selected year, optionally filtered by company
-        $calendarQuery = HolidayCalendar::where('year', $year)->with('holidays');
-        if ($companyFilter) {
-            $calendarQuery->where('company_id', $companyFilter);
-        }
-        $calendars = $calendarQuery->get();
-
-        // Company id → name map for display
-        $companyNames = $companies->pluck('name', 'id');
-
-        // Load all holidays for these calendars, ordered by date
-        // Grouped as: date → [company_id => holiday]  so the table shows all companies per date
-        $allHolidays = Holiday::whereIn('holiday_calendar_id', $calendars->pluck('id'))
+        // ── DB-level paginated query with search filters ───────────────────
+        // Filter by holiday DATE year — not by calendar year (a calendar's year label may
+        // differ from the actual holiday dates it contains).
+        $holidays = Holiday::with(['calendar' => fn($q) => $q->with('company:id,name')])
             ->whereYear('date', $year)
+            ->when($companyFilter, fn($q) => $q->whereHas('calendar', fn($cq) =>
+                $cq->where('company_id', $companyFilter)
+            ))
+            ->when($searchName !== '', fn($q) => $q->where('name', 'like', "%{$searchName}%"))
+            ->when($searchDate  !== '', fn($q) => $q->whereDate('date', $searchDate))
             ->orderBy('date')
-            ->get()
-            ->map(function ($h) use ($calendars, $companyNames) {
-                $cal = $calendars->firstWhere('id', $h->holiday_calendar_id);
-                $h->company_id   = $cal?->company_id;
-                $h->company_name = $companyNames[$cal?->company_id] ?? '—';
-                return $h;
-            });
-
-        // Group by date for the date-wise grid view
-        $byDate = $allHolidays->groupBy(fn($h) => \Carbon\Carbon::parse($h->date)->format('Y-m-d'));
-
-        // Which companies actually have data (for column headers)
-        $activeCompanyIds = $allHolidays->pluck('company_id')->unique()->values();
-        $activeCompanies  = $companies->whereIn('id', $activeCompanyIds)->values();
+            ->orderBy('id')
+            ->paginate(50)
+            ->withQueryString();
 
         // Calendar map: company_id → calendar (for Add Holiday modal)
-        $calendarByCompany = $calendars->keyBy('company_id');
+        // Use current year for creating new calendars; doesn't affect search display.
+        $calendarByCompany = HolidayCalendar::where('year', $year)
+            ->when($companyFilter, fn($q) => $q->where('company_id', $companyFilter))
+            ->get()
+            ->keyBy('company_id');
+
+        $totalRecords = $holidays->total();
 
         return view('holidays.index', compact(
             'year', 'companies', 'companyFilter',
-            'byDate', 'activeCompanies', 'calendarByCompany',
-            'allHolidays'
+            'holidays', 'calendarByCompany',
+            'searchName', 'searchDate', 'totalRecords'
         ));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'company_id'  => 'required|exists:companies,id',
+            'company_ids' => 'required|array|min:1',
+            'company_ids.*' => 'exists:companies,id',
             'date'        => 'required|date',
             'name'        => 'required|string|max:200',
             'type'        => 'required|in:national,regional,optional,company',
             'description' => 'nullable|string',
         ]);
 
-        $year = (int) \Carbon\Carbon::parse($validated['date'])->format('Y');
+        $year  = (int) Carbon::parse($validated['date'])->format('Y');
+        $count = 0;
 
-        // Auto-create calendar for this company+year if not exists
-        $company  = Company::find($validated['company_id']);
-        $calendar = HolidayCalendar::firstOrCreate(
-            ['company_id' => $validated['company_id'], 'year' => $year],
-            ['name' => $company->name . ' ' . $year, 'is_active' => true]
-        );
+        foreach ($validated['company_ids'] as $companyId) {
+            $company  = Company::find($companyId);
+            $calendar = HolidayCalendar::firstOrCreate(
+                ['company_id' => $companyId, 'year' => $year],
+                ['name' => $company->name . ' ' . $year, 'is_active' => true]
+            );
+            Holiday::updateOrCreate(
+                ['holiday_calendar_id' => $calendar->id, 'date' => $validated['date']],
+                ['name' => $validated['name'], 'type' => $validated['type'], 'description' => $validated['description'] ?? null]
+            );
+            $count++;
+        }
 
-        Holiday::updateOrCreate(
-            ['holiday_calendar_id' => $calendar->id, 'date' => $validated['date']],
-            ['name' => $validated['name'], 'type' => $validated['type'], 'description' => $validated['description'] ?? null]
-        );
+        $names = Company::whereIn('id', $validated['company_ids'])->pluck('name')->join(', ');
+        return redirect()->route('holidays', ['year' => $year])
+            ->with('success', "Holiday added for {$count} company/companies: {$names}.");
+    }
 
-        return redirect()->route('holidays', ['year' => $year])->with('success', 'Holiday added for ' . $company->name . '.');
+    // ─────────────────────────────────────────────────────────────────────────
+    // STORE WEEKOFFS — auto-generate Sunday/Saturday entries for a period
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function storeWeekoffs(Request $request)
+    {
+        $validated = $request->validate([
+            'company_ids'     => 'required|array|min:1',
+            'company_ids.*'   => 'exists:companies,id',
+            'start_date'      => 'required|date',
+            'end_date'        => 'required|date|after_or_equal:start_date',
+            'include_sundays' => 'nullable|boolean',
+            'saturday_config' => 'nullable|in:none,all,1st,2nd,3rd,4th,1st_3rd,2nd_4th',
+        ]);
+
+        $start          = Carbon::parse($validated['start_date'])->startOfDay();
+        $end            = Carbon::parse($validated['end_date'])->endOfDay();
+        $includeSundays = (bool) ($validated['include_sundays'] ?? true);
+        $satConfig      = $validated['saturday_config'] ?? 'none';
+
+        $created = 0;
+
+        DB::beginTransaction();
+        try {
+            foreach ($validated['company_ids'] as $companyId) {
+                $company = Company::find($companyId);
+
+                // Generate all dates in the period
+                $current = $start->copy();
+                while ($current->lte($end)) {
+                    $yearForDate = (int) $current->format('Y');
+                    $calendar    = HolidayCalendar::firstOrCreate(
+                        ['company_id' => $companyId, 'year' => $yearForDate],
+                        ['name' => $company->name . ' ' . $yearForDate, 'is_active' => true]
+                    );
+
+                    $isWeekoff = false;
+                    $name      = '';
+
+                    if ($includeSundays && $current->dayOfWeek === Carbon::SUNDAY) {
+                        $isWeekoff = true;
+                        $name      = 'Sunday';
+                    } elseif ($current->dayOfWeek === Carbon::SATURDAY) {
+                        $weekNum = (int) ceil($current->day / 7); // which Saturday of month
+                        $isWeekoff = match ($satConfig) {
+                            'all'     => true,
+                            '1st'     => $weekNum === 1,
+                            '2nd'     => $weekNum === 2,
+                            '3rd'     => $weekNum === 3,
+                            '4th'     => $weekNum === 4,
+                            '1st_3rd' => in_array($weekNum, [1, 3]),
+                            '2nd_4th' => in_array($weekNum, [2, 4]),
+                            default   => false,
+                        };
+                        if ($isWeekoff) {
+                            $name = match ($weekNum) {
+                                1 => '1st Saturday', 2 => '2nd Saturday',
+                                3 => '3rd Saturday', 4 => '4th Saturday',
+                                default => 'Saturday',
+                            };
+                        }
+                    }
+
+                    if ($isWeekoff) {
+                        Holiday::updateOrCreate(
+                            ['holiday_calendar_id' => $calendar->id, 'date' => $current->toDateString()],
+                            ['name' => $name, 'type' => 'weekly_off', 'description' => null]
+                        );
+                        $created++;
+                    }
+
+                    $current->addDay();
+                }
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->with('error', 'Failed to generate weekoffs: ' . $e->getMessage());
+        }
+
+        $yearDisplay = $start->format('Y');
+        return redirect()->route('holidays', ['year' => $yearDisplay])
+            ->with('success', "{$created} weekoff entries generated for " . count($validated['company_ids']) . ' company/companies.');
     }
 
     public function destroy(Holiday $holiday)
@@ -474,58 +559,9 @@ class WebHolidayController extends Controller
         return $rows;
     }
 
-    /**
-     * Parse a date value that may arrive as:
-     *  • YYYY-MM-DD string            → stored as-is
-     *  • DD-MM-YYYY / DD/MM/YYYY      → converted to Y-m-d
-     *  • Excel serial (float/int)     → converted via epoch calculation
-     *  • DateTimeInterface            → formatted
-     *
-     * Returns "Y-m-d" string or null on failure.
-     */
+    // Date parsing delegated to ParsesExcelDates trait.
     private function parseHolidayDate(mixed $value): ?string
     {
-        if ($value === null || $value === '') return null;
-
-        // DateTime object
-        if ($value instanceof \DateTimeInterface) {
-            return Carbon::instance($value)->format('Y-m-d');
-        }
-
-        // Excel serial number
-        if (is_numeric($value)) {
-            $serial = (float) $value;
-            if ($serial >= 1 && $serial <= 2958465) {
-                try {
-                    return Carbon::createFromTimestampUTC((int)(($serial - 25569) * 86400))->format('Y-m-d');
-                } catch (\Throwable) {
-                    return null;
-                }
-            }
-        }
-
-        $str = trim((string) $value);
-        if ($str === '') return null;
-
-        // Try formats from most specific to least
-        $formats = ['Y-m-d', 'd-m-Y', 'd/m/Y', 'd.m.Y', 'm/d/Y', 'Y/m/d', 'd-m-y', 'd/m/y'];
-        foreach ($formats as $fmt) {
-            try {
-                $parsed = Carbon::createFromFormat($fmt, $str);
-                if ($parsed && $parsed->year >= 1900 && $parsed->year <= 2100) {
-                    return $parsed->format('Y-m-d');
-                }
-            } catch (\Throwable) { }
-        }
-
-        // Last resort: Carbon::parse
-        try {
-            $parsed = Carbon::parse($str);
-            if ($parsed->year >= 1900 && $parsed->year <= 2100) {
-                return $parsed->format('Y-m-d');
-            }
-        } catch (\Throwable) { }
-
-        return null;
+        return $this->parseDate($value);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Imports\Concerns\ParsesExcelDates;
 use App\Models\Employee;
 use App\Models\SalaryRevision;
 use App\Models\EmployeeLoan;
@@ -10,6 +11,7 @@ use App\Models\Contractor;
 
 class SalaryRevisionImporter extends BaseImporter
 {
+    use ParsesExcelDates;
     protected function getRequiredHeaders(): array
     {
         return ['Employee ID', 'New CTC (Annual)', 'Effective Date', 'Reason'];
@@ -103,10 +105,5 @@ class SalaryRevisionImporter extends BaseImporter
         return ['success' => $success, 'errors' => $errors];
     }
 
-    private function parseDate(string $raw): ?string
-    {
-        if (empty($raw)) return null;
-        if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $raw, $m)) return "{$m[3]}-{$m[2]}-{$m[1]}";
-        try { return \Carbon\Carbon::parse($raw)->format('Y-m-d'); } catch (\Throwable) { return null; }
-    }
+    // parseDate() provided by ParsesExcelDates trait
 }

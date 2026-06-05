@@ -108,7 +108,7 @@ class WebReportController extends Controller
 
     public function attendanceExport(Request $request)
     {
-        $companyId  = $this->resolveCompanyId($request);
+        $companyId = $this->resolveCompanyId($request);
         $monthStr  = $request->get('month');
         $empFilter = $request->get('emp_id');
 
@@ -118,7 +118,6 @@ class WebReportController extends Controller
 
         $from = Carbon::parse($monthStr . '-01')->startOfMonth();
         $to   = $from->copy()->endOfMonth();
-
         $rows = $this->buildAttendanceRows($companyId, $from, $to, $empFilter);
 
         $headers = [
@@ -131,33 +130,186 @@ class WebReportController extends Controller
         $approvalLabel = fn(?string $v): string => match($v) {
             'approved'     => 'Approved',
             'not_approved' => 'Not Approved',
-            default        => '',
+            default        => 'Approved',   // default shown when no record exists
         };
 
-        // Map associative row arrays to plain indexed arrays for the writer
-        $dataRows = array_map(fn($r) => [
-            $r['month'],         $r['date'],              $r['day_name'],
-            $r['emp_id'],        $r['emp_name'],
-            $r['time_in'],       $r['time_out'],
-            $r['punch_in_type'], $r['punch_out_type'],
-            $r['clocked_time'],  $r['ct_remark'],
-            $r['leave_type'],    $r['reason_for_leave'],
-            $r['punch_deviation'],
-            $approvalLabel($r['punch_in_approval']),
-            $approvalLabel($r['punch_out_approval']),
-        ], $rows);
+        // ── Build Excel with PhpSpreadsheet so we can add dropdown validation ──
+        $wb = new Spreadsheet();
+        $ws = $wb->getActiveSheet();
+        $ws->setTitle('Attendance');
 
-        $colWidths = [14, 13, 12, 14, 24, 8, 8, 14, 14, 14, 14, 12, 24, 14, 18, 18];
-        $filename  = 'Attendance_' . $from->format('Y_m') . '.xlsx';
+        // Header row
+        $ws->fromArray($headers, null, 'A1');
+        $lastCol = count($headers);
+        $ws->getStyle('A1:' . Coordinate::stringFromColumnIndex($lastCol) . '1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '3b7de8']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
 
-        $tmpFile = (new FastXlsxWriter())->write('Attendance', $headers, $dataRows, $colWidths);
+        // Approval column letters (O = Punch In Approval, P = Punch Out Approval)
+        $piApprColLetter = Coordinate::stringFromColumnIndex(15); // O
+        $poApprColLetter = Coordinate::stringFromColumnIndex(16); // P
 
-        return response()->download($tmpFile, $filename, [
-            'Content-Type'  => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Cache-Control' => 'no-cache, no-store, must-revalidate',
-            'Pragma'        => 'no-cache',
-            'Expires'       => '0',
-        ])->deleteFileAfterSend(true);
+        // Data rows
+        $ri = 2;
+        foreach ($rows as $r) {
+            $ws->fromArray([
+                $r['month'],          $r['date'],           $r['day_name'],
+                $r['emp_id'],         $r['emp_name'],
+                $r['time_in'],        $r['time_out'],
+                $r['punch_in_type'],  $r['punch_out_type'],
+                $r['clocked_time'],   $r['ct_remark'],
+                $r['leave_type'],     $r['reason_for_leave'],
+                $r['punch_deviation'],
+                $approvalLabel($r['punch_in_approval']),
+                $approvalLabel($r['punch_out_approval']),
+            ], null, 'A' . $ri);
+            $ri++;
+        }
+
+        $lastRow = $ri - 1;
+
+        // ── Dropdown validation on approval columns ────────────────────────────
+        $approvalOptions = '"Approved,Not Approved"';
+        foreach ([$piApprColLetter, $poApprColLetter] as $colLetter) {
+            $validation = new \PhpOffice\PhpSpreadsheet\Cell\DataValidation();
+            $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+            $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(false);
+            $validation->setShowDropDown(false);
+            $validation->setShowErrorMessage(true);
+            $validation->setErrorTitle('Invalid value');
+            $validation->setError('Please select "Approved" or "Not Approved".');
+            $validation->setFormula1($approvalOptions);
+            if ($lastRow >= 2) {
+                $ws->setDataValidation("{$colLetter}2:{$colLetter}{$lastRow}", $validation);
+            }
+        }
+
+        // Column widths
+        foreach ([14,13,12,14,24,8,8,14,14,14,14,12,24,14,18,18] as $ci => $w) {
+            $ws->getColumnDimension(Coordinate::stringFromColumnIndex($ci + 1))->setWidth($w);
+        }
+        $ws->freezePane('A2');
+
+        $filename = 'Attendance_' . $from->format('Y_m') . '.xlsx';
+        $writer   = new XlsxWriter($wb);
+
+        return response()->streamDownload(fn() => $writer->save('php://output'), $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Re-upload edited attendance report — updates ONLY Punch In/Out Approval
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function reuploadAttendance(Request $request)
+    {
+        $request->validate([
+            'file'           => 'required|file|mimes:xlsx,xls|max:20480',
+            'expected_month' => 'required|date_format:Y-m',
+        ]);
+
+        $expectedMonth = $request->get('expected_month');
+        $path          = $request->file('file')->store('tmp');
+
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile(
+                \Illuminate\Support\Facades\Storage::path($path)
+            );
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load(\Illuminate\Support\Facades\Storage::path($path));
+            $ws          = $spreadsheet->getActiveSheet();
+            $data        = $ws->toArray(null, false, false, false);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Storage::delete($path);
+            return back()->with('error', 'Could not read file: ' . $e->getMessage());
+        } finally {
+            \Illuminate\Support\Facades\Storage::delete($path);
+        }
+
+        if (count($data) < 2) {
+            return back()->with('error', 'File has no data rows.');
+        }
+
+        // Map header → column index (0-based)
+        $headerRow = array_map(fn($v) => strtolower(trim((string)$v)), $data[0]);
+        $colEmpId  = array_search('new emp id', $headerRow);
+        $colDate   = array_search('date', $headerRow);
+        $colPiAppr = array_search('punch in approval', $headerRow);
+        $colPoAppr = array_search('punch out approval', $headerRow);
+
+        if ($colEmpId === false || $colDate === false || $colPiAppr === false || $colPoAppr === false) {
+            return back()->with('error', 'Header row not recognised. Use the file downloaded from this page.');
+        }
+
+        // Pre-load employee emp_id → DB id map
+        $empMap = Employee::pluck('id', 'employee_id')->all();
+
+        $normalize = fn(?string $v): ?string => match(strtolower(trim((string)$v))) {
+            'approved'     => 'approved',
+            'not approved' => 'not_approved',
+            default        => null,
+        };
+
+        $updated = 0;
+        $skipped = 0;
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            foreach (array_slice($data, 1) as $row) {
+                if (empty(array_filter($row, fn($v) => $v !== null && $v !== ''))) continue;
+
+                $empIdStr = trim((string)($row[$colEmpId] ?? ''));
+                $dateRaw  = trim((string)($row[$colDate]  ?? ''));
+
+                if (!$empIdStr || !$dateRaw) continue;
+
+                // Parse date — format in the file is "dd-mm-yyyy"
+                $date = null;
+                foreach (['d-m-Y', 'Y-m-d', 'd/m/Y'] as $fmt) {
+                    try {
+                        $date = Carbon::createFromFormat($fmt, $dateRaw)->format('Y-m-d');
+                        break;
+                    } catch (\Throwable) {}
+                }
+                if (!$date) { $skipped++; continue; }
+
+                // Month cross-check
+                if (substr($date, 0, 7) !== $expectedMonth) { $skipped++; continue; }
+
+                $empDbId = $empMap[$empIdStr] ?? null;
+                if (!$empDbId) { $skipped++; continue; }
+
+                $piAppr = $normalize($row[$colPiAppr] ?? null);
+                $poAppr = $normalize($row[$colPoAppr] ?? null);
+
+                if ($piAppr === null && $poAppr === null) { $skipped++; continue; }
+
+                $update = ['updated_by' => auth()->id()];
+                if ($piAppr !== null) $update['punch_in_approval']  = $piAppr;
+                if ($poAppr !== null) $update['punch_out_approval'] = $poAppr;
+
+                AttendanceApproval::updateOrCreate(
+                    ['employee_id' => $empDbId, 'attendance_date' => $date],
+                    $update
+                );
+                $updated++;
+            }
+            \Illuminate\Support\Facades\DB::commit();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return back()->with('error', 'Re-upload failed: ' . $e->getMessage());
+        }
+
+        $label = Carbon::createFromFormat('Y-m', $expectedMonth)->format('F Y');
+        $msg   = "Re-upload complete — {$updated} attendance approval(s) updated for {$label}.";
+        if ($skipped > 0) $msg .= " {$skipped} rows skipped.";
+
+        return redirect()->route('reports.attendance', ['month' => $expectedMonth])
+            ->with('success', $msg);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

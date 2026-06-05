@@ -123,8 +123,6 @@
                 href="{{ route('payroll') }}"><span>💰</span> Payroll & Reports</a>
             <a class="ni {{ request()->routeIs('salary') ? 'on' : '' }}" href="{{ route('salary') }}"><span>🧾</span>
                 Salary Details</a>
-            <a class="ni {{ request()->routeIs('revisions') ? 'on' : '' }}"
-                href="{{ route('revisions') }}"><span>📈</span> Salary Revisions</a>
             <a class="ni {{ request()->routeIs('incentives') ? 'on' : '' }}"
                 href="{{ route('incentives') }}"><span>🎁</span> Incentives</a>
             <a class="ni {{ request()->routeIs('tds.monthly') ? 'on' : '' }}"
@@ -577,6 +575,121 @@
         }());
     </script>
     @stack('scripts')
+
+    {{-- ── Salary report re-upload: client-side month verification ─────────
+         Reads the uploaded Excel using SheetJS, finds the "Month" column,
+         extracts the value from the first data row, and shows a SweetAlert
+         if it doesn't match the expected month for the current report.     --}}
+    <script>
+    function verifyReuploadMonth(input, expectedYM) {
+      const file = input.files[0];
+      if (!file || !expectedYM) return;
+
+      // Show verification in progress
+      const okDiv = input.parentElement.querySelector('[id^="reupload-month-ok"]');
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const wb   = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+          const ws   = wb.Sheets[wb.SheetNames[0]];
+          const rng  = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+          // Locate the "Month" column by scanning the header row
+          let monthCol = -1;
+          for (let c = rng.s.c; c <= rng.e.c; c++) {
+            const cell = ws[XLSX.utils.encode_cell({ r: rng.s.r, c })];
+            if (cell && String(cell.v).trim().toLowerCase() === 'month') {
+              monthCol = c;
+              break;
+            }
+          }
+
+          if (monthCol === -1) {
+            // Header not found — let server decide
+            if (okDiv) okDiv.style.display = 'none';
+            return;
+          }
+
+          // Get the Month value from the first data row
+          const monthCell = ws[XLSX.utils.encode_cell({ r: rng.s.r + 1, c: monthCol })];
+          if (!monthCell) return;
+
+          const MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6,
+                           jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+          const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun',
+                          'Jul','Aug','Sep','Oct','Nov','Dec'];
+
+          let filledYM = null;
+          const v = monthCell.v;
+
+          if (v instanceof Date) {
+            // Round to nearest UTC midnight before extracting year/month.
+            // PHP servers in non-UTC timezones (e.g. IST = UTC+5:30) write Excel
+            // date serials at 18:30 UTC instead of 00:00 UTC, shifting the Date
+            // object to the previous day in UTC. Rounding ±12 h fixes this.
+            const DAY_MS = 86400000;
+            const snapped = new Date(Math.round(v.getTime() / DAY_MS) * DAY_MS);
+            filledYM = snapped.getUTCFullYear() + '-' + String(snapped.getUTCMonth() + 1).padStart(2, '0');
+          } else if (typeof v === 'number') {
+            // Excel date serial (cell not yet parsed as Date by SheetJS)
+            const d = new Date(Math.round((v - 25569) * 86400000));
+            filledYM = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+          } else if (typeof v === 'string') {
+            // "May 2026" or "2026-05" etc.
+            const s = v.trim();
+            // Try YYYY-MM
+            if (/^\d{4}-\d{2}$/.test(s)) {
+              filledYM = s;
+            } else {
+              const parts = s.split(/[\s,\-\/]+/).filter(Boolean);
+              if (parts.length >= 2) {
+                const a = parts[0], b = parts[1];
+                const monA = MONTHS[a.toLowerCase().substring(0, 3)];
+                const monB = MONTHS[b.toLowerCase().substring(0, 3)];
+                if (monA && /^\d{4}$/.test(b)) filledYM = b + '-' + String(monA).padStart(2, '0');
+                else if (monB && /^\d{4}$/.test(a)) filledYM = a + '-' + String(monB).padStart(2, '0');
+              }
+            }
+          }
+
+          if (!filledYM) {
+            if (okDiv) okDiv.style.display = 'none';
+            return; // Can't parse — let server handle
+          }
+
+          if (filledYM !== expectedYM) {
+            // ── MISMATCH — show SweetAlert and clear the file ──────────────
+            const [ey, em] = expectedYM.split('-');
+            const [fy, fm] = filledYM.split('-');
+            const expectedLabel = MNAMES[parseInt(em) - 1] + ' ' + ey;
+            const fileLabel     = MNAMES[parseInt(fm) - 1] + ' ' + fy;
+
+            Swal.fire({
+              icon: 'error',
+              title: 'Wrong Report File!',
+              html:
+                'The uploaded file is the <strong>' + fileLabel + '</strong> salary report,<br>'
+                + 'but you are viewing the <strong>' + expectedLabel + '</strong> report.<br><br>'
+                + 'Please select the correct <strong>' + expectedLabel + '</strong> Excel file.',
+              confirmButtonText: 'OK, select correct file',
+              confirmButtonColor: '#dc2626',
+            });
+
+            input.value = '';           // clear the file input
+            if (okDiv) okDiv.style.display = 'none';
+          } else {
+            // ── Match — show green confirmation ────────────────────────────
+            if (okDiv) okDiv.style.display = 'block';
+          }
+        } catch (err) {
+          // Silent fail — server will catch it
+          if (okDiv) okDiv.style.display = 'none';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+    </script>
 </body>
 
 </html>

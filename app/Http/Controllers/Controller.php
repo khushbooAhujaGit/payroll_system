@@ -65,7 +65,16 @@ abstract class Controller
             $row = array_values((array) $row);
             foreach ($row as $ci => $val) {
                 $cell = $ws->getCell([$ci + 1, $ri]);
-                if (is_string($val) && $val !== '' && preg_match('/^\d+$/', $val)) {
+                if ($val instanceof \DateTimeInterface) {
+                    // Write as a proper Excel date serial so Excel can sort/filter by date.
+                    // Null is left as an empty cell (handled by the else branch below).
+                    // Use date+time format only when the time component is non-midnight.
+                    $excelSerial = \PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel($val);
+                    $cell->setValue($excelSerial);
+                    $hasTime = ((int) $val->format('His')) !== 0;
+                    $cell->getStyle()->getNumberFormat()
+                        ->setFormatCode($hasTime ? 'DD-MM-YYYY HH:MM' : 'DD-MM-YYYY');
+                } elseif (is_string($val) && $val !== '' && preg_match('/^\d+$/', $val)) {
                     $cell->setValueExplicit(
                         $val,
                         \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING

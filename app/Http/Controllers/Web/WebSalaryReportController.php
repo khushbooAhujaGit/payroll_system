@@ -48,8 +48,11 @@ class WebSalaryReportController extends Controller
             ? (int) $request->get('company_id')
             : 0;
 
-        $month = $request->get('month'); // YYYY-MM or null
-        $rows    = [];
+        $month  = $request->get('month'); // YYYY-MM or null
+        $search = trim((string) $request->get('search', ''));
+        $filter = (string) ($request->get('filter') ?? ''); // tds | incentive | loan | lop
+
+        $allRows = [];
         $summary = null;
         $isLocked      = false;
         $snapshotCount = 0;
@@ -63,35 +66,41 @@ class WebSalaryReportController extends Controller
             $snapshotCount = SalaryReportSnapshot::where('year_month', $month)->count();
             $isLocked      = $snapshotCount > 0;
 
-            // Auto-lock on first generation: compute + freeze immediately.
-            // Subsequent visits (snapshot already exists) skip this block.
-            // if (!$isLocked) {
-                $liveRows = $this->compute($month, $companyId);
+            // Always compute live data (needed for summary cards + table in live view).
+            $liveRows = $this->compute($month, $companyId);
+
+            if (!$isLocked) {
+                // ── FIRST GENERATION — no snapshot exists yet → auto-save once ──────
+                // Subsequent page loads (snapshot already exists) skip this block entirely
+                // so the existing locked data is NEVER replaced by a page refresh.
                 if (!empty($liveRows)) {
                     $this->performLock($month, $liveRows);
                     $snapshotCount = count($liveRows);
                     $isLocked      = true;
                 }
-            // }
+            }
 
-            // Always serve rows from the frozen snapshot (auto-locked or re-locked).
-            // if ($isLocked) {
-                $snapshots = SalaryReportSnapshot::where('year_month', $month)
-                    ->get()
-                    ->keyBy('employee_id');
+            if ($isLocked) {
+                // Snapshot exists — serve the LIVE rows for display so the user
+                // can see current data, but the locked snapshot stays untouched
+                // until the user explicitly clicks "Save / Re-lock".
+                $allRows = $liveRows;
 
-                if ($companyId !== 0) {
-                    $snapshots = $snapshots->filter(
-                        fn($s) => ($s->snapshot_data['company_id'] ?? 0) === $companyId
-                    );
-                }
+                // For the summary and count we still show live numbers.
+                // $lockedAt comes from the snapshot metadata.
+                $snapMeta = SalaryReportSnapshot::where('year_month', $month)
+                    ->orderByDesc('locked_at')
+                    ->first(['locked_at', 'locked_by']);
+                $lockedAt = $snapMeta?->locked_at;
+            } else {
+                $allRows  = $liveRows;
+                $lockedAt = null;
+            }
 
-                $rows     = $snapshots->map(fn($s) => $s->snapshot_data)->values()->toArray();
-                $lockedAt = $snapshots->sortByDesc('locked_at')->first()?->locked_at;
-            // }
-
-            $summary = $this->summarise($rows);
+            $summary = $this->summarise($allRows);
         }
+
+        $rows = $this->filterAndPaginate($allRows, $search, 25, $filter);
 
         return view('salary-report.index', compact(
             'month',
@@ -101,7 +110,9 @@ class WebSalaryReportController extends Controller
             'companies',
             'isLocked',
             'snapshotCount',
-            'lockedAt'
+            'lockedAt',
+            'search',
+            'filter'
         ));
     }
 
@@ -122,11 +133,15 @@ class WebSalaryReportController extends Controller
                 ->with('error', 'No locked report found for ' . $month . '.');
         }
 
-        $rows          = $snapshots->map(fn($s) => $s->snapshot_data)->values()->toArray();
-        $summary       = $this->summarise($rows);
+        $search    = trim((string) request()->get('search', ''));
+        $filter    = (string) (request()->get('filter') ?? '');
+        $allRows   = $snapshots->map(fn($s) => $s->snapshot_data)->values()->toArray();
+        $summary   = $this->summarise($allRows);
+        $rows      = $this->filterAndPaginate($allRows, $search, 25, $filter);
+
         $snapshotCount = $snapshots->count();
         $lockedAt      = $snapshots->sortByDesc('locked_at')->first()->locked_at;
-        $companyId      = 0;
+        $companyId     = 0;
         $isLocked      = true;
         $isReadonly    = true;
 
@@ -143,7 +158,9 @@ class WebSalaryReportController extends Controller
             'isLocked',
             'snapshotCount',
             'lockedAt',
-            'isReadonly'
+            'isReadonly',
+            'search',
+            'filter'
         ));
     }
 
@@ -206,8 +223,20 @@ class WebSalaryReportController extends Controller
             ? null
             : $prevMonthCarbon->copy()->endOfMonth()->toDateString();
 
-        // Ensure employee statuses / date_of_leaving are up to date before querying.
-        Employee::syncLeaverStatuses();
+        // NOTE: syncLeaverStatuses() is intentionally NOT called here.
+        //
+        // compute() is a READ-ONLY function — it must never mutate employee records.
+        // Calling syncLeaverStatuses(now()) during report generation was causing a bug:
+        // it would permanently set date_of_leaving on employees based on leave-tracker
+        // LFT records dated TODAY, which could set a future leaver's date_of_leaving to
+        // a date BEFORE the report month, excluding them from months where they were
+        // still active (e.g. an employee with LFT=2026-01-31 in the tracker would have
+        // date_of_leaving set to Jan 31, excluding them from any report month where
+        // monthStart > Jan 31).
+        //
+        // Status/date maintenance is handled by scopeCurrentlyEmployed() (called once
+        // per request via a service-container flag) which is the correct, isolated place.
+        // Admins can also set date_of_leaving explicitly on the employee record.
 
         // Include employees who were employed AT ANY POINT during the report month:
         //  • joined on or before the last day of the month
@@ -251,7 +280,7 @@ class WebSalaryReportController extends Controller
             ->get()
             ->groupBy('holiday_calendar_id');
 
-        // ── All Sundays in the month (standard weekly off, always counted) ──────
+        // ── Static weekoff fallback (used only when no weekly_off entries exist in DB) ──
         $companiesById = Company::whereIn('id', $companyIdsInScope)
             ->get(['id', 'name', 'short_name'])
             ->keyBy('id');
@@ -260,33 +289,51 @@ class WebSalaryReportController extends Controller
         $saturdaysInMonth = [];
         $d = $carbonMonth->copy()->startOfMonth();
         while ($d->month === $mon) {
-            if ($d->dayOfWeek === Carbon::SUNDAY) {
-                $sundaysInMonth[] = $d->format('Y-m-d');
-            } elseif ($d->dayOfWeek === Carbon::SATURDAY) {
-                $saturdaysInMonth[] = $d->format('Y-m-d');
-            }
+            if ($d->dayOfWeek === Carbon::SUNDAY)   $sundaysInMonth[]   = $d->format('Y-m-d');
+            elseif ($d->dayOfWeek === Carbon::SATURDAY) $saturdaysInMonth[] = $d->format('Y-m-d');
             $d->addDay();
         }
 
-        // Build: company_id → [Y-m-d, ...] (Sundays + DB holidays, deduped, sorted)
+        // Build: company_id → [Y-m-d, ...] (all paid-off dates, deduped, sorted)
+        //
+        // Priority order for weekoff source:
+        //   1. DB weekly_off entries (if any exist for this company + month) — user-configured
+        //   2. Static fallback (all Sundays + company-rule Saturdays) — backward compat
+        //
+        // Named holidays from DB (national/regional/company) are ALWAYS merged regardless.
         $holidaysByCompany = [];
         foreach ($companyIdsInScope as $compId) {
             $calId = $calendarIds[$compId] ?? null;
-            $dbHolidays = $calId
+            $calHolidays = $calId
                 ? ($allHolidays[$calId] ?? collect())
+                : collect();
+
+            // Split into named holidays and weekoff entries
+            $namedHolidayDates  = $calHolidays
+                ->where('type', '!=', 'weekly_off')
                 ->pluck('date')
-                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
-                ->all()
-                : [];
+                ->map(fn($dt) => Carbon::parse($dt)->format('Y-m-d'))
+                ->toArray();
 
-            $company = $companiesById->get($compId);
-            $weeklyOffs = array_merge(
-                $sundaysInMonth,
-                $this->companySaturdayWeeklyOffs($company?->name, $company?->short_name, $saturdaysInMonth)
-            );
+            $dbWeekoffDates = $calHolidays
+                ->where('type', 'weekly_off')
+                ->pluck('date')
+                ->map(fn($dt) => Carbon::parse($dt)->format('Y-m-d'))
+                ->toArray();
 
-            // Merge weekly offs + DB holidays, deduplicate, sort
-            $combined = array_values(array_unique(array_merge($weeklyOffs, $dbHolidays)));
+            // Use DB weekoffs if present; otherwise fall back to static calculation
+            if (!empty($dbWeekoffDates)) {
+                $weeklyOffs = $dbWeekoffDates;
+            } else {
+                $company    = $companiesById->get($compId);
+                $weeklyOffs = array_merge(
+                    $sundaysInMonth,
+                    $this->companySaturdayWeeklyOffs($company?->name, $company?->short_name, $saturdaysInMonth)
+                );
+            }
+
+            // Merge weekoffs + named holidays, deduplicate, sort
+            $combined = array_values(array_unique(array_merge($weeklyOffs, $namedHolidayDates)));
             sort($combined);
             $holidaysByCompany[$compId] = $combined;
         }
@@ -380,15 +427,30 @@ class WebSalaryReportController extends Controller
 
         // Months that have a locked snapshot — attendance LOP in these months is
         // considered already processed, so we exclude them from carry-forward.
+        // ── FY boundary for carry-forward queries ─────────────────────────
+        // Carry-forward must NEVER cross a financial year boundary.
+        // FY 2025-26 = Apr 2025 → Mar 2026. FY 2026-27 = Apr 2026 → Mar 2027.
+        // Anything before $fyStart belongs to the previous FY — leave resets
+        // on April 1 so prior-FY undeducted LOP is NOT the current FY's problem.
+        //
+        // $fyYear / $fyStart are also defined later (line ~498) for per-employee
+        // leave calculations — computing them here first since they are needed for
+        // these bulk carry-forward queries that run before the per-employee loop.
+        $fyYear       = $mon >= 4 ? $year : $year - 1;
+        $fyStart      = Carbon::createFromDate($fyYear, 4, 1)->toDateString();
+        $fyMonthStart = sprintf('%d-04', $fyYear);  // e.g. '2026-04' for FY 2026-27
+
+        // Only locked months WITHIN the current FY matter for carry-forward.
         $lockedPriorMonths = SalaryReportSnapshot::where('year_month', '<', $month)
+            ->where('year_month', '>=', $fyMonthStart)  // current FY only
             ->distinct()
             ->pluck('year_month')
             ->all();
 
-        // Carry-forward: not_approved attendance from prior months that were NEVER locked.
-        // If a month has a snapshot, its LOP was already deducted — skip it.
+        // Carry-forward: not_approved attendance from prior UNLOCKED months in this FY.
         $carryForwardLop = AttendanceApproval::where('punch_in_approval', 'not_approved')
             ->where('attendance_date', '<', $monthStart)
+            ->where('attendance_date', '>=', $fyStart)  // current FY only — no prior-FY bleed
             ->whereIn('employee_id', $empIds)
             ->get(['employee_id', 'attendance_date'])
             ->filter(fn($r) => !in_array(
@@ -398,14 +460,12 @@ class WebSalaryReportController extends Controller
             ->groupBy('employee_id')
             ->map(fn($g) => $g->count());
 
-        // Deferred LOP from LOCKED prior months where the admin reduced the LOP via override
-        // (i.e. total_lop < computed_lop in the snapshot).
-        // Formula: sum(att_lop + leave_lop) − sum(total_lop) across all locked prior months.
-        // att_lop + leave_lop is the "fresh" LOP generated that month (excludes carry-forward
-        // already counted in carry_fwd_lop so there is no double-count across months).
-        // For snapshots created before this change, leave_lop defaults to 0 safely.
+        // Deferred LOP from LOCKED prior months IN THIS FY where admin reduced LOP via override.
+        // Restricted to the current FY: leave balance resets on April 1 each year, so
+        // undeducted LOP from FY 2025-26 must NOT appear in FY 2026-27 reports.
         $deferredLopFromSnapshots = !empty($lockedPriorMonths)
             ? SalaryReportSnapshot::where('year_month', '<', $month)
+                ->where('year_month', '>=', $fyMonthStart)  // current FY only
                 ->whereIn('employee_id', $empIds)
                 ->get(['employee_id', 'snapshot_data'])
                 ->groupBy('employee_id')
@@ -437,9 +497,8 @@ class WebSalaryReportController extends Controller
             ->keyBy('employee_id');
 
         // ── Financial year leave balance (FY = April 1 → March 31) ──────────
-        // FY year = calendar year of April 1 that started this FY.
-        //   Apr-Dec 2025  → fyYear = 2025  (FY 2025-26)
-        //   Jan-Mar 2025  → fyYear = 2024  (FY 2024-25)
+        // FY year / FY start — already set above for carry-forward queries; values are identical.
+        // Re-assigning here is a no-op but keeps the per-employee block self-contained.
         $fyYear  = $mon >= 4 ? $year : $year - 1;
         $fyStart = Carbon::createFromDate($fyYear, 4, 1)->toDateString();       // "2025-04-01"
         $fyEnd   = $carbonMonth->copy()->endOfMonth()->toDateString();           // e.g. "2025-06-30"
@@ -704,6 +763,30 @@ class WebSalaryReportController extends Controller
             $dojInMonth = $doj && (int)$doj->format('Y') === $year && (int)$doj->format('n') === $mon && $doj->day > 1;
             $dolInMonth = $dol && (int)$dol->format('Y') === $year && (int)$dol->format('n') === $mon;
 
+            // ── Effective month days for this employee ────────────────────────
+            // Full month by default. Reduced when the employee joined or left
+            // mid-month so that working-days and net-paid-days are proportional
+            // to the actual days they were on payroll.
+            //
+            //   DOJ on Jan 22 in a 31-day month → empMonthDays = 31 - 22 + 1 = 10
+            //   DOL on Jan 15 in a 31-day month → empMonthDays = 15 - 1 + 1  = 15
+            //   Both in same month              → empMonthDays = DOL - DOJ + 1
+            //
+            // NOTE: $monthDays (full month) is still used as the salary divisor
+            // in Payable Gross because the gross is a monthly rate, not a daily rate.
+            $empMonthDays = $monthDays;
+
+            if ($dojInMonth && $dolInMonth) {
+                // Joined AND left within the same month
+                $empMonthDays = max(1, $dol->day - $doj->day + 1);
+            } elseif ($dojInMonth) {
+                // Joined mid-month — count from DOJ to last day
+                $empMonthDays = max(1, $monthDays - $doj->day + 1);
+            } elseif ($dolInMonth) {
+                // Left mid-month — count from first day to DOL
+                $empMonthDays = max(1, $dol->day);
+            }
+
             if ($dojInMonth || $dolInMonth) {
                 $joiningDateStr = $dojInMonth ? $doj->format('Y-m-d') : null;
                 $leavingDateStr = $dolInMonth ? $dol->format('Y-m-d') : null;
@@ -714,8 +797,8 @@ class WebSalaryReportController extends Controller
                 ));
             }
 
-            // Working Days = Month Days − WeekOff&Holidays
-            $empWorkingDays = max(0, $monthDays - $empWeekoffAndHolidays);
+            // Working Days = Employee's active days − WeekOff&Holidays in that period
+            $empWorkingDays = max(0, $empMonthDays - $empWeekoffAndHolidays);
 
             // Net Paid Days = Working Days − LOP + WeekOff&Holidays
             $netPaidDays = max(0, $empWorkingDays - $empLop + $empWeekoffAndHolidays);
@@ -805,7 +888,7 @@ class WebSalaryReportController extends Controller
                 'designation'       => $emp->designation?->name ?? '—',
                 'gross_salary'      => $grossMonthly,
                 'month'             => $monthLabel,
-                'month_days'        => $monthDays,
+                'month_days'        => $empMonthDays,   // actual days on payroll (< full month for mid-month joiners/leavers)
                 'weekoff_holidays'  => $empWeekoffAndHolidays,
                 'working_days'      => $empWorkingDays,
                 'total_lop'         => $empLop,
@@ -1202,6 +1285,418 @@ class WebSalaryReportController extends Controller
     }
 
     // ─────────────────────────────────────────────
+    // RE-UPLOAD EDITED EXCEL → REPLACE SNAPSHOT
+    // ─────────────────────────────────────────────
+
+    public function reuploadSnapshot(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'file'           => 'required|file|mimes:xlsx,xls|max:20480',
+            'expected_month' => 'nullable|date_format:Y-m',
+        ]);
+
+        // The form passes the month the user is currently viewing.
+        // We'll use this to cross-check the file's Month column.
+        $expectedMonth = $request->input('expected_month');
+
+        $path = $request->file('file')->store('tmp');
+
+        // ── Read the Excel cells safely ────────────────────────────────────
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile(
+                \Illuminate\Support\Facades\Storage::path($path)
+            );
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load(\Illuminate\Support\Facades\Storage::path($path));
+            $ws          = $spreadsheet->getActiveSheet();
+
+            $data = $ws->toArray(null, false, false, false); // 0-indexed rows and cols
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Storage::delete($path);
+            return back()->with('error', 'Could not read the file: ' . $e->getMessage());
+        } finally {
+            \Illuminate\Support\Facades\Storage::delete($path);
+        }
+
+        if (count($data) < 2) {
+            return back()->with('error', 'The uploaded file is empty or has only a header row.');
+        }
+
+        // ── Map header text → column index (0-based) ──────────────────────
+        // Matches the exact headers written by buildExcel().
+        // The 'LOP' column (col 35) is a duplicate of 'Total LOP' — skipped.
+        $headerMap = [
+            'Emp ID'                => 'emp_id',
+            'Employee'              => 'name',
+            'Designation'           => 'designation',
+            'Gross Salary'          => 'gross_salary',
+            'Month'                 => 'month',
+            'Month Days'            => 'month_days',
+            'WeekOff & Holidays'    => 'weekoff_holidays',
+            'Working Days'          => 'working_days',
+            'Total LOP'             => 'total_lop',
+            'LOP Amount'            => 'lop_amount',
+            'Net Paid Days'         => 'net_paid_days',
+            'Payable Gross'         => 'payable_gross',
+            'Basic Pay'             => 'basic_pay',
+            'HRA'                   => 'hra',
+            'Special Allowance'     => 'special_allowance',
+            'Incentive'             => 'incentive',
+            'Reimbursement'         => 'reimbursement',
+            'Employee PF'           => 'employee_pf',
+            'Professional Tax'      => 'professional_tax',
+            'Advance Salary'        => 'advance_salary',
+            'TDS'                   => 'tds',
+            'Total Deduction'       => 'total_deduction',
+            'Net Pay'               => 'net_pay',
+            'Employer PF'           => 'employer_pf',
+            'CTC'                   => 'ctc',
+            'Bonus For Diwali'      => 'bonus_diwali',
+            'CTC with Diwali Bonus' => 'ctc_with_diwali',
+            'Firm'                  => 'firm',
+            'PF Applicability'      => 'pf_applicability',
+            'UAN Number'            => 'uan_number',
+            'Closing CL'            => 'closing_cl',
+            'Closing SL'            => 'closing_sl',
+            'Current CP'            => 'current_cp',
+            'Current LOP'           => 'current_lop',
+            'Att LOP'               => 'att_lop',
+            // 'LOP' at col 35 is a duplicate — intentionally not mapped
+            'Account Number'        => 'account_number',
+            'IFSC Code'             => 'ifsc_code',
+            'PAN'                   => 'pan_number',
+            'RSC Mail ID'           => 'rsc_mail_id',
+        ];
+
+        // Build col-index → snapshot-key map from the actual header row
+        $colToKey   = [];
+        $seenLop    = false;
+        foreach ($data[0] as $colIdx => $headerVal) {
+            $h = trim((string) $headerVal);
+            if ($h === 'LOP') {
+                // This is the duplicate col — skip it completely
+                continue;
+            }
+            if (isset($headerMap[$h])) {
+                // Guard against any accidental duplicate headers
+                if ($headerMap[$h] === 'total_lop' && $seenLop) continue;
+                if ($headerMap[$h] === 'total_lop') $seenLop = true;
+                $colToKey[$colIdx] = $headerMap[$h];
+            }
+        }
+
+        if (empty($colToKey)) {
+            return back()->with('error', 'Header row not recognised. Please upload the file that was downloaded from the Salary Report.');
+        }
+
+        // ── Detect month-year from the first data row ──────────────────────
+        $monthColIdx = array_search('month', $colToKey);
+        $monthRaw    = ($monthColIdx !== false) ? ($data[1][$monthColIdx] ?? null) : null;
+        $yearMonth   = null;
+
+        if ($monthRaw !== null && $monthRaw !== '') {
+            // Could be: Excel serial (float), "Feb 2026" string, or DateTime
+            if ($monthRaw instanceof \DateTimeInterface) {
+                $yearMonth = Carbon::instance($monthRaw)->format('Y-m');
+            } elseif (is_numeric($monthRaw)) {
+                try {
+                    $yearMonth = Carbon::instance(
+                        \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $monthRaw)
+                    )->format('Y-m');
+                } catch (\Throwable) {}
+            } else {
+                foreach (['M Y', 'F Y', 'Y-m', 'Y-m-d'] as $fmt) {
+                    try {
+                        $yearMonth = Carbon::createFromFormat($fmt, trim($monthRaw))->format('Y-m');
+                        break;
+                    } catch (\Throwable) {}
+                }
+                if (!$yearMonth) {
+                    try { $yearMonth = Carbon::parse($monthRaw)->format('Y-m'); } catch (\Throwable) {}
+                }
+            }
+        }
+
+        if (!$yearMonth || !preg_match('/^\d{4}-\d{2}$/', $yearMonth)) {
+            return back()->with('error', 'Could not determine the month-year from the uploaded file. Ensure the "Month" column is intact.');
+        }
+
+        // ── Month cross-check — ensure the file is for the expected month ────
+        // The form passes the month the user is currently viewing so we can
+        // catch an accidental wrong-file upload before touching any data.
+        if ($expectedMonth && $yearMonth !== $expectedMonth) {
+            $fileLabel     = Carbon::createFromFormat('Y-m', $yearMonth)->format('F Y');
+            $expectedLabel = Carbon::createFromFormat('Y-m', $expectedMonth)->format('F Y');
+            return back()->with('error',
+                "Month mismatch — the uploaded file is for {$fileLabel} but you are viewing the "
+                . "{$expectedLabel} report. Please upload the correct file."
+            );
+        }
+
+        // ── Validation: snapshot must already exist ────────────────────────
+        $existingSnapshots = SalaryReportSnapshot::where('year_month', $yearMonth)
+            ->get()
+            ->keyBy('employee_id');
+
+        if ($existingSnapshots->isEmpty()) {
+            $label = Carbon::createFromFormat('Y-m', $yearMonth)->format('F Y');
+            return back()->with('error',
+                "No saved/locked report exists for {$label}. "
+                . "Re-upload is only allowed after the report has been saved at least once. "
+                . "Generate and save the report first."
+            );
+        }
+
+        // Build emp_id string → snapshot record lookup
+        $empIdToSnap = [];
+        foreach ($existingSnapshots as $snap) {
+            $eid = $snap->snapshot_data['emp_id'] ?? null;
+            if ($eid) $empIdToSnap[(string) $eid] = $snap;
+        }
+
+        // ── Only these columns are accepted from the uploaded Excel ──────────
+        // All other columns are ignored — the snapshot keeps its existing values.
+        //
+        // Computation columns → trigger full recompute of all derived fields:
+        //   payable_gross, incentive, advance_salary, tds, total_lop
+        //
+        // Employee master columns → also update the respective DB tables:
+        //   account_number, ifsc_code  → employee_bank_details
+        //   pan_number                 → employee_statutory_details
+        //   rsc_mail_id                → employees.official_email
+        $computationColumns = ['payable_gross', 'incentive', 'advance_salary', 'tds', 'total_lop'];
+        $masterColumns      = ['account_number', 'ifsc_code', 'pan_number', 'rsc_mail_id'];
+        $allowedColumns     = array_merge($computationColumns, $masterColumns);
+
+        // ── Process rows ───────────────────────────────────────────────────
+        $empIdColIdx = array_search('emp_id', $colToKey);
+        $updated = 0;
+        $skipped = 0;
+        $now     = now();
+        $userId  = auth()->id();
+
+        DB::beginTransaction();
+        try {
+            foreach (array_slice($data, 1) as $row) {
+                if (empty(array_filter($row, fn($v) => $v !== null && $v !== ''))) continue;
+
+                $empId = $empIdColIdx !== false ? trim((string) ($row[$empIdColIdx] ?? '')) : '';
+                if ($empId === '') continue;
+
+                $snap = $empIdToSnap[$empId] ?? null;
+                if (!$snap) { $skipped++; continue; }
+
+                $newData  = $snap->snapshot_data;
+                $changed  = false;
+
+                // ── 1. Apply only the allowed editable columns ─────────────
+                foreach ($colToKey as $colIdx => $snapshotKey) {
+                    if (!in_array($snapshotKey, $allowedColumns)) continue;
+
+                    $val = $row[$colIdx] ?? null;
+                    if ($val === null || $val === '') continue;
+
+                    // Cast numeric computation columns to int
+                    if (in_array($snapshotKey, $computationColumns)) {
+                        $val = is_numeric($val) ? (int) round((float) $val) : 0;
+                    }
+                    // String master columns — keep as string
+                    if ($newData[$snapshotKey] !== $val) {
+                        $newData[$snapshotKey] = $val;
+                        $changed = true;
+                    }
+                }
+
+                if (!$changed) { $updated++; continue; } // nothing to do
+
+                // ── 2. Recompute all derived columns from the new values ────
+                $newData = $this->recomputeSnapshotRow($newData);
+
+                // ── 3. Update employee master tables WITH HISTORY ─────────
+                $empDbId = $newData['employee_db_id'] ?? null;
+                if ($empDbId) {
+                    $newAccountNum = trim((string) ($newData['account_number'] ?? ''));
+                    $newIfscCode   = strtoupper(trim((string) ($newData['ifsc_code']  ?? '')));
+                    $newPan        = strtoupper(trim((string) ($newData['pan_number'] ?? '')));
+                    $newEmail      = strtolower(trim((string) ($newData['rsc_mail_id']?? '')));
+
+                    // ── Bank details — create new record, mark old as non-primary ──
+                    if ($newAccountNum && $newIfscCode) {
+                        $oldBank = \App\Models\EmployeeBankDetail::where('employee_id', $empDbId)
+                            ->where('is_primary', true)->first();
+
+                        $isSameBank = $oldBank &&
+                            (string) $oldBank->account_number === $newAccountNum &&
+                            $oldBank->ifsc_code === $newIfscCode;
+
+                        if (!$isSameBank) {
+                            // Deactivate old primary record
+                            if ($oldBank) {
+                                $oldBank->update(['is_primary' => false]);
+                            }
+                            // Insert new primary record
+                            \App\Models\EmployeeBankDetail::create([
+                                'employee_id'          => $empDbId,
+                                'bank_name'            => $oldBank?->bank_name ?? '',
+                                'account_number'       => $newAccountNum,
+                                'ifsc_code'            => $newIfscCode,
+                                'account_holder_name'  => $oldBank?->account_holder_name
+                                                          ?? ($newData['name'] ?? ''),
+                                'account_type'         => 'savings',
+                                'is_primary'           => true,
+                            ]);
+                            // Log the change
+                            \App\Models\EmployeeMasterHistory::create([
+                                'employee_id' => $empDbId,
+                                'field_type'  => 'bank_details',
+                                'old_value'   => $oldBank
+                                    ? ['account_number' => $oldBank->account_number, 'ifsc_code' => $oldBank->ifsc_code, 'bank_name' => $oldBank->bank_name]
+                                    : null,
+                                'new_value'   => ['account_number' => $newAccountNum, 'ifsc_code' => $newIfscCode],
+                                'changed_via' => 'salary_reupload',
+                                'changed_by'  => $userId,
+                            ]);
+                        }
+                    }
+
+                    // ── PAN — create new statutory record, mark old as is_current=false ──
+                    if ($newPan) {
+                        $oldStat = \App\Models\EmployeeStatutoryDetail::where('employee_id', $empDbId)
+                            ->where('is_current', true)->latest()->first();
+
+                        $isSamePan = $oldStat && $oldStat->pan_number === $newPan;
+
+                        if (!$isSamePan) {
+                            // Deactivate old current record
+                            if ($oldStat) {
+                                $oldStat->update(['is_current' => false]);
+                            }
+                            // Insert new current record (copy existing fields, update PAN)
+                            \App\Models\EmployeeStatutoryDetail::create([
+                                'employee_id'  => $empDbId,
+                                'pan_number'   => $newPan,
+                                'uan_number'   => $oldStat?->uan_number,
+                                'pf_number'    => $oldStat?->pf_number,
+                                'esic_number'  => $oldStat?->esic_number,
+                                'aadhaar_number'=> $oldStat?->aadhaar_number,
+                                'is_current'   => true,
+                                'updated_by'   => $userId,
+                            ]);
+                            // Log
+                            \App\Models\EmployeeMasterHistory::create([
+                                'employee_id' => $empDbId,
+                                'field_type'  => 'pan',
+                                'old_value'   => $oldStat ? ['pan_number' => $oldStat->pan_number] : null,
+                                'new_value'   => ['pan_number' => $newPan],
+                                'changed_via' => 'salary_reupload',
+                                'changed_by'  => $userId,
+                            ]);
+                        }
+                    }
+
+                    // ── Email — update employees table + log history ───────────
+                    if ($newEmail) {
+                        $emp = \App\Models\Employee::find($empDbId);
+                        $oldEmail = $emp?->official_email;
+
+                        if ($emp && strtolower($oldEmail ?? '') !== $newEmail) {
+                            $emp->update(['official_email' => $newEmail]);
+                            \App\Models\EmployeeMasterHistory::create([
+                                'employee_id' => $empDbId,
+                                'field_type'  => 'email',
+                                'old_value'   => ['official_email' => $oldEmail],
+                                'new_value'   => ['official_email' => $newEmail],
+                                'changed_via' => 'salary_reupload',
+                                'changed_by'  => $userId,
+                            ]);
+                        }
+                    }
+                }
+
+                $snap->update([
+                    'snapshot_data' => $newData,
+                    'locked_at'     => $now,
+                    'locked_by'     => $userId,
+                ]);
+                $updated++;
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->with('error', 'Re-upload failed: ' . $e->getMessage());
+        }
+
+        $label = Carbon::createFromFormat('Y-m', $yearMonth)->format('F Y');
+        $msg   = "Re-upload complete — {$updated} rows updated in the {$label} saved report.";
+        if ($skipped > 0) $msg .= " {$skipped} rows skipped (Emp ID not found in existing snapshot).";
+
+        return redirect()->route('salary.report.view', $yearMonth)->with('success', $msg);
+    }
+
+    // ─────────────────────────────────────────────
+    // RECOMPUTE SNAPSHOT ROW after editable columns change
+    // ─────────────────────────────────────────────
+
+    private function recomputeSnapshotRow(array $d): array
+    {
+        $gross        = (float) ($d['gross_salary']      ?? 0);
+        $monthDays    = max(1, (int) ($d['month_days']   ?? 31));
+        $weekoffs     = (int) ($d['weekoff_holidays']    ?? 0);
+        $workDays     = (int) ($d['working_days']        ?? 0);
+        $reimbursement = (float) ($d['reimbursement']   ?? 0);
+        $pfApplicable = (($d['pf_applicability'] ?? 'No') === 'Yes');
+
+        // Editable columns (may have been updated)
+        $payableGross = (int) ($d['payable_gross']   ?? 0);
+        $totalLop     = (int) ($d['total_lop']       ?? 0);
+        $incentive    = (float) ($d['incentive']     ?? 0);
+        $advance      = (float) ($d['advance_salary']?? 0);
+        $tds          = (float) ($d['tds']            ?? 0);
+
+        // ── Salary breakdown from payable_gross ──────────────────────────
+        $basic            = (int) round($payableGross * 0.70);
+        $hra              = (int) round($basic * 0.40);
+        $specialAllowance = $payableGross - $basic - $hra;
+
+        // ── PF (capped at ₹1,800) ────────────────────────────────────────
+        $pfEligible = $payableGross - $hra;
+        $empPf      = $pfApplicable ? min(1800, (int) round($pfEligible * 0.12)) : 0;
+        $emplPf     = $empPf;
+
+        // ── Professional Tax (based on original gross, not payable) ──────
+        $pt = $gross > 12000 ? 200 : 0;
+
+        // ── LOP-derived fields ────────────────────────────────────────────
+        $lopAmount   = (int) round(($gross / $monthDays) * $totalLop);
+        $netPaidDays = max(0, $workDays - $totalLop + $weekoffs);
+
+        // ── Totals ────────────────────────────────────────────────────────
+        $totalDeduction = $empPf + $pt + $advance + $tds;
+        $netPay         = (int) round($payableGross + $incentive + $reimbursement - $totalDeduction);
+
+        // ── CTC ───────────────────────────────────────────────────────────
+        $ctc          = (int) round($gross + $emplPf);
+        $bonusDiwali  = (float) ($d['bonus_diwali'] ?? $ctc); // keep existing override
+        $ctcWithBonus = (int) round(($bonusDiwali + $ctc * 12) / 12);
+
+        return array_merge($d, [
+            'basic_pay'         => $basic,
+            'hra'               => $hra,
+            'special_allowance' => $specialAllowance,
+            'employee_pf'       => $empPf,
+            'professional_tax'  => $pt,
+            'lop_amount'        => $lopAmount,
+            'net_paid_days'     => $netPaidDays,
+            'total_deduction'   => $totalDeduction,
+            'net_pay'           => $netPay,
+            'employer_pf'       => $emplPf,
+            'ctc'               => $ctc,
+            'bonus_diwali'      => (int) $bonusDiwali,
+            'ctc_with_diwali'   => $ctcWithBonus,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────
     // SAVED REPORTS  — history of locked snapshots
     // ─────────────────────────────────────────────
 
@@ -1230,6 +1725,45 @@ class WebSalaryReportController extends Controller
         $users   = \App\Models\User::whereIn('id', $userIds)->pluck('name', 'id');
 
         return view('salary-report.saved', compact('byMonth', 'users'));
+    }
+
+    private function filterAndPaginate(array $rows, string $search, int $perPage, ?string $filter = ''): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        // ── Text search on Emp ID / Name ─────────────────────────────────────
+        if ($search !== '') {
+            $lower = strtolower($search);
+            $rows = array_values(array_filter($rows, fn($r) =>
+                str_contains(strtolower((string)($r['emp_id'] ?? '')), $lower) ||
+                str_contains(strtolower((string)($r['name']   ?? '')), $lower)
+            ));
+        }
+
+        $filter = (string) ($filter ?? '');
+
+        // ── Column filter: only rows where the selected field has a value > 0 ─
+        if ($filter !== '') {
+            $fieldMap = [
+                'tds'       => 'tds',
+                'incentive' => 'incentive',
+                'loan'      => 'advance_salary',
+                'lop'       => 'total_lop',
+            ];
+            if (isset($fieldMap[$filter])) {
+                $field = $fieldMap[$filter];
+                $rows  = array_values(array_filter($rows, fn($r) => (float)($r[$field] ?? 0) > 0));
+            }
+        }
+
+        $page   = (int) (request()->get('page', 1));
+        $offset = ($page - 1) * $perPage;
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            array_slice($rows, $offset, $perPage),
+            count($rows),
+            $perPage,
+            $page,
+            ['path' => request()->url(), 'query' => request()->query()]
+        );
     }
 
     private function companySaturdayWeeklyOffs(?string $companyName, ?string $shortName, array $saturdaysInMonth): array
@@ -1383,13 +1917,33 @@ class WebSalaryReportController extends Controller
         // collapsing long numeric strings into scientific notation.
         $textColumns = ['account_number', 'uan_number'];
 
+        // 'month' column index (1-based) — written as a proper Excel date so
+        // users can filter/sort by month.  Format: "MMM YYYY" (e.g. "Jan 2026").
+        $monthColIdx = array_search('month', $keys);  // 0-based
+        $monthColLetter = $monthColIdx !== false
+            ? Coordinate::stringFromColumnIndex($monthColIdx + 1)
+            : null;
+
         // Data rows — write cell-by-cell so text columns keep their TYPE_STRING
         foreach ($rows as $i => $row) {
             $r = $i + 2;
             foreach ($keys as $colIdx => $k) {
                 $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
                 $cell      = $ws->getCell($colLetter . $r);
-                if (in_array($k, $textColumns)) {
+
+                if ($k === 'month' && !empty($row[$k])) {
+                    // Convert "Jan 2026" → Excel date serial for the 1st of that month
+                    try {
+                        // Force UTC midnight so the Excel serial has no fractional-day
+                        // component. Without this, servers running in non-UTC timezones
+                        // (e.g. IST = UTC+5:30) write April 30 18:30 UTC instead of
+                        // May 1 00:00 UTC, causing SheetJS to read back the wrong month.
+                        $dt = Carbon::createFromFormat('M Y', $row[$k], 'UTC')->startOfMonth();
+                        $cell->setValue(\PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel($dt));
+                    } catch (\Throwable) {
+                        $cell->setValue($row[$k]);
+                    }
+                } elseif (in_array($k, $textColumns)) {
                     // Force text type — prevents 3.91802E+14 collapsing
                     $cell->setValueExplicit((string)($row[$k] ?? ''), DataType::TYPE_STRING);
                 } else {
@@ -1400,6 +1954,13 @@ class WebSalaryReportController extends Controller
 
         $lastRow = count($rows) + 1;
         $lastCol = count($headers);
+
+        // Apply "MMM YYYY" date format to the entire Month column
+        if ($monthColLetter && $lastRow >= 2) {
+            $ws->getStyle("{$monthColLetter}2:{$monthColLetter}{$lastRow}")
+                ->getNumberFormat()
+                ->setFormatCode('MMM YYYY');
+        }
 
         // Header styling
         $headerRange = 'A1:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastCol) . '1';

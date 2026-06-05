@@ -89,7 +89,29 @@ main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; overflo
 /* ── TABLES ─────────────────────────────────── */
 .tw { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th { padding: 7px 12px; text-align: left; color: var(--t3); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--b1); white-space: nowrap; }
+th {
+  padding: 7px 12px;
+  text-align: left;
+  color: var(--t3);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border-bottom: 1px solid var(--b1);
+  white-space: nowrap;
+  /* Sticky header — stays visible when scrolling vertically or during
+     horizontal-scroll repaints on wide tables. */
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--s1);
+  /* Force a GPU compositing layer so the header never flickers or
+     disappears momentarily when the browser repaints during scroll. */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: transform;
+}
 td { padding: 9px 12px; border-bottom: 1px solid rgba(42,47,66,.4); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: rgba(255,255,255,.02); }

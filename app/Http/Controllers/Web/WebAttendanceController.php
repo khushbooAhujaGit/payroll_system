@@ -50,11 +50,26 @@ class WebAttendanceController extends Controller
         $from = Carbon::createFromDate($year, $month, 1)->startOfMonth()->toDateString();
         $to   = Carbon::createFromDate($year, $month, 1)->endOfMonth()->toDateString();
 
+        $search = trim((string) $request->get('search', ''));
+
+        // Shared name/ID search closure — applied to both employee grid and biometric table
+        $searchScope = $search !== ''
+            ? fn($q) => $q->where(fn($q2) =>
+                $q2->whereRaw(
+                    "CONCAT(COALESCE(first_name,''),' ',COALESCE(NULLIF(middle_name,''),NULL),' ',COALESCE(last_name,'')) LIKE ?",
+                    ["%{$search}%"]
+                )
+                ->orWhere('employee_id', 'like', "%{$search}%")
+              )
+            : null;
+
+        // Employee grid (attendance calendar rows) — paginated 25/page
         $employees = Employee::query()
             ->currentlyEmployed()
             ->with(['department'])
+            ->when($searchScope, $searchScope)
             ->orderBy('employee_id')
-            ->paginate(30)
+            ->paginate(25)
             ->withQueryString();
 
         // Scope attendance data to only the current page's employees for efficiency
@@ -71,7 +86,7 @@ class WebAttendanceController extends Controller
             ->groupBy('status')
             ->pluck('count', 'status');
 
-        // Grouped collection — used by the attendance grid for day-cell tooltips
+        // Grouped biometric punches for the attendance grid tooltips (current page employees only)
         $rawPunches = AttendanceRawPunch::whereBetween('attendance_date', [$from, $to])
             ->whereIn('employee_id', $pageEmpIds)
             ->orderBy('attendance_date')
@@ -79,12 +94,10 @@ class WebAttendanceController extends Controller
             ->get()
             ->groupBy('employee_id');
 
-        // Paginated flat list — used by the Biometric Punch Records table.
-        // Restricted to currently active employees so left employees' punches
-        // don't inflate the count.
+        // Biometric Punch Records flat table — paginated 50/page, filtered by search
         $rawPunchesPaginated = AttendanceRawPunch::whereBetween('attendance_date', [$from, $to])
-            ->whereHas('employee', fn($q) => $q->currentlyEmployed())
-            ->with(['employee:id,first_name,middle_name,last_name'])
+            ->whereHas('employee', fn($q) => $q->currentlyEmployed()->when($searchScope, $searchScope))
+            ->with(['employee:id,first_name,middle_name,last_name,employee_id'])
             ->orderBy('attendance_date')
             ->orderBy('employee_id')
             ->paginate(50, ['*'], 'punch_page')
@@ -99,7 +112,7 @@ class WebAttendanceController extends Controller
         return view('attendance.index', compact(
             'employees', 'records', 'todaySummary',
             'year', 'month', 'from', 'to', 'companyId', 'rawPunches', 'rawPunchesPaginated', 'companies',
-            'biometricDataRange'
+            'biometricDataRange', 'search'
         ));
     }
 
@@ -162,7 +175,7 @@ class WebAttendanceController extends Controller
             $r->employee?->employee_id,
             $r->employee ? ($r->employee->full_name) : null,
             $r->employee?->department?->name,
-            $r->attendance_date?->format('d-m-Y'),
+            $r->attendance_date,        // Carbon → Excel date
             $r->status,
             $r->work_type,
             $r->check_in  ? substr($r->check_in,  0, 5) : null,

@@ -3,7 +3,7 @@
 
 @section('page_actions')
   <a href="{{ route('payroll') }}" class="btn">← Payroll</a>
-  @if($month && count($rows))
+  @if($month && $rows->total() > 0)
   <form method="POST" action="{{ route('salary.report.download') }}" style="display:inline">
     @csrf
     <input type="hidden" name="month" value="{{ $month }}">
@@ -35,11 +35,30 @@
         @endforeach
       </select>
     </div>
+    @if($month)
+    <div class="fld" style="min-width:200px">
+      <label>Search Emp ID / Name</label>
+      <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="e.g. EMP001 or John…">
+    </div>
+    <div class="fld" style="min-width:160px">
+      <label>Filter by</label>
+      <select name="filter">
+        <option value="" {{ ($filter??'')==='' ? 'selected' : '' }}>— None —</option>
+        <option value="tds"       {{ ($filter??'')==='tds'       ? 'selected' : '' }}>Has TDS</option>
+        <option value="incentive" {{ ($filter??'')==='incentive' ? 'selected' : '' }}>Has Incentive</option>
+        <option value="loan"      {{ ($filter??'')==='loan'      ? 'selected' : '' }}>Has Loan / EMI</option>
+        <option value="lop"       {{ ($filter??'')==='lop'       ? 'selected' : '' }}>Has LOP</option>
+      </select>
+    </div>
+    @endif
     <button type="submit" class="btn acc">Preview →</button>
+    @if(!empty($search) || !empty($filter))
+      <a href="{{ route('salary.report', ['month' => $month, 'company_id' => $companyId]) }}" class="btn">✕ Clear</a>
+    @endif
   </form>
 </div>
 
-@if($month && count($rows))
+@if($month && $rows->total() > 0)
 
 {{-- Summary Cards --}}
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px">
@@ -82,6 +101,9 @@
     </div>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn sm" onclick="om('reupload-modal')" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">
+      📤 Re-upload Edited
+    </button>
     <form method="POST" action="{{ route('salary.report.lock') }}" style="display:inline">
       @csrf
       <input type="hidden" name="month" value="{{ $month }}">
@@ -89,7 +111,7 @@
       <button type="button" class="btn sm" style="background:#fed7aa;color:#9a3412;font-weight:600"
         onclick="swConfirm(this.closest('form'),
           'Re-lock {{ $lockLabel }}?',
-          'This replaces the previous saved snapshot with the current live data for {{ count($rows) }} employees.',
+          'This replaces the previous saved snapshot with the current live data for {{ $snapshotCount }} employees.',
           'question', 'Yes, re-lock', '#d97706')">
         🔒 Save / Re-lock
       </button>
@@ -121,7 +143,7 @@
     <button type="button" class="btn sm acc"
       onclick="swConfirm(this.closest('form'),
         'Save report for {{ $lockLabel }}?',
-        'This freezes {{ count($rows) }} employee rows into a snapshot. Future changes to salaries or leave data will not affect it.',
+        'This freezes {{ $snapshotCount }} employee rows into a snapshot. Future changes to salaries or leave data will not affect it.',
         'question', 'Yes, save & lock', '#166534')">
       🔒 Save / Lock Report
     </button>
@@ -130,12 +152,16 @@
 @endif
 
 {{-- Preview Table --}}
-<div class="card" style="overflow-x:auto">
+<div class="card" style="overflow-x:auto;will-change:transform;-webkit-overflow-scrolling:touch">
   <div class="ch">
     <div class="ct">Salary Sheet — {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y') }} · {{ $companyId == 0 ? 'All Firms' : ($companies->firstWhere('id', $companyId)?->short_name ?? $companies->firstWhere('id', $companyId)?->name ?? '') }}
       @if($isLocked)<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:2px 6px;font-size:10px;margin-left:8px">🔄 LIVE (snapshot saved)</span>@endif
     </div>
-    <div style="font-size:11px;color:var(--t3)">{{ count($rows) }} employees · Scroll right for full details</div>
+    <div style="font-size:11px;color:var(--t3)">
+      {{ $rows->total() }}{{ !empty($search) ? ' matching "'.e($search).'"' : '' }} of {{ $snapshotCount }} employees
+      @if($rows->lastPage() > 1) · Page {{ $rows->currentPage() }} / {{ $rows->lastPage() }} @endif
+      · Scroll right for full details
+    </div>
   </div>
   <table style="font-size:11px;min-width:2800px">
     <thead>
@@ -270,7 +296,7 @@
     {{-- Total row --}}
     <tfoot>
       <tr style="background:var(--s2);font-weight:700;font-size:11px">
-        <td colspan="3" style="text-align:right;color:var(--t2)">TOTAL ({{ count($rows) }} employees)</td>
+        <td colspan="3" style="text-align:right;color:var(--t2)">TOTAL ({{ $snapshotCount }} employees)</td>
         <td style="text-align:right">{{ number_format($summary['gross_salary'],0) }}</td>
         <td colspan="6"></td>
         <td style="text-align:right">{{ number_format($summary['payable_gross'],0) }}</td>
@@ -293,6 +319,16 @@
       </tr>
     </tfoot>
   </table>
+  @if($rows->hasPages())
+    <div style="padding:14px 18px;border-top:1px solid var(--b1)">{{ $rows->links() }}</div>
+  @endif
+  @if(!empty($search) && $rows->total() === 0)
+    <div class="empty" style="padding:24px">
+      <div class="ico">🔍</div>
+      <p>No employees matching "{{ e($search) }}".</p>
+      <a href="{{ route('salary.report', ['month' => $month, 'company_id' => $companyId]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+    </div>
+  @endif
 </div>
 
 @elseif($month)
@@ -405,5 +441,50 @@ function openSalaryOverride(empId, empName, month,
   om('salary-override-modal');
 }
 </script>
+
+{{-- Re-upload Modal --}}
+<div class="modal" id="reupload-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">📤 Re-upload Edited Salary Report</span>
+      <button class="mc" onclick="cm('reupload-modal')">✕</button>
+    </div>
+    <div style="background:#fefce8;border:1px solid #fde047;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#854d0e;line-height:1.6">
+      <strong style="font-size:11px">Only these columns are read from the file — all others are ignored:</strong>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px">
+        <span>✏ <strong>Payable Gross</strong> <span style="font-weight:400">(triggers recompute)</span></span>
+        <span>✏ <strong>Incentive</strong></span>
+        <span>✏ <strong>Advance Salary</strong> (Loan/EMI)</span>
+        <span>✏ <strong>TDS</strong></span>
+        <span>✏ <strong>Total LOP</strong></span>
+        <span>✏ <strong>Account No · IFSC · PAN · Email</strong> <span style="font-weight:400">(also updates employee master)</span></span>
+      </div>
+      <div style="margin-top:5px;color:#92400e;font-size:10px">
+        System auto-recomputes Basic, HRA, Spl Allow, PF, PT, Total Deduction, Net Pay, CTC after upload. · <strong>Do not change Emp ID or Month columns.</strong>
+      </div>
+    </div>
+    <form method="POST" action="{{ route('salary.report.reupload') }}" enctype="multipart/form-data">
+      @csrf
+      <input type="hidden" name="expected_month" value="{{ $month }}">
+      <div class="fld" style="margin-bottom:14px">
+        <label class="req">Edited Excel File (.xlsx)</label>
+        <input type="file" name="file" id="reupload-file-index" accept=".xlsx,.xls" required
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%"
+          onchange="verifyReuploadMonth(this, '{{ $month }}')">
+        <div id="reupload-month-ok-index" style="display:none;margin-top:6px;font-size:11px;color:var(--grn);font-weight:600">
+          ✅ File month verified — matches <strong>{{ $month ? \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y') : '' }}</strong>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">
+          Upload the salary report Excel previously downloaded and edited.
+          Month-year is read automatically from the <strong>Month</strong> column.
+        </div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('reupload-modal')">Cancel</button>
+        <button type="submit" class="btn acc">📤 Replace Snapshot Data</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 @endsection
