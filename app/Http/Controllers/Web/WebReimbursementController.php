@@ -18,6 +18,8 @@ class WebReimbursementController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('reimbursment_tab');
+
         $companyId = $this->resolveCompanyId($request);
 
         $claims = ReimbursementClaim::with([
@@ -41,6 +43,8 @@ class WebReimbursementController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('reimbursment_add');
+
         $validated = $request->validate([
             'year'                          => 'required|integer',
             'month'                         => 'required|integer|min:1|max:12',
@@ -103,6 +107,8 @@ class WebReimbursementController extends Controller
 
     public function template()
     {
+        $this->authorize('reimbursment_tab');
+
         $wb = new Spreadsheet();
         $ws = $wb->getActiveSheet();
         $ws->setTitle('Template');
@@ -135,6 +141,8 @@ class WebReimbursementController extends Controller
 
     public function approve(Request $request, ReimbursementClaim $claim)
     {
+        $this->authorize('reimbursment_edit');
+
         $request->validate(['action' => 'required|in:approved,rejected']);
         $claim->update(['status' => $request->action, 'approved_by' => auth()->id(), 'approved_at' => now()]);
         return redirect()->route('reimbursements')->with('success', 'Claim ' . $request->action . '.');

@@ -148,7 +148,7 @@
         <span class="mt">Add Employee</span>
         <button class="mc" onclick="cm('emp-modal')">✕</button>
       </div>
-      <form method="POST" action="<?php echo e(route('employees.store')); ?>">
+      <form method="POST" action="<?php echo e(route('employees.store')); ?>" enctype="multipart/form-data">
         <?php echo csrf_field(); ?>
         <input type="hidden" name="employee_status" value="active">
 
@@ -260,15 +260,6 @@ unset($__errorArgs, $__bag); ?>
             <input type="date" name="date_of_birth" value="<?php echo e(old('date_of_birth')); ?>">
           </div>
           <div class="fld">
-            <label>Blood Group</label>
-            <select name="blood_group">
-              <option value="">Select</option>
-              <?php $__currentLoopData = ['A+','A-','B+','B-','AB+','AB-','O+','O-']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $bg): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                <option value="<?php echo e($bg); ?>" <?php echo e(old('blood_group') === $bg ? 'selected' : ''); ?>><?php echo e($bg); ?></option>
-              <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-            </select>
-          </div>
-          <div class="fld">
             <label>Marital Status</label>
             <select name="marital_status">
               <option value="">Select</option>
@@ -290,8 +281,24 @@ unset($__errorArgs, $__bag); ?>
         </div>
         <div class="fg2">
           <div class="fld">
-            <label>Official Email</label>
-            <input type="email" name="official_email" value="<?php echo e(old('official_email')); ?>">
+            <label class="req">Official Email</label>
+            <input type="email" name="official_email" required value="<?php echo e(old('official_email')); ?>"
+              <?php $__errorArgs = ['official_email'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['official_email'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
             <label class="req">Mobile (10 digits)</label>
@@ -369,44 +376,132 @@ unset($__errorArgs, $__bag); ?>>
             </select>
           </div>
           <div class="fld">
-            <label>Work Type *</label>
-            <select name="work_type" required>
+            <label class="req">Work Type</label>
+            <select name="work_type" id="add-work-type" required onchange="toggleClientName('add', this.value)"
+              <?php $__errorArgs = ['work_type'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
               <option value="wfo"            <?php echo e(old('work_type', 'wfo') === 'wfo'            ? 'selected' : ''); ?>>Work from Office</option>
               <option value="wfh"            <?php echo e(old('work_type') === 'wfh'            ? 'selected' : ''); ?>>Work from Home</option>
               <option value="hybrid"         <?php echo e(old('work_type') === 'hybrid'         ? 'selected' : ''); ?>>Hybrid</option>
               <option value="client_location"<?php echo e(old('work_type') === 'client_location'? 'selected' : ''); ?>>Client Location</option>
             </select>
+            <?php $__errorArgs = ['work_type'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
+          </div>
+          <div class="fld" id="add-client-name-wrap" style="display:<?php echo e(old('work_type') === 'client_location' ? 'flex' : 'none'); ?>">
+            <label class="req">Client Name</label>
+            <input type="text" name="client_name" value="<?php echo e(old('client_name')); ?>"
+              <?php $__errorArgs = ['client_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['client_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Department</label>
-            <select name="department_id">
+            <label class="req">Department</label>
+            <select name="department_id" required <?php $__errorArgs = ['department_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
               <option value="">Select Department</option>
               <?php $__currentLoopData = $departments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $dept): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <option value="<?php echo e($dept->id); ?>" <?php echo e(old('department_id') == $dept->id ? 'selected' : ''); ?>><?php echo e($dept->name); ?></option>
               <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
             </select>
+            <?php $__errorArgs = ['department_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Designation</label>
-            <select name="designation_id">
+            <label class="req">Designation</label>
+            <select name="designation_id" required <?php $__errorArgs = ['designation_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
               <option value="">Select Designation</option>
               <?php $__currentLoopData = $designations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $d): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <option value="<?php echo e($d->id); ?>" <?php echo e(old('designation_id') == $d->id ? 'selected' : ''); ?>><?php echo e($d->name); ?></option>
               <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
             </select>
+            <?php $__errorArgs = ['designation_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Branch / Location</label>
-            <select name="branch_id">
+            <label class="req">Branch / Location</label>
+            <select name="branch_id" id="add-branch" required <?php $__errorArgs = ['branch_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
               <option value="">Select Branch</option>
               <?php $__currentLoopData = $branches; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $b): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <option value="<?php echo e($b->id); ?>" <?php echo e(old('branch_id') == $b->id ? 'selected' : ''); ?>><?php echo e($b->name); ?></option>
               <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
             </select>
+            <?php $__errorArgs = ['branch_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Reporting Manager</label>
-            <select name="reporting_manager_id">
+            <label class="req">Reporting Manager</label>
+            <select name="reporting_manager_id" required <?php $__errorArgs = ['reporting_manager_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
               <option value="">Select Manager</option>
               <?php $__currentLoopData = $managers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mgr): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <option value="<?php echo e($mgr->id); ?>" <?php echo e(old('reporting_manager_id') == $mgr->id ? 'selected' : ''); ?>>
@@ -415,11 +510,35 @@ unset($__errorArgs, $__bag); ?>>
                 </option>
               <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
             </select>
+            <?php $__errorArgs = ['reporting_manager_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Probation Period (months)</label>
-            <input type="number" name="probation_period_months" min="0" max="24"
-              value="<?php echo e(old('probation_period_months', 6)); ?>" placeholder="6">
+            <label class="req">Probation Period (months)</label>
+            <input type="number" name="probation_period_months" min="0" max="24" required
+              value="<?php echo e(old('probation_period_months', 6)); ?>" placeholder="6"
+              <?php $__errorArgs = ['probation_period_months'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['probation_period_months'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
             <label>Employee ID <span style="font-size:10px;color:var(--t3);font-weight:400">(auto-generated if blank)</span></label>
@@ -435,8 +554,9 @@ unset($__errorArgs, $__bag); ?>>
         <div class="fg2">
           <div class="fld">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" name="is_pf_applicable" value="1"
-                <?php echo e(old('is_pf_applicable', '1') ? 'checked' : ''); ?> style="width:16px;height:16px">
+              <input type="checkbox" name="is_pf_applicable" id="add-pf-applicable" value="1"
+                <?php echo e(old('is_pf_applicable', '1') ? 'checked' : ''); ?> style="width:16px;height:16px"
+                onchange="toggleUanRequired('add', this.checked)">
               PF Applicable
             </label>
           </div>
@@ -449,8 +569,8 @@ unset($__errorArgs, $__bag); ?>>
         </div>
         <div class="fg2">
           <div class="fld">
-            <label class="req">PAN Number</label>
-            <input type="text" name="pan_number" value="<?php echo e(old('pan_number')); ?>" required
+            <label>PAN Number</label>
+            <input type="text" name="pan_number" value="<?php echo e(old('pan_number')); ?>"
               placeholder="ABCDE1234F" maxlength="10" style="text-transform:uppercase"
               oninput="this.value=this.value.toUpperCase()"
               <?php $__errorArgs = ['pan_number'];
@@ -471,8 +591,8 @@ endif;
 unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label class="req">Aadhaar Number</label>
-            <input type="text" name="aadhaar_number" value="<?php echo e(old('aadhaar_number')); ?>" required
+            <label>Aadhaar Number</label>
+            <input type="text" name="aadhaar_number" value="<?php echo e(old('aadhaar_number')); ?>"
               placeholder="12-digit number" maxlength="12" pattern="\d{12}"
               <?php $__errorArgs = ['aadhaar_number'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
@@ -492,9 +612,26 @@ endif;
 unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>UAN Number</label>
-            <input type="text" name="uan_number" value="<?php echo e(old('uan_number')); ?>"
-              placeholder="12-digit UAN" maxlength="12">
+            <label id="add-uan-label" class="<?php echo e(old('is_pf_applicable', '1') ? 'req' : ''); ?>">UAN Number</label>
+            <input type="text" name="uan_number" id="add-uan" value="<?php echo e(old('uan_number')); ?>"
+              placeholder="12-digit UAN" maxlength="12" <?php echo e(old('is_pf_applicable', '1') ? 'required' : ''); ?>
+
+              <?php $__errorArgs = ['uan_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['uan_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
         </div>
 
@@ -504,8 +641,8 @@ unset($__errorArgs, $__bag); ?>
         </div>
         <div class="fg2">
           <div class="fld">
-            <label class="req">Bank Name</label>
-            <input type="text" name="bank_name" value="<?php echo e(old('bank_name')); ?>" required
+            <label>Bank Name</label>
+            <input type="text" name="bank_name" value="<?php echo e(old('bank_name')); ?>"
               placeholder="e.g. HDFC Bank"
               <?php $__errorArgs = ['bank_name'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
@@ -525,8 +662,8 @@ endif;
 unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label class="req">Account Number</label>
-            <input type="text" name="account_number" value="<?php echo e(old('account_number')); ?>" required
+            <label>Account Number</label>
+            <input type="text" name="account_number" value="<?php echo e(old('account_number')); ?>"
               <?php $__errorArgs = ['account_number'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -545,8 +682,8 @@ endif;
 unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label class="req">IFSC Code</label>
-            <input type="text" name="ifsc_code" value="<?php echo e(old('ifsc_code')); ?>" required
+            <label>IFSC Code</label>
+            <input type="text" name="ifsc_code" value="<?php echo e(old('ifsc_code')); ?>"
               placeholder="HDFC0001234" maxlength="11" style="text-transform:uppercase"
               oninput="this.value=this.value.toUpperCase()"
               <?php $__errorArgs = ['ifsc_code'];
@@ -567,8 +704,8 @@ endif;
 unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label class="req">Account Holder Name</label>
-            <input type="text" name="account_holder_name" value="<?php echo e(old('account_holder_name')); ?>" required
+            <label>Account Holder Name</label>
+            <input type="text" name="account_holder_name" value="<?php echo e(old('account_holder_name')); ?>"
               placeholder="As per bank records"
               <?php $__errorArgs = ['account_holder_name'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
@@ -595,14 +732,75 @@ unset($__errorArgs, $__bag); ?>
         </div>
         <div class="fg2">
           <div class="fld">
-            <label>Contact Name</label>
-            <input type="text" name="emergency_contact_name" value="<?php echo e(old('emergency_contact_name')); ?>">
+            <label class="req">Contact Name</label>
+            <input type="text" name="emergency_contact_name" required value="<?php echo e(old('emergency_contact_name')); ?>"
+              <?php $__errorArgs = ['emergency_contact_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['emergency_contact_name'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
-            <label>Contact Phone (10 digits)</label>
-            <input type="text" name="emergency_contact_phone" value="<?php echo e(old('emergency_contact_phone')); ?>"
-              pattern="\d{10}" maxlength="10" placeholder="9876543210">
+            <label class="req">Contact Phone (10 digits)</label>
+            <input type="text" name="emergency_contact_phone" required value="<?php echo e(old('emergency_contact_phone')); ?>"
+              pattern="\d{10}" maxlength="10" placeholder="9876543210"
+              <?php $__errorArgs = ['emergency_contact_phone'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ['emergency_contact_phone'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
           </div>
+        </div>
+
+        
+        <div style="margin:18px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
+          Documents
+        </div>
+        <div class="fg2">
+          <?php $__currentLoopData = \App\Models\EmployeeDocument::UPLOAD_TYPES; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $docType => $docLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+          <div class="fld">
+            <label><?php echo e($docLabel); ?></label>
+            <input type="file" name="documents[<?php echo e($docType); ?>]" accept=".pdf,.jpg,.jpeg,.png"
+              <?php $__errorArgs = ["documents.$docType"];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <?php $__errorArgs = ["documents.$docType"];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
+          </div>
+          <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </div>
 
         <div class="mf" style="position:sticky;bottom:0;background:var(--s1);padding-top:12px;border-top:1px solid var(--b1)">
@@ -620,7 +818,7 @@ unset($__errorArgs, $__bag); ?>
         <span class="mt">Edit Employee</span>
         <button class="mc" onclick="cm('emp-edit-modal')">✕</button>
       </div>
-      <form method="POST" id="emp-edit-form">
+      <form method="POST" id="emp-edit-form" enctype="multipart/form-data">
         <?php echo csrf_field(); ?>
         <div id="edit-loading" style="text-align:center;padding:40px;color:var(--t3);display:none">
           Loading employee data…
@@ -655,15 +853,6 @@ unset($__errorArgs, $__bag); ?>
             <div class="fld">
               <label>Date of Birth</label>
               <input type="date" name="date_of_birth" id="e-dob">
-            </div>
-            <div class="fld">
-              <label>Blood Group</label>
-              <select name="blood_group" id="e-blood-group">
-                <option value="">Select</option>
-                <?php $__currentLoopData = ['A+','A-','B+','B-','AB+','AB-','O+','O-']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $bg): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                  <option value="<?php echo e($bg); ?>"><?php echo e($bg); ?></option>
-                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-              </select>
             </div>
             <div class="fld">
               <label>Marital Status</label>
@@ -727,12 +916,16 @@ unset($__errorArgs, $__bag); ?>
             </div>
             <div class="fld">
               <label>Work Type</label>
-              <select name="work_type" id="e-work-type">
+              <select name="work_type" id="e-work-type" onchange="toggleClientName('e', this.value)">
                 <option value="wfo">Work from Office</option>
                 <option value="wfh">Work from Home</option>
                 <option value="hybrid">Hybrid</option>
                 <option value="client_location">Client Location</option>
               </select>
+            </div>
+            <div class="fld" id="e-client-name-wrap" style="display:none">
+              <label>Client Name</label>
+              <input type="text" name="client_name" id="e-client-name">
             </div>
             <div class="fld">
               <label>Department</label>
@@ -787,7 +980,8 @@ unset($__errorArgs, $__bag); ?>
           <div class="fg2">
             <div class="fld">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <input type="checkbox" name="is_pf_applicable" value="1" id="e-pf" style="width:16px;height:16px">
+                <input type="checkbox" name="is_pf_applicable" value="1" id="e-pf" style="width:16px;height:16px"
+                  onchange="toggleUanRequired('e', this.checked)">
                 PF Applicable
               </label>
             </div>
@@ -835,7 +1029,7 @@ unset($__errorArgs, $__bag); ?>
                 placeholder="12-digit number" maxlength="12">
             </div>
             <div class="fld">
-              <label>UAN Number</label>
+              <label id="e-uan-label">UAN Number</label>
               <input type="text" name="uan_number" id="e-uan" maxlength="12">
             </div>
           </div>
@@ -878,6 +1072,19 @@ unset($__errorArgs, $__bag); ?>
               <label>Contact Phone</label>
               <input type="text" name="emergency_contact_phone" id="e-emg-phone" maxlength="10">
             </div>
+          </div>
+
+          
+          <div style="margin:18px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
+            Documents
+          </div>
+          <div class="fg2">
+            <?php $__currentLoopData = \App\Models\EmployeeDocument::UPLOAD_TYPES; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $docType => $docLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <div class="fld">
+              <label><?php echo e($docLabel); ?> <a href="#" id="e-doc-<?php echo e($docType); ?>-link" target="_blank" style="display:none;font-weight:400;font-size:11px;margin-left:6px">(view current)</a></label>
+              <input type="file" name="documents[<?php echo e($docType); ?>]" accept=".pdf,.jpg,.jpeg,.png">
+            </div>
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
           </div>
 
         </div>
@@ -931,7 +1138,6 @@ unset($__errorArgs, $__bag); ?>
       setVal('e-last-name',     d.last_name);
       setVal('e-gender',        d.gender);
       setVal('e-dob',           d.date_of_birth);
-      setVal('e-blood-group',   d.blood_group);
       setVal('e-marital',       d.marital_status);
 
       // Contact
@@ -944,6 +1150,8 @@ unset($__errorArgs, $__bag); ?>
       setVal('e-status',        d.employee_status);
       setVal('e-emp-type',      d.employment_type);
       setVal('e-work-type',     d.work_type);
+      setVal('e-client-name',   d.client_name);
+      toggleClientName('e', d.work_type);
       setVal('e-dept',          d.department_id);
       setVal('e-desig',         d.designation_id);
       setVal('e-branch',        d.branch_id);
@@ -958,6 +1166,7 @@ unset($__errorArgs, $__bag); ?>
       setCheck('e-pt',          d.is_pt_applicable);
       setCheck('e-tds',         d.is_tds_applicable);
       setVal('e-tds-regime',    d.tds_regime);
+      toggleUanRequired('e', d.is_pf_applicable);
 
       // Statutory
       setVal('e-pan',           d.pan_number);
@@ -973,6 +1182,16 @@ unset($__errorArgs, $__bag); ?>
       // Emergency
       setVal('e-emg-name',      d.emergency_contact_name);
       setVal('e-emg-phone',     d.emergency_contact_phone);
+
+      // Documents — show a "view current" link for any type already uploaded
+      document.querySelectorAll('[id^="e-doc-"][id$="-link"]').forEach(a => a.style.display = 'none');
+      Object.entries(d.documents || {}).forEach(([type, doc]) => {
+        const link = document.getElementById('e-doc-' + type + '-link');
+        if (!link) return;
+        link.href = doc.download_url;
+        link.textContent = '(view: ' + doc.file_name + ')';
+        link.style.display = 'inline';
+      });
 
     } catch(e) {
       console.error('Failed to load employee data', e);
@@ -998,10 +1217,53 @@ unset($__errorArgs, $__bag); ?>
 
   function onCompanyChange(companyId) {
     const empIdInput = document.querySelector('#emp-modal input[name="employee_id"]');
-    if (!empIdInput) return;
-    const suggested = _empIdByCompany[companyId] || '';
-    empIdInput.value       = suggested;
-    empIdInput.placeholder = suggested || 'e.g. 202618053';
+    if (empIdInput) {
+      const suggested = _empIdByCompany[companyId] || '';
+      empIdInput.value       = suggested;
+      empIdInput.placeholder = suggested || 'e.g. 202618053';
+    }
+
+    // Branches belong to a company — refresh the list instead of showing
+    // whatever company the Employees page happens to be filtered to.
+    const branchSelect = document.getElementById('add-branch');
+    if (!branchSelect) return;
+    branchSelect.innerHTML = '<option value="">Loading…</option>';
+    if (!companyId) {
+      branchSelect.innerHTML = '<option value="">Select Branch</option>';
+      return;
+    }
+    fetch('<?php echo e(route("masters.branches.by-company")); ?>?company_id=' + encodeURIComponent(companyId))
+      .then(r => r.json())
+      .then(branches => {
+        branchSelect.innerHTML = '<option value="">Select Branch</option>';
+        branches.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b.id;
+          opt.textContent = b.name;
+          branchSelect.appendChild(opt);
+        });
+      })
+      .catch(() => { branchSelect.innerHTML = '<option value="">Select Branch</option>'; });
+  }
+
+  // Work Type = Client Location -> show/require the Client Name field.
+  function toggleClientName(prefix, workType) {
+    const wrap  = document.getElementById(prefix + '-client-name-wrap');
+    const input = wrap?.querySelector('input[name="client_name"]');
+    if (!wrap || !input) return;
+    const show = workType === 'client_location';
+    wrap.style.display = show ? 'flex' : 'none';
+    input.required = show;
+    if (!show) input.value = '';
+  }
+
+  // PF Applicable checked -> UAN Number becomes required.
+  function toggleUanRequired(prefix, isChecked) {
+    const input = document.getElementById(prefix + '-uan');
+    const label = document.getElementById(prefix + '-uan-label');
+    if (!input) return;
+    input.required = isChecked;
+    label?.classList.toggle('req', isChecked);
   }
 
   // ── Cross-page bulk selection (sessionStorage) ───────────────────────────

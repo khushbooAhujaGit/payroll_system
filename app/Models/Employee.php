@@ -23,7 +23,9 @@ class Employee extends Model
         'grade_id',
         'cost_center_id',
         'reporting_manager_id',
+        'pending_reporting_manager_ref',
         'team_leader_id',
+        'pending_team_leader_ref',
         'holiday_calendar_id',
         'title',
         'employee_id',
@@ -64,6 +66,7 @@ class Employee extends Model
         'probation_end_date',
         'employment_type',
         'work_type',
+        'client_name',
         'attendance_group',
         'employee_status',
         'is_payroll_active',
@@ -80,7 +83,6 @@ class Employee extends Model
     ];
 
     protected $casts = [
-        'date_of_birth'              => 'date',
         'date_of_joining'            => 'date',
         'date_of_leaving'            => 'date',
         'offer_letter_date'          => 'date',
@@ -93,6 +95,15 @@ class Employee extends Model
         'is_pt_applicable'           => 'boolean',
         'is_lwf_applicable'          => 'boolean',
         'is_tds_applicable'          => 'boolean',
+        // Encrypted at rest — see database/migrations/2026_07_15_000001_add_column_encryption_support.php
+        'date_of_birth'              => 'encrypted',
+        'personal_email'             => 'encrypted',
+        'mobile'                     => 'encrypted',
+        'alternate_phone'            => 'encrypted',
+        'current_address'            => 'encrypted',
+        'permanent_address'          => 'encrypted',
+        'emergency_contact_name'     => 'encrypted',
+        'emergency_contact_phone'    => 'encrypted',
     ];
 
     // ──────────────────────────────────────────
@@ -274,7 +285,7 @@ class Employee extends Model
 
     public function getAgeAttribute(): ?int
     {
-        return $this->date_of_birth?->age;
+        return $this->date_of_birth ? \Carbon\Carbon::parse($this->date_of_birth)->age : null;
     }
 
     public function getServiceYearsAttribute(): float

@@ -73,7 +73,8 @@
             text-overflow: ellipsis;
         }
 
-        .ss-opt:hover {
+        .ss-opt:hover,
+        .ss-opt.ss-hl {
             background: var(--s2);
         }
 
@@ -81,6 +82,11 @@
             background: var(--acc2);
             color: var(--acc);
             font-weight: 600;
+        }
+
+        .ss-opt.ss-hl.ss-sel {
+            background: var(--acc2);
+            filter: brightness(0.96);
         }
 
         .ss-none {
@@ -104,80 +110,147 @@
             </div>
         </div>
         <nav>
+            @unless(auth()->user()?->isRestrictedToLeaveOnly())
             <div class="nl">Overview</div>
             <a class="ni {{ request()->routeIs('dashboard') ? 'on' : '' }}"
-                href="{{ route('dashboard') }}"><span>📊</span> Dashboard</a>
+                href="{{ route('dashboard') }}">Dashboard</a>
+            @endunless
 
+            @canany(['employee_view', 'bioid_view', 'attendance_view', 'attendance_self_view', 'attendance_analytics_view', 'leave_management_view', 'reimbursment_self_view'])
             <div class="nl">HR</div>
+            @can('employee_view')
             <a class="ni {{ request()->routeIs('employees') ? 'on' : '' }}"
-                href="{{ route('employees') }}"><span>👥</span> Employees</a>
-            <a class="ni {{ request()->routeIs('bio_ids') ? 'on' : '' }}" href="{{ route('bio_ids') }}"><span>🔖</span>
+                href="{{ route('employees') }}">Employees</a>
+            @endcan
+            @can('bioid_view')
+            <a class="ni {{ request()->routeIs('bio_ids') ? 'on' : '' }}" href="{{ route('bio_ids') }}">
                 Bio IDs</a>
+            @endcan
+            @can('attendance_view')
             <a class="ni {{ request()->routeIs('attendance') ? 'on' : '' }}"
-                href="{{ route('attendance') }}"><span>🕐</span> Attendance</a>
-            <a class="ni {{ request()->routeIs('leave') ? 'on' : '' }}" href="{{ route('leave') }}"><span>🏖️</span>
+                href="{{ route('attendance') }}">Attendance</a>
+            @endcan
+            @can('attendance_self_view')
+            @if(auth()->user()->employee)
+            <a class="ni {{ request()->routeIs('my-attendance') ? 'on' : '' }}"
+                href="{{ route('my-attendance') }}">My Attendance</a>
+            @endif
+            @endcan
+            @can('attendance_edit')
+            <a class="ni {{ request()->routeIs('attendance.change_requests*') ? 'on' : '' }}"
+                href="{{ route('attendance.change_requests') }}">Attendance Requests</a>
+            @endcan
+            @can('attendance_analytics_view')
+            <a class="ni {{ request()->routeIs('attendance.analytics') ? 'on' : '' }}"
+                href="{{ route('attendance.analytics') }}">Attendance Analytics</a>
+            @endcan
+            @can('leave_management_view')
+            <a class="ni {{ request()->routeIs('leave') ? 'on' : '' }}" href="{{ route('leave') }}">
                 Leave Management</a>
+            @endcan
+            @can('reimbursment_self_view')
+            @if(auth()->user()->employee)
+            <a class="ni {{ request()->routeIs('my-reimbursements') ? 'on' : '' }}"
+                href="{{ route('my-reimbursements') }}">My Reimbursements</a>
+            @endif
+            @endcan
+            @endcanany
 
+            @canany(['payroll_view', 'salary_details', 'incentive_view', 'monthly_tds_view'])
             <div class="nl">Payroll</div>
+            @can('payroll_view')
             <a class="ni {{ request()->routeIs('payroll', 'salary.report*') ? 'on' : '' }}"
-                href="{{ route('payroll') }}"><span>💰</span> Payroll & Reports</a>
-            <a class="ni {{ request()->routeIs('salary') ? 'on' : '' }}" href="{{ route('salary') }}"><span>🧾</span>
+                href="{{ route('payroll') }}">Payroll & Reports</a>
+            @endcan
+            @can('salary_details')
+            <a class="ni {{ request()->routeIs('salary') ? 'on' : '' }}" href="{{ route('salary') }}">
                 Salary Details</a>
+            @endcan
+            @can('incentive_view')
             <a class="ni {{ request()->routeIs('incentives') ? 'on' : '' }}"
-                href="{{ route('incentives') }}"><span>🎁</span> Incentives</a>
+                href="{{ route('incentives') }}">Incentives</a>
+            @endcan
+            @can('monthly_tds_view')
             <a class="ni {{ request()->routeIs('tds.monthly') ? 'on' : '' }}"
-                href="{{ route('tds.monthly') }}"><span>📑</span> Monthly TDS</a>
+                href="{{ route('tds.monthly') }}">Monthly TDS</a>
+            @endcan
+            @endcanany
 
+            @canany(['loan_tab_view', 'reimbursment_tab', 'reimb_report', 'reimbursment_approve'])
             <div class="nl">Finance</div>
-            <a class="ni {{ request()->routeIs('loans') ? 'on' : '' }}" href="{{ route('loans') }}"><span>🏦</span>
+            @can('loan_tab_view')
+            <a class="ni {{ request()->routeIs('loans') ? 'on' : '' }}" href="{{ route('loans') }}">
                 Loans / Advance</a>
+            @endcan
+            @can('reimbursment_tab')
             <a class="ni {{ request()->routeIs('reimbursements.tracker*') ? 'on' : '' }}"
-                href="{{ route('reimbursements.tracker') }}"><span>📋</span> Reimbursements</a>
+                href="{{ route('reimbursements.tracker') }}">Reimbursements</a>
+            @endcan
+            @can('reimbursment_approve')
+            <a class="ni {{ request()->routeIs('reimbursements.approvals*') ? 'on' : '' }}"
+                href="{{ route('reimbursements.approvals') }}">Reimbursement Approvals</a>
+            @endcan
+            @can('reimb_report')
             <a class="ni {{ request()->routeIs('reimbursements.report*') ? 'on' : '' }}"
-                href="{{ route('reimbursements.report.saved') }}"><span>📊</span> Reimb. Report</a>
-            <a class="ni {{ request()->routeIs('contractors') ? 'on' : '' }}"
-                href="{{ route('contractors') }}"><span>🏭</span> Contractors</a>
+                href="{{ route('reimbursements.report.saved') }}">Reimb. Report</a>
+            @endcan
+            @endcanany
 
-            <div class="nl">Statutory</div>
-            <a class="ni {{ request()->routeIs('statutory') ? 'on' : '' }}"
-                href="{{ route('statutory') }}"><span>📋</span> Compliance</a>
-            <a class="ni {{ request()->routeIs('tds') ? 'on' : '' }}" href="{{ route('tds') }}"><span>📄</span> TDS
-                Slabs</a>
-
-            <div class="nl">More</div>
-            <a class="ni {{ request()->routeIs('holidays') ? 'on' : '' }}"
-                href="{{ route('holidays') }}"><span>🗓️</span> Holidays</a>
-            <a class="ni {{ request()->routeIs('helpdesk') ? 'on' : '' }}"
-                href="{{ route('helpdesk') }}"><span>🎫</span> Helpdesk</a>
-            <a class="ni {{ request()->routeIs('reports') ? 'on' : '' }}"
-                href="{{ route('reports') }}"><span>📊</span> Reports</a>
-
+            @canany(['holidays_view', 'company_view', 'department_view', 'branch_view', 'leave_policies_view', 'rbac_roles_manage', 'user_view'])
             <div class="nl">Masters</div>
+             @can('holidays_view')
+            <a class="ni {{ request()->routeIs('holidays') ? 'on' : '' }}"
+                href="{{ route('holidays') }}">Holidays</a>
+            @endcan
+            @can('company_view')
             <a class="ni {{ request()->routeIs('masters') ? 'on' : '' }}"
-                href="{{ route('masters') }}"><span>🏢</span> Company / Entity</a>
+                href="{{ route('masters') }}">Company / Entity</a>
+            @endcan
+            @can('department_view')
             <a class="ni {{ request()->routeIs('departments') ? 'on' : '' }}"
-                href="{{ route('departments') }}"><span>🏗️</span> Departments</a>
+                href="{{ route('departments') }}">Departments</a>
+            <a class="ni {{ request()->routeIs('designations') ? 'on' : '' }}"
+                href="{{ route('designations') }}">Designations</a>
+            @endcan
+            @can('branch_view')
+            <a class="ni {{ request()->routeIs('branches') ? 'on' : '' }}"
+                href="{{ route('branches') }}">Branches</a>
+            @endcan
+            @can('leave_policies_view')
             <a class="ni {{ request()->routeIs('leave.policies') ? 'on' : '' }}"
-                href="{{ route('leave.policies') }}"><span>📋</span> Leave Policies</a>
+                href="{{ route('leave.policies') }}">Leave Policies</a>
+            @endcan
+            @can('rbac_roles_manage')
+            <a class="ni {{ request()->routeIs('rbac.roles', 'rbac.permission_groups', 'rbac.permissions', 'rbac.index') ? 'on' : '' }}"
+                href="{{ route('rbac.roles') }}">Role &amp; Permissions</a>
+            @endcan
+            @can('user_view')
+            <a class="ni {{ request()->routeIs('users.*') ? 'on' : '' }}"
+                href="{{ route('users.index') }}">Users</a>
+            @endcan
+            @endcanany
 
         </nav>
         <div class="sf">
+            <a href="{{ route('profile.show') }}" class="up" style="text-decoration:none;color:inherit" title="My Profile">
+                <div class="uav">{{ strtoupper(substr(auth()->user()->name ?? auth()->user()->email, 0, 1)) }}
+                </div>
+                <div style="flex:1;min-width:0">
+                    <div
+                        style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        {{ auth()->user()->name ?? auth()->user()->email }}
+                    </div>
+                    <div style="font-size:10px;color:var(--t3)">
+                        {{ auth()->user()->roles->first()?->name ?? 'user' }}
+                    </div>
+                </div>
+            </a>
             <form method="POST" action="{{ route('logout') }}" id="logout-form">
                 @csrf
-                <div class="up" onclick="document.getElementById('logout-form').submit()" title="Sign out">
-                    <div class="uav">{{ strtoupper(substr(auth()->user()->name ?? auth()->user()->email, 0, 1)) }}
-                    </div>
-                    <div style="flex:1;min-width:0">
-                        <div
-                            style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                            {{ auth()->user()->name ?? auth()->user()->email }}
-                        </div>
-                        <div style="font-size:10px;color:var(--t3)">
-                            {{ auth()->user()->roles->first()?->slug ?? 'user' }}
-                        </div>
-                    </div>
-                    <span style="color:var(--t3);font-size:11px">⏻</span>
-                </div>
+                <button type="submit" title="Sign out"
+                    style="background:none;border:none;color:var(--t3);font-size:12px;cursor:pointer;padding:6px 8px;width:100%;text-align:left">
+                    ⏻ Sign out
+                </button>
             </form>
         </div>
     </aside>
@@ -186,6 +259,37 @@
         <div class="hdr">
             <h2>@yield('title', 'Dashboard')</h2>
             <div style="display:flex;gap:6px" id="pacts">@yield('page_actions')</div>
+            <div class="bell-wrap">
+                <button type="button" class="bell-btn" onclick="toggleBell(event)" title="Notifications">
+                    🔔
+                    @if ($unreadNotifCount > 0)
+                        <span class="bell-badge">{{ $unreadNotifCount > 9 ? '9+' : $unreadNotifCount }}</span>
+                    @endif
+                </button>
+                <div class="bell-drop" id="bellDrop">
+                    <div class="bell-hd">
+                        <span>Notifications</span>
+                        @if ($unreadNotifCount > 0)
+                            <form method="POST" action="{{ route('notifications.read_all') }}">
+                                @csrf
+                                <button type="submit" class="bell-mark-all">Mark all read</button>
+                            </form>
+                        @endif
+                    </div>
+                    <div class="bell-list">
+                        @forelse ($recentNotifications as $n)
+                            <a href="{{ route('notifications.open', $n->id) }}"
+                                class="bell-item {{ $n->read_at ? '' : 'unread' }}">
+                                <div class="bell-item-title">{{ $n->data['title'] ?? 'Notification' }}</div>
+                                <div class="bell-item-msg">{{ $n->data['message'] ?? '' }}</div>
+                                <div class="bell-item-time">{{ $n->created_at->diffForHumans() }}</div>
+                            </a>
+                        @empty
+                            <div class="bell-empty">No notifications yet.</div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="pg" id="pg">
             @if (session('error') && session('error_file'))
@@ -288,6 +392,18 @@
         const fmtD = d => d ? String(d).slice(0, 10) : '-';
         const om = id => $(id).classList.add('on');
         const cm = id => $(id).classList.remove('on');
+
+        // ── Notification bell ─────────────────────────────────────────────
+        function toggleBell(e) {
+            e.stopPropagation();
+            $('bellDrop').classList.toggle('on');
+        }
+        document.addEventListener('click', e => {
+            const drop = $('bellDrop');
+            if (drop && drop.classList.contains('on') && !e.target.closest('.bell-wrap')) {
+                drop.classList.remove('on');
+            }
+        });
 
         function toast(msg, t = 'ok') {
             const el = $('toast');
@@ -424,6 +540,8 @@
                 wrap.appendChild(drop);
 
                 /* ---------- helpers ---------- */
+                var hlIdx = -1; // index into the currently rendered .ss-opt list (keyboard highlight)
+
                 function selectedOpt() {
                     return Array.from(sel.options).find(o => o.value == sel.value);
                 }
@@ -433,6 +551,33 @@
                     inp.value = (o && o.value) ? o.text : '';
                 }
                 syncDisplay();
+
+                function optEls() {
+                    return Array.from(drop.querySelectorAll('.ss-opt'));
+                }
+
+                function applyHighlight() {
+                    var els = optEls();
+                    els.forEach(function(el, i) {
+                        el.classList.toggle('ss-hl', i === hlIdx);
+                    });
+                    if (hlIdx >= 0 && els[hlIdx]) {
+                        els[hlIdx].scrollIntoView({
+                            block: 'nearest'
+                        });
+                    }
+                }
+
+                function choose(el) {
+                    var o = el._opt;
+                    if (!o) return;
+                    sel.value = o.value;
+                    syncDisplay();
+                    hideDrop();
+                    sel.dispatchEvent(new Event('change', {
+                        bubbles: true
+                    }));
+                }
 
                 function render(q) {
                     drop.innerHTML = '';
@@ -444,14 +589,14 @@
                         var d = document.createElement('div');
                         d.className = 'ss-opt' + (o.value == sel.value ? ' ss-sel' : '');
                         d.textContent = o.text;
+                        d._opt = o;
                         d.addEventListener('mousedown', function(e) {
                             e.preventDefault();
-                            sel.value = o.value;
-                            syncDisplay();
-                            hideDrop();
-                            sel.dispatchEvent(new Event('change', {
-                                bubbles: true
-                            }));
+                            choose(d);
+                        });
+                        d.addEventListener('mouseenter', function() {
+                            hlIdx = optEls().indexOf(d);
+                            applyHighlight();
                         });
                         drop.appendChild(d);
                         shown++;
@@ -462,6 +607,10 @@
                         em.textContent = 'No results';
                         drop.appendChild(em);
                     }
+                    // Land the keyboard highlight on the current selection, if visible
+                    var els = optEls();
+                    hlIdx = els.findIndex(el => el.classList.contains('ss-sel'));
+                    applyHighlight();
                 }
 
                 function showDrop(q) {
@@ -473,6 +622,7 @@
                 function hideDrop() {
                     drop.style.display = 'none';
                     inp.classList.remove('ss-open');
+                    hlIdx = -1;
                     syncDisplay();
                 }
 
@@ -492,7 +642,33 @@
                     setTimeout(hideDrop, 200);
                 });
                 inp.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') hideDrop();
+                    if (e.key === 'Escape') {
+                        hideDrop();
+                        return;
+                    }
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (drop.style.display === 'none') {
+                            render(inp.value === (selectedOpt()?.text || '') ? '' : inp.value);
+                            drop.style.display = 'block';
+                            inp.classList.add('ss-open');
+                        }
+                        var count = optEls().length;
+                        if (!count) return;
+                        if (e.key === 'ArrowDown') {
+                            hlIdx = hlIdx < count - 1 ? hlIdx + 1 : 0;
+                        } else {
+                            hlIdx = hlIdx > 0 ? hlIdx - 1 : count - 1;
+                        }
+                        applyHighlight();
+                        return;
+                    }
+                    if (e.key === 'Enter') {
+                        if (drop.style.display === 'none') return;
+                        e.preventDefault();
+                        var els = optEls();
+                        if (hlIdx >= 0 && els[hlIdx]) choose(els[hlIdx]);
+                    }
                 });
 
                 /* exposed so setVal() can sync display after programmatic changes */

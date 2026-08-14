@@ -10,12 +10,16 @@ class WebMasterController extends Controller
 {
     public function index()
     {
+        $this->authorize('company_view');
+
         $companies = Company::orderBy('name')->get();
         return view('masters.index', compact('companies'));
     }
 
     public function storeCompany(Request $request)
     {
+        $this->authorize('company_add');
+
         $validated = $request->validate([
             'name'       => 'required|string|max:200',
             'short_name' => 'nullable|string|max:50',
@@ -36,6 +40,8 @@ class WebMasterController extends Controller
 
     public function destroyCompany(Company $company)
     {
+        $this->authorize('company_del');
+
         $company->delete();
         return redirect()->route('masters')->with('success', 'Company deleted.');
     }

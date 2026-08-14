@@ -14,6 +14,8 @@ class WebMonthlyTdsController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('monthly_tds_view');
+
         $companyId = $this->resolveCompanyId($request);
         $month    = $request->get('month', now()->format('Y-m'));
 
@@ -40,6 +42,8 @@ class WebMonthlyTdsController extends Controller
 
     public function export(Request $request)
     {
+        $this->authorize('monthly_tds_view');
+
         $companyId = $this->resolveCompanyId($request);
         $month    = $request->get('month', now()->format('Y-m'));
 
@@ -64,6 +68,8 @@ class WebMonthlyTdsController extends Controller
 
     public function upsert(Request $request)
     {
+        $this->authorize('monthly_tds_add');
+
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'month'       => 'required|date_format:Y-m',
@@ -83,6 +89,8 @@ class WebMonthlyTdsController extends Controller
 
     public function destroy(EmployeeMonthlyTds $tds)
     {
+        $this->authorize('monthly_tds_del');
+
         $month = $tds->month;
         $tds->delete();
         return redirect()->route('tds.monthly', ['month' => $month])
@@ -91,6 +99,8 @@ class WebMonthlyTdsController extends Controller
 
     public function template()
     {
+        $this->authorize('monthly_tds_add');
+
         $spreadsheet = new Spreadsheet();
         $ws = $spreadsheet->getActiveSheet();
         $ws->setTitle('Monthly TDS');
@@ -107,6 +117,8 @@ class WebMonthlyTdsController extends Controller
 
     public function import(Request $request)
     {
+        $this->authorize('monthly_tds_add');
+
         $request->validate([
             'file'         => 'required|file|mimes:xlsx,xls',
             'import_month' => 'required|date_format:Y-m',

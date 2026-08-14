@@ -14,6 +14,8 @@ class WebIncentiveController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('incentive_view');
+
         $companyId = $this->resolveCompanyId($request);
         $month    = $request->get('month', now()->format('Y-m'));
 
@@ -40,6 +42,8 @@ class WebIncentiveController extends Controller
 
     public function upsert(Request $request)
     {
+        $this->authorize('incentive_add');
+
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'month'       => 'required|date_format:Y-m',
@@ -59,6 +63,8 @@ class WebIncentiveController extends Controller
 
     public function destroy(EmployeeIncentive $incentive)
     {
+        $this->authorize('incentive_delete');
+
         $month = $incentive->month;
         $incentive->delete();
         return redirect()->route('incentives', ['month' => $month])
@@ -67,6 +73,8 @@ class WebIncentiveController extends Controller
 
     public function export(Request $request)
     {
+        $this->authorize('incentive_view');
+
         $companyId = $this->resolveCompanyId($request);
         $month    = $request->get('month', now()->format('Y-m'));
 
@@ -91,6 +99,8 @@ class WebIncentiveController extends Controller
 
     public function template()
     {
+        $this->authorize('incentive_add');
+
         $spreadsheet = new Spreadsheet();
         $ws = $spreadsheet->getActiveSheet();
         $ws->setTitle('Incentives');
@@ -107,6 +117,8 @@ class WebIncentiveController extends Controller
 
     public function import(Request $request)
     {
+        $this->authorize('incentive_add');
+
         $request->validate([
             'file'         => 'required|file|mimes:xlsx,xls',
             'import_month' => 'required|date_format:Y-m',

@@ -14,9 +14,11 @@ class EmployeeMasterHistory extends Model
         'changed_via', 'changed_by',
     ];
 
+    // Encrypted at rest — snapshots bank_details/pan/email values verbatim.
+    // See database/migrations/2026_07_15_000001_add_column_encryption_support.php
     protected $casts = [
-        'old_value' => 'array',
-        'new_value' => 'array',
+        'old_value' => 'encrypted:array',
+        'new_value' => 'encrypted:array',
     ];
 
     public function employee(): BelongsTo { return $this->belongsTo(Employee::class); }

@@ -215,6 +215,10 @@ class LeaveTrackerImporter extends BaseImporter
             'reason'           => trim((string) ($data['reason'] ?? '')) ?: null,
             'source_file'      => $this->meta['source_file'] ?? null,
             'uploaded_by'      => $this->meta['uploaded_by'] ?? null,
+            // Bulk-imported records are treated as already approved (they
+            // reflect actual/historical leave, not a pending request) —
+            // set explicitly rather than relying on the column default.
+            'is_approved'      => true,
             'created_at'       => $now,
             'updated_at'       => $now,
         ];

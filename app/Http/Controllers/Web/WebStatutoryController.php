@@ -14,6 +14,8 @@ class WebStatutoryController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('statutory_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $overdue = ComplianceChallan::where('company_id', $companyId)
@@ -49,6 +51,8 @@ class WebStatutoryController extends Controller
 
     public function storeChallan(Request $request)
     {
+        $this->authorize('statutory_manage');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -69,6 +73,8 @@ class WebStatutoryController extends Controller
 
     public function markPaid(Request $request, ComplianceChallan $challan)
     {
+        $this->authorize('statutory_manage');
+
         $validated = $request->validate([
             'challan_number' => 'required|string',
             'payment_date'   => 'required|date',

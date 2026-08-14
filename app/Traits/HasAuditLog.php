@@ -30,8 +30,8 @@ trait HasAuditLog
                 'module'      => class_basename($model),
                 'model_type'  => get_class($model),
                 'model_id'    => $model->getKey(),
-                'old_values'  => $old ? static::filterSensitive($old) : null,
-                'new_values'  => $new ? static::filterSensitive($new) : null,
+                'old_values'  => $old ? static::filterSensitive($old, $model) : null,
+                'new_values'  => $new ? static::filterSensitive($new, $model) : null,
                 'ip_address'  => request()->ip(),
             ]);
         } catch (\Throwable) {
@@ -39,9 +39,26 @@ trait HasAuditLog
         }
     }
 
-    protected static function filterSensitive(array $data): array
+    /**
+     * Redacts sensitive fields before they're written to audit_logs.
+     *
+     * $old (from getOriginal()) has casts applied, so encrypted columns arrive
+     * here already decrypted — every column the model casts to 'encrypted'
+     * must be redacted here too, or the plaintext ends up sitting in
+     * audit_logs.old_values/new_values despite the column itself being encrypted.
+     */
+    protected static function filterSensitive(array $data, $model = null): array
     {
         $sensitive = ['password', 'token', 'secret', 'api_key', 'aadhaar_number', 'account_number'];
+
+        if ($model) {
+            foreach ($model->getCasts() as $field => $cast) {
+                if ($cast === 'encrypted' || str_starts_with($cast, 'encrypted:')) {
+                    $sensitive[] = $field;
+                }
+            }
+        }
+
         foreach ($sensitive as $field) {
             if (isset($data[$field])) {
                 $data[$field] = '***';

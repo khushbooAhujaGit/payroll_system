@@ -13,7 +13,14 @@ use App\Http\Controllers\Web\WebLeaveController;
 use App\Http\Controllers\Web\WebLoanController;
 use App\Http\Controllers\Web\WebMasterController;
 use App\Http\Controllers\Web\WebMonthlyTdsController;
+use App\Http\Controllers\Web\WebMyAttendanceController;
+use App\Http\Controllers\Web\WebMyReimbursementController;
+use App\Http\Controllers\Web\WebNotificationController;
+use App\Http\Controllers\Web\WebPasswordResetController;
 use App\Http\Controllers\Web\WebPayrollController;
+use App\Http\Controllers\Web\WebProfileController;
+use App\Http\Controllers\Web\WebRbacController;
+use App\Http\Controllers\Web\WebUserController;
 use App\Http\Controllers\Web\WebReimbursementController;
 use App\Http\Controllers\Web\WebReimbursementReportController;
 use App\Http\Controllers\Web\WebReportController;
@@ -28,6 +35,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/login',  [WebAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [WebAuthController::class, 'login']);
+
+    Route::get('/forgot-password',  [WebPasswordResetController::class, 'showForgotForm'])->name('password.request');
+    Route::post('/forgot-password', [WebPasswordResetController::class, 'sendResetLink'])->name('password.email');
+    Route::get('/reset-password/{token}', [WebPasswordResetController::class, 'showResetForm'])->name('password.reset');
+    Route::post('/reset-password', [WebPasswordResetController::class, 'resetPassword'])->name('password.update');
 });
 
 Route::post('/logout', [WebAuthController::class, 'logout'])
@@ -45,16 +57,26 @@ Route::get('/error-export/{filename}', function (string $filename) {
     abort_if(!preg_match('/^[\w\-]+\.xlsx$/', $filename), 404);
     $path = storage_path('app/error_exports/' . $filename);
     abort_if(!file_exists($path), 404);
-    return response()->download($path, $filename);
+    // Delete after sending — these are meant to be downloaded once and discarded,
+    // not retained indefinitely. Any left behind (e.g. never downloaded) are
+    // swept up by the storage:prune-error-exports scheduled command.
+    return response()->download($path, $filename)->deleteFileAfterSend(true);
 })->middleware('auth')->name('error_export.download');
 
 // ── AUTHENTICATED PAGES ────────────────────────────────────────────
 Route::middleware('auth')->group(function () {
 
-    Route::get('/', fn() => redirect()->route('dashboard'));
+    Route::get('/', fn(\Illuminate\Http\Request $request) => redirect()->route(
+        $request->user()?->isRestrictedToLeaveOnly() ? 'leave' : 'dashboard'
+    ));
 
     // Dashboard
     Route::get('/dashboard', [WebDashboardController::class, 'index'])->name('dashboard');
+
+    // ── My Profile (self-service — every authenticated user) ──
+    Route::get('/profile',  [WebProfileController::class, 'show'])->name('profile.show');
+    Route::put('/profile',  [WebProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/employee-details', [WebProfileController::class, 'updateEmployeeDetails'])->name('profile.employee_details.update');
 
     // ── Employees ──────────────────────────────────
     Route::get('/employees',                          [WebEmployeeController::class, 'index'])->name('employees');
@@ -65,6 +87,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/employees/import',                  [WebEmployeeController::class, 'import'])->name('employees.import');
     Route::post('/employees/bulk-destroy',            [WebEmployeeController::class, 'bulkDestroy'])->name('employees.bulk_destroy');
     Route::get('/employees/{employee}/edit-data',     [WebEmployeeController::class, 'editData'])->name('employees.edit_data');
+    Route::get('/employees/documents/{document}',     [WebEmployeeController::class, 'downloadDocument'])->name('employees.documents.download');
     Route::post('/employees/{employee}',              [WebEmployeeController::class, 'update'])->name('employees.update');
     Route::delete('/employees/{employee}',            [WebEmployeeController::class, 'destroy'])->name('employees.destroy');
 
@@ -95,11 +118,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/attendance/punch/{punch}/update',    [WebAttendanceController::class, 'updatePunch'])->name('attendance.punch.update');
     Route::delete('/attendance/punch/{punch}',         [WebAttendanceController::class, 'destroyPunch'])->name('attendance.punch.destroy');
 
+    // ── My Attendance (self-service) + Change Requests + Analytics ──
+    Route::get('/my-attendance',                        [WebMyAttendanceController::class, 'index'])->name('my-attendance');
+    Route::post('/my-attendance/change-request',        [WebMyAttendanceController::class, 'requestChange'])->name('my-attendance.change_request');
+    Route::get('/attendance/change-requests',           [WebMyAttendanceController::class, 'pendingRequests'])->name('attendance.change_requests');
+    Route::post('/attendance/change-requests/{regularization}/resolve', [WebMyAttendanceController::class, 'resolveRequest'])->name('attendance.change_requests.resolve');
+    Route::get('/attendance/analytics',                 [WebMyAttendanceController::class, 'analytics'])->name('attendance.analytics');
+
+    // ── Notifications (bell/dropdown) ──────────────
+    Route::get('/notifications/{notification}/open',    [WebNotificationController::class, 'open'])->name('notifications.open');
+    Route::post('/notifications/read-all',               [WebNotificationController::class, 'markAllRead'])->name('notifications.read_all');
+
     // ── Leave ──────────────────────────────────────
     Route::get('/leave',                         [WebLeaveController::class, 'index'])->name('leave');
     Route::post('/leave/apply',                  [WebLeaveController::class, 'apply'])->name('leave.apply');
     Route::get('/leave/export',                  [WebLeaveController::class, 'exportApplications'])->name('leave.export');
     // Leave Tracker (static segments first, before parameterised routes)
+    Route::get('/leave/calendar',                 [WebLeaveController::class, 'calendar'])->name('leave.calendar');
     Route::get('/leave/tracker',                 [WebLeaveController::class, 'trackerRecords'])->name('leave.tracker');
     Route::get('/leave/tracker/export',          [WebLeaveController::class, 'exportTracker'])->name('leave.tracker.export');
     Route::get('/leave/tracker/template',        [WebLeaveController::class, 'trackerTemplate'])->name('leave.tracker.template');
@@ -114,6 +149,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/leave-policies',                [WebLeaveController::class, 'storePolicy'])->name('leave.policies.store');
     Route::post('/leave-policies/{policy}',       [WebLeaveController::class, 'updatePolicy'])->name('leave.policies.update');
     Route::delete('/leave-policies/{policy}',     [WebLeaveController::class, 'destroyPolicy'])->name('leave.policies.destroy');
+    Route::post('/leave/bulk-approve',           [WebLeaveController::class, 'bulkApprove'])->name('leave.bulk_approve');
+    Route::post('/leave/tracker-request/{record}/approve', [WebLeaveController::class, 'approveTrackerRecord'])->name('leave.tracker_request.approve');
     // Parameterised — must come after static segments
     Route::post('/leave/{application}/approve',  [WebLeaveController::class, 'approve'])->name('leave.approve');
 
@@ -189,7 +226,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/reimbursements/tracker/images',       [WebReimbursementReportController::class, 'trackerImageUpload'])->name('reimbursements.tracker.images');
     Route::get('/reimbursements/tracker/images/{month}/{filename}', [WebReimbursementReportController::class, 'trackerImageView'])->name('reimbursements.tracker.image.view')->where('filename', '[^/]+');
     Route::post('/reimbursements/tracker/{row}/status', [WebReimbursementReportController::class, 'trackerUpdateStatus'])->name('reimbursements.tracker.status');
+    Route::post('/reimbursements/tracker/{row}/payment', [WebMyReimbursementController::class, 'updatePayment'])->name('reimbursements.tracker.payment');
     Route::delete('/reimbursements/tracker/{row}',      [WebReimbursementReportController::class, 'trackerDestroy'])->name('reimbursements.tracker.destroy');
+
+    // ── My Reimbursements (self-service claims) + Approvals ───
+    Route::get('/my-reimbursements',                       [WebMyReimbursementController::class, 'index'])->name('my-reimbursements');
+    Route::post('/my-reimbursements/submit',                [WebMyReimbursementController::class, 'submit'])->name('my-reimbursements.submit');
+    Route::get('/reimbursements/tracker/{row}/document',    [WebMyReimbursementController::class, 'viewDocument'])->name('reimbursements.tracker.document');
+    Route::get('/reimbursements/approvals',                 [WebMyReimbursementController::class, 'approvals'])->name('reimbursements.approvals');
+    Route::post('/reimbursements/approvals/{row}/resolve',  [WebMyReimbursementController::class, 'resolve'])->name('reimbursements.approvals.resolve');
 
     // ── Reimbursement Report ───────────────────────
     Route::get('/reimbursements/report',                [WebReimbursementReportController::class, 'reportIndex'])->name('reimbursements.report');
@@ -243,7 +288,42 @@ Route::middleware('auth')->group(function () {
     // ── Departments ────────────────────────────────
     Route::get('/departments',              [WebDepartmentController::class, 'index'])->name('departments');
     Route::post('/departments',             [WebDepartmentController::class, 'storeDepartment'])->name('departments.store');
-    Route::post('/designations',            [WebDepartmentController::class, 'storeDesignation'])->name('designations.store');
     Route::get('/departments/template',     [WebDepartmentController::class, 'template'])->name('departments.template');
     Route::post('/departments/import',      [WebDepartmentController::class, 'import'])->name('departments.import');
+
+    // ── Designations ───────────────────────────────
+    Route::get('/designations',             [WebDepartmentController::class, 'indexDesignations'])->name('designations');
+    Route::post('/designations',            [WebDepartmentController::class, 'storeDesignation'])->name('masters.designations.store');
+
+    // ── Branches ───────────────────────────────────
+    Route::get('/branches',                 [WebDepartmentController::class, 'indexBranches'])->name('branches');
+    Route::post('/branches',                [WebDepartmentController::class, 'storeBranch'])->name('masters.branches.store');
+    Route::get('/branches/by-company',      [WebDepartmentController::class, 'branchesByCompany'])->name('masters.branches.by-company');
+
+    // ── Role & Permissions (super_admin only — enforced in WebRbacController) ──
+    Route::prefix('rbac')->name('rbac.')->group(function () {
+        Route::redirect('/', '/rbac/roles')->name('index');
+        Route::get('/roles',                              [WebRbacController::class, 'roles'])->name('roles');
+        Route::post('/roles',                             [WebRbacController::class, 'storeRole'])->name('roles.store');
+        Route::delete('/roles/{role}',                    [WebRbacController::class, 'destroyRole'])->name('roles.destroy');
+        Route::post('/roles/{role}/permissions',          [WebRbacController::class, 'syncPermissions'])->name('roles.permissions');
+        Route::get('/permission-groups',                  [WebRbacController::class, 'permissionGroups'])->name('permission_groups');
+        Route::post('/permission-groups',                 [WebRbacController::class, 'storePermissionGroup'])->name('permission_groups.store');
+        Route::put('/permission-groups/{permissionGroup}', [WebRbacController::class, 'updatePermissionGroup'])->name('permission_groups.update');
+        Route::delete('/permission-groups/{permissionGroup}', [WebRbacController::class, 'destroyPermissionGroup'])->name('permission_groups.destroy');
+        Route::get('/permissions',                        [WebRbacController::class, 'permissions'])->name('permissions');
+        Route::post('/permissions',                       [WebRbacController::class, 'storePermission'])->name('permissions.store');
+        Route::put('/permissions/{permission}',           [WebRbacController::class, 'updatePermission'])->name('permissions.update');
+        Route::delete('/permissions/{permission}',        [WebRbacController::class, 'destroyPermission'])->name('permissions.destroy');
+    });
+
+    // ── User Creation (super_admin only — enforced in WebUserController) ──
+    Route::prefix('users')->name('users.')->group(function () {
+        Route::get('/',              [WebUserController::class, 'index'])->name('index');
+        Route::post('/',             [WebUserController::class, 'store'])->name('store');
+        Route::put('/{user}',        [WebUserController::class, 'update'])->name('update');
+        Route::delete('/{user}',     [WebUserController::class, 'destroy'])->name('destroy');
+        Route::post('/{user}/toggle-active', [WebUserController::class, 'toggleActive'])->name('toggle-active');
+        Route::post('/{user}/toggle-reimbursement-approver', [WebUserController::class, 'toggleReimbursementApprover'])->name('toggle-reimbursement-approver');
+    });
 });

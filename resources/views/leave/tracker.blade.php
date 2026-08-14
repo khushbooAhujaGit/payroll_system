@@ -115,6 +115,9 @@
                                    color:{{ strtoupper($rec->leave_type) === 'LOP' ? 'var(--red)' : 'var(--acc)' }}">
             {{ $rec->leave_type }}
           </span>
+          @unless($rec->is_approved)
+          <span class="bx" style="font-size:9px;color:var(--yel);background:#fef3c7;margin-left:4px">Pending Approval</span>
+          @endunless
         </td>
         <td style="font-size:11px;color:var(--t2)">{{ $rec->team_leader_name ?? '—' }}</td>
         <td style="font-size:11px;color:var(--t2);text-transform:capitalize">{{ str_replace('_', ' ', $rec->reason_type ?? '—') }}</td>
@@ -177,7 +180,12 @@
           @endif
         </td>
         <td class="mono" style="font-size:11px">{{ $sp['sheet_emp_id'] ?? '—' }}</td>
-        <td><span class="bx" style="background:var(--acc2);color:var(--acc)">{{ $sp['leave_type'] }}</span></td>
+        <td>
+          <span class="bx" style="background:var(--acc2);color:var(--acc)">{{ $sp['leave_type'] }}</span>
+          @unless($sp['is_approved'])
+          <span class="bx" style="font-size:9px;color:var(--yel);background:#fef3c7;margin-left:4px">Pending Approval</span>
+          @endunless
+        </td>
         <td class="mono" style="text-align:center;font-weight:700">{{ $sp['day_count'] }}</td>
         <td class="mono" style="white-space:nowrap">{{ $sp['start_date']->format('d M Y') }}</td>
         <td class="mono" style="white-space:nowrap;color:{{ $isSingle ? 'var(--t3)' : 'inherit' }}">

@@ -14,6 +14,7 @@ use App\Models\EmployeeStatutoryDetail;
 use App\Models\Entity;
 use App\Models\Grade;
 use App\Services\EmployeeService;
+use App\Services\UserProvisioningService;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
 
@@ -26,7 +27,6 @@ use Carbon\Exceptions\InvalidFormatException;
 class EmployeeImporter extends BaseImporter
 {
     use ParsesExcelDates;
-    protected array $pendingEmployeeLinks = [];
 
     /**
      * Tracks employee_ids seen in THIS upload to detect in-file duplicates.
@@ -199,7 +199,7 @@ class EmployeeImporter extends BaseImporter
                 // Check if this PAN is already registered to a DIFFERENT employee_id in the DB
                 $existingWithPan = Employee::whereHas(
                     'statutoryDetails',
-                    fn($q) => $q->where('pan_number', $pan)
+                    fn($q) => $q->where('pan_number_hash', hash('sha256', $pan))
                 )->first();
 
                 if ($existingWithPan
@@ -324,7 +324,7 @@ class EmployeeImporter extends BaseImporter
             // Fallback: match deleted employee by PAN
             if (!$deleted && $pan) {
                 $deleted = Employee::onlyTrashed()
-                    ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number', $pan))
+                    ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number_hash', hash('sha256', $pan)))
                     ->first();
             }
 
@@ -372,12 +372,20 @@ class EmployeeImporter extends BaseImporter
             'branch_id'           => $branchId,
             'current_city'        => $data['current_city']    ?? null,
             'reporting_manager_id'=> $reportingManagerId,
+            // If the manager/team-leader can't be resolved yet, keep the raw
+            // reference text so it can be backfilled automatically whenever
+            // that person is eventually created — see EmployeeObserver /
+            // ManagerReferenceResolverService.
+            'pending_reporting_manager_ref' => $reportingManagerId ? null : (($data['reporting_manager'] ?? null) ?: null),
             'team_leader_id'      => $teamLeaderId,
+            'pending_team_leader_ref'       => $teamLeaderId ? null : (($data['team_leader'] ?? null) ?: null),
             'is_pf_applicable'    => $isPfApplicable,
             'is_esic_applicable'  => $isEsicApplicable,
             'employee_status'     => $status,
             'created_by'          => auth()->id(),
         ];
+
+        $isNewEmployee = !$employee;
 
         if ($employee) {
             $employee->update($fields);
@@ -396,23 +404,19 @@ class EmployeeImporter extends BaseImporter
             );
         }
 
-        if (!$reportingManagerId && !empty($data['reporting_manager'])) {
-            $this->pendingEmployeeLinks[] = [
-                'employee_id' => $employee->id,
-                'company_id' => $companyId,
-                'field' => 'reporting_manager_id',
-                'reference' => $data['reporting_manager'],
-            ];
+        // ── Default login account for newly-created employees only ──────────
+        // Re-imports that update an existing employee never touch their
+        // account/password — only a brand-new row gets one seeded.
+        if ($isNewEmployee) {
+            (new UserProvisioningService())->createDefaultAccountFor($employee);
         }
 
-        if (!$teamLeaderId && !empty($data['team_leader'])) {
-            $this->pendingEmployeeLinks[] = [
-                'employee_id' => $employee->id,
-                'company_id' => $companyId,
-                'field' => 'team_leader_id',
-                'reference' => $data['team_leader'],
-            ];
-        }
+        // Note: unresolved reporting_manager/team_leader references are
+        // persisted onto $employee via pending_reporting_manager_ref /
+        // pending_team_leader_ref above, and get backfilled automatically
+        // by EmployeeObserver whenever the referenced person is eventually
+        // created (via this importer OR the manual "Add Employee" form) —
+        // see ManagerReferenceResolverService.
 
         // ── Statutory details ────────────────────────────────
         $uan = !empty($data['uan_number']) ? trim($data['uan_number']) : null;
@@ -440,9 +444,12 @@ class EmployeeImporter extends BaseImporter
         $ifscCode      = !empty($data['ifsc_code'])      ? strtoupper(trim($data['ifsc_code']))    : null;
 
         if ($accountNumber && $ifscCode) {
+            // account_number is encrypted (ciphertext varies per row even for the same
+            // value), so matching must go through the SHA-256 blind-index column instead.
             EmployeeBankDetail::updateOrCreate(
-                ['employee_id' => $employee->id, 'account_number' => $accountNumber],
+                ['employee_id' => $employee->id, 'account_number_hash' => hash('sha256', $accountNumber)],
                 [
+                    'account_number'      => $accountNumber,
                     'bank_name'           => $data['bank_name']    ?? '',
                     'ifsc_code'           => $ifscCode,
                     'account_holder_name' => $employee->full_name,
@@ -486,24 +493,22 @@ class EmployeeImporter extends BaseImporter
         }
     }
 
+    /**
+     * Runs once after every row in the upload has been processed. Sweeps
+     * ALL still-unresolved manager/team-leader references (not just ones
+     * from this upload) against the current employees table — catches
+     * anything EmployeeObserver's live, per-row resolution couldn't, e.g.
+     * a manager who already existed from an earlier, unrelated import.
+     */
+    public function afterImport(): void
+    {
+        app(\App\Services\ManagerReferenceResolverService::class)->resolveAllPending();
+    }
+
     // ─────────────────────────────────────────────
     // HELPERS
     // ─────────────────────────────────────────────
 
-    public function afterImport(): void
-    {
-        foreach ($this->pendingEmployeeLinks as $link) {
-            $managerId = $this->resolveEmployee($link['company_id'], $link['reference']);
-
-            if (!$managerId || $managerId === $link['employee_id']) {
-                continue;
-            }
-
-            Employee::whereKey($link['employee_id'])->update([
-                $link['field'] => $managerId,
-            ]);
-        }
-    }
 
     /**
      * Split a full name into [first, middle, last].
@@ -577,7 +582,7 @@ class EmployeeImporter extends BaseImporter
 
         if (preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/i', $value)) {
             $id = Employee::where('company_id', $companyId)
-                ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number', strtoupper($value)))
+                ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number_hash', hash('sha256', strtoupper($value))))
                 ->value('id');
 
             if ($id) return $id;

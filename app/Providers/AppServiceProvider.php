@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Employee;
+use App\Observers\EmployeeObserver;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
 
@@ -18,26 +21,29 @@ class AppServiceProvider extends ServiceProvider
     {
         Schema::defaultStringLength(191);
         Paginator::defaultView('vendor.pagination.hrms');
-        // Wire our custom RBAC into Laravel's Gate system.
-        // super_admin bypasses all checks.
-        // All other users are checked against the role_permissions table.
+
+        // Whenever an employee is created/rehired (manual form OR bulk
+        // import), resolve anyone else still waiting on them as a manager —
+        // see ManagerReferenceResolverService.
+        Employee::observe(EmployeeObserver::class);
+
+        // spatie/laravel-permission wires $user->can('some.permission') into
+        // Gate automatically (via its own Gate::before) — no custom permission
+        // lookup needed here. This one just adds the "Admin always gets
+        // everything, regardless of what's actually assigned" bypass rule —
+        // see User::isSuperAdmin().
         Gate::before(function ($user, string $ability) {
-            // Super admin gets everything
-            if ($user->roles()->where('slug', 'super_admin')->exists()) {
-                return true;
-            }
+            return $user->isSuperAdmin() ? true : null;
+        });
 
-            // Check if this user has the permission slug via any of their roles
-            $hasPermission = $user->roles()
-                ->whereHas('permissions', fn($q) => $q->where('slug', $ability))
-                ->exists();
-
-            if ($hasPermission) {
-                return true;
-            }
-
-            // Return null (not false) to fall through to other Gate checks
-            return null;
+        // Feeds the header bell/dropdown on every authenticated page —
+        // see resources/views/layouts/app.blade.php.
+        View::composer('layouts.app', function ($view) {
+            $user = auth()->user();
+            $view->with([
+                'recentNotifications' => $user ? $user->notifications()->latest()->take(10)->get() : collect(),
+                'unreadNotifCount'    => $user ? $user->unreadNotifications()->count() : 0,
+            ]);
         });
     }
 }

@@ -22,6 +22,8 @@ class WebBioIdController extends Controller
      */
     public function index(Request $request)
     {
+        $this->authorize('bioid_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $bioIds = EmployeeBioId::with('employee:id,employee_id,first_name,middle_name,last_name,company_id')
@@ -56,11 +58,15 @@ class WebBioIdController extends Controller
 
     public function template()
     {
+        $this->authorize('bioid_create');
+
         return $this->excelImportService->generateTemplate(BioIdImporter::class);
     }
 
     public function import(Request $request)
     {
+        $this->authorize('bioid_create');
+
         $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
@@ -79,6 +85,8 @@ class WebBioIdController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('bioid_create');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -115,6 +123,8 @@ class WebBioIdController extends Controller
 
     public function update(Request $request, EmployeeBioId $bioId)
     {
+        $this->authorize('bioid_edit');
+
         $validated = $request->validate([
             'bio_id_full' => 'required|string|max:20',
             'is_active'   => 'boolean',
@@ -134,6 +144,8 @@ class WebBioIdController extends Controller
 
     public function destroy(EmployeeBioId $bioId)
     {
+        $this->authorize('bioid_delete');
+
         $bioId->delete();
         return redirect()->route('bio_ids')->with('success', 'Bio ID deleted.');
     }

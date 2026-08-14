@@ -11,22 +11,29 @@ use App\Models\Company;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\EmployeeDocument;
 use App\Models\Entity;
+use App\Models\HolidayCalendar;
 use App\Models\LeaveTrackerRecord;
-use App\Services\EmployeeService; 
+use App\Services\EmployeeDocumentService;
+use App\Services\EmployeeService;
 use App\Services\ExcelImportService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class WebEmployeeController extends Controller
 {
     use ImportsExcel;
     public function __construct(
         protected EmployeeService $employeeService,
-        protected ExcelImportService $excelImportService
+        protected ExcelImportService $excelImportService,
+        protected EmployeeDocumentService $employeeDocumentService
     ) {}
 
     public function index(Request $request)
     {
+        $this->authorize('employee_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $query = Employee::with(['department', 'designation', 'company']);
@@ -81,16 +88,29 @@ class WebEmployeeController extends Controller
 
     public function store(StoreEmployeeRequest $request)
     {
+        $this->authorize('employee_add');
+
         $data = $request->validated();
 
         // company_id is already set from the form — pass it straight through
 
-        $this->employeeService->create($data);
+        // Checkbox is absent from the request when unchecked — without this,
+        // Employee::create() would silently fall back to the DB column
+        // default (true), so unchecking "PF Applicable" on this form never
+        // actually saved as unchecked.
+        $data['is_pf_applicable'] = $request->boolean('is_pf_applicable');
+
+        $employee = $this->employeeService->create($data);
+
+        $this->employeeDocumentService->storeUploads($employee, $request->file('documents', []), auth()->id());
+
         return redirect()->route('employees')->with('success', 'Employee created successfully.');
     }
 
     public function template()
     {
+        $this->authorize('employee_export');
+
         // Build dropdown lists from live DB data for the template
         $dropdowns = [
             'Firm'              => Company::where('is_active', true)->orderBy('name')->pluck('name')->all(),
@@ -103,6 +123,8 @@ class WebEmployeeController extends Controller
 
     public function import(Request $request)
     {
+        $this->authorize('employee_add');
+
         // dd($request->all());
         $companyId = $this->resolveCompanyId($request);
 
@@ -123,7 +145,9 @@ class WebEmployeeController extends Controller
     /** Return employee data as JSON for the Edit modal (AJAX). */
     public function editData(Employee $employee)
     {
-        $employee->load(['statutoryDetails', 'primaryBank']);
+        $this->authorize('employee_view');
+
+        $employee->load(['statutoryDetails', 'primaryBank', 'documents']);
 
         // Suggest a date_of_leaving from the leave tracker when none is set on the employee.
         //
@@ -170,8 +194,7 @@ class WebEmployeeController extends Controller
             'middle_name'             => $employee->middle_name,
             'last_name'               => $employee->last_name,
             'gender'                  => $employee->gender,
-            'date_of_birth'           => $employee->date_of_birth?->format('Y-m-d'),
-            'blood_group'             => $employee->blood_group,
+            'date_of_birth'           => $employee->date_of_birth ? \Carbon\Carbon::parse($employee->date_of_birth)->format('Y-m-d') : null,
             'marital_status'          => $employee->marital_status,
             'official_email'          => $employee->official_email,
             'personal_email'          => $employee->personal_email,
@@ -183,6 +206,7 @@ class WebEmployeeController extends Controller
             'branch_id'               => $employee->branch_id,
             'reporting_manager_id'    => $employee->reporting_manager_id,
             'work_type'               => $employee->work_type,
+            'client_name'             => $employee->client_name,
             'employment_type'         => $employee->employment_type,
             'date_of_joining'         => $employee->date_of_joining?->format('Y-m-d'),
             'date_of_leaving'         => $employee->date_of_leaving?->format('Y-m-d'),
@@ -201,18 +225,25 @@ class WebEmployeeController extends Controller
             'account_holder_name'     => $employee->primaryBank?->account_holder_name,
             'emergency_contact_name'  => $employee->emergency_contact_name,
             'emergency_contact_phone' => $employee->emergency_contact_phone,
+            'documents'               => $employee->documents
+                ->whereIn('document_type', array_keys(EmployeeDocument::UPLOAD_TYPES))
+                ->mapWithKeys(fn($doc) => [$doc->document_type => [
+                    'file_name'     => $doc->file_name,
+                    'download_url'  => route('employees.documents.download', $doc),
+                ]]),
         ]);
     }
 
     public function update(Request $request, Employee $employee)
     {
+        $this->authorize('employee_edit');
+
         $validated = $request->validate([
             'first_name'              => 'required|string|max:100',
             'middle_name'             => 'nullable|string|max:100',
             'last_name'               => 'required|string|max:100',
             'gender'                  => 'nullable|in:Male,Female,Other',
             'date_of_birth'           => 'nullable|date|before:today',
-            'blood_group'             => 'nullable|string|max:5',
             'marital_status'          => 'nullable|string|max:20',
             'official_email'          => 'nullable|email',
             'personal_email'          => 'nullable|email',
@@ -224,6 +255,7 @@ class WebEmployeeController extends Controller
             'branch_id'               => 'nullable|exists:branches,id',
             'reporting_manager_id'    => 'nullable|exists:employees,id',
             'work_type'               => 'nullable|in:wfo,wfh,hybrid,client_location',
+            'client_name'             => 'nullable|required_if:work_type,client_location|string|max:150',
             'employment_type'         => 'nullable|in:full_time,part_time,contract,intern,consultant,retainer',
             'date_of_joining'         => 'nullable|date',
             'date_of_leaving'         => 'nullable|date',
@@ -234,13 +266,18 @@ class WebEmployeeController extends Controller
             'tds_regime'              => 'nullable|in:old,new',
             'pan_number'              => ['nullable', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/'],
             'aadhaar_number'          => 'nullable|regex:/^\d{12}$/',
-            'uan_number'              => 'nullable|string|max:12',
+            'uan_number'              => 'nullable|required_if:is_pf_applicable,1|string|max:12',
             'bank_name'               => 'nullable|string|max:100',
             'account_number'          => 'nullable|string|max:30',
             'ifsc_code'               => ['nullable', 'regex:/^[A-Z]{4}0[A-Z0-9]{6}$/'],
             'account_holder_name'     => 'nullable|string|max:200',
             'emergency_contact_name'  => 'nullable|string|max:100',
             'emergency_contact_phone' => 'nullable|regex:/^\d{10}$/',
+            'documents'               => 'nullable|array',
+            'documents.*'             => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+        ], [
+            'uan_number.required_if'  => 'UAN Number is required when PF Applicable is checked.',
+            'client_name.required_if' => 'Client Name is required when Work Type is Client Location.',
         ]);
 
         // Checkboxes are absent when unchecked — coerce explicitly
@@ -264,13 +301,31 @@ class WebEmployeeController extends Controller
             );
         }
 
+        $this->employeeDocumentService->storeUploads($employee, $request->file('documents', []), auth()->id());
+
         return redirect()->route('employees')->with('success', 'Employee updated successfully.');
+    }
+
+    /**
+     * Serves an employee's uploaded document — HR/Admin can view any
+     * employee's, the employee themselves can only view their own.
+     */
+    public function downloadDocument(EmployeeDocument $document)
+    {
+        $isOwnDocument = auth()->user()->employee?->id === $document->employee_id;
+        abort_unless($isOwnDocument || auth()->user()->can('employee_view'), 403);
+
+        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+
+        return Storage::disk('local')->download($document->file_path, $document->file_name);
     }
 
     public function export(Request $request)
     {
+        $this->authorize('employee_export');
+
         $query = Employee::with([
-            'entity', 'branch', 'department', 'designation',
+            'entity', 'branch', 'department', 'designation', 'grade', 'costCenter',
             'reportingManager', 'teamLeader',
             'statutoryDetails', 'primaryBank',
         ]);
@@ -289,10 +344,18 @@ class WebEmployeeController extends Controller
 
         $employees = $query->orderBy('employee_id')->get();
 
-        // Also eager-load documents for PAN/Aadhaar doc columns
-        $employees->load(['documents' => fn($q) => $q->whereIn('document_type', ['pan', 'aadhaar'])]);
+        // Also eager-load documents — PAN/Aadhaar for the import-template file-path
+        // columns below, plus every upload type for the "Documents Uploaded" summary column.
+        $employees->load(['documents' => fn($q) => $q->whereIn('document_type', array_keys(EmployeeDocument::UPLOAD_TYPES))]);
 
-        // Headers match the import template exactly so the exported file can be re-imported
+        // holiday_calendar_id has no defined relation on Employee — resolve via a single keyed lookup instead.
+        $holidayCalendarNames = HolidayCalendar::whereIn('id', $employees->pluck('holiday_calendar_id')->filter())
+            ->pluck('name', 'id');
+
+        // The first block of headers/columns (through 'Left Type') matches the
+        // import template exactly, unchanged, so the exported file can still be
+        // re-imported — EmployeeImporter maps columns by this exact header text,
+        // not by position, so don't rename or reorder any of these.
         $headers = [
             'New Emp ID', 'Count', 'Employee Name', 'CurrentStatus', 'Left Date',
             'Reporting Manager', 'Team Leader', 'Attendance', 'Office', 'Mobile Number',
@@ -304,50 +367,156 @@ class WebEmployeeController extends Controller
             'Please attach a copy of your AADHAAR card (size limit 10 MB)',
             'PF', 'RSC Mail ID', 'Firm', 'PF Applicability', 'UAN Number',
             'Offer Letter Date', 'Left Type',
+            // ── Everything else on the Employee master, appended (not part of
+            // the re-import template — new columns only, existing ones above
+            // are untouched) so the export covers every field, not just the
+            // import-template subset. Includes an unambiguously-labeled
+            // "Official Email" / "Personal Email" pair alongside the
+            // existing "Email address" / "RSC Mail ID" columns above, which
+            // hold the same data under the import template's naming.
+            'Title', 'External Employee ID', 'Badge Number', 'Badge ID',
+            'Grade', 'Cost Center', 'Holiday Calendar',
+            'Official Email', 'Personal Email', 'Alternate Phone',
+            'Blood Group', 'Number of Dependents', 'Nationality', 'Religion', 'Caste Category',
+            'Physically Handicapped',
+            'Current Address', 'Current State', 'Current Pincode',
+            'Permanent Address', 'Permanent City', 'Permanent State', 'Permanent Pincode',
+            'Date of Confirmation', 'Probation Period (months)', 'Probation End Date',
+            'Employment Type', 'Work Type',
+            'Payroll Active', 'ESIC Applicable', 'PT Applicable', 'LWF Applicable', 'TDS Applicable', 'TDS Regime',
+            'PT Number', 'NPS PRAN', 'Bank MICR Code', 'Bank Account Holder Name',
+            'Emergency Contact Name', 'Emergency Contact Phone', 'Emergency Contact Relation',
+            'Pending Reporting Manager Ref', 'Pending Team Leader Ref',
+            'Documents Uploaded',
         ];
 
-        $rows = $employees->values()->map(fn($e, $i) => [
-            $e->employee_id,
-            $i + 1,
-            trim(implode(' ', array_filter([$e->first_name, $e->middle_name, $e->last_name]))),
-            $e->employee_status,
-            $e->date_of_leaving,        // Carbon → Excel date (null = empty cell)
-            $e->reportingManager?->full_name,
-            $e->teamLeader?->full_name,
-            $e->attendance_group,
-            $e->branch?->name,
-            $e->mobile,
-            $e->statutoryDetails?->pan_number,
-            $e->marital_status,
-            $e->gender,
-            $e->date_of_birth,          // Carbon → Excel date via streamXlsx
-            $e->date_of_joining,        // Carbon → Excel date via streamXlsx
-            $e->department?->name,
-            $e->designation?->name,
-            $e->current_city,
-            $e->statutoryDetails?->pf_number,
-            $e->statutoryDetails?->uan_number,
-            $e->statutoryDetails?->esic_number,
-            $e->primaryBank?->bank_name,
-            $e->primaryBank?->account_number,
-            $e->primaryBank?->ifsc_code,
-            $e->official_email,
-            $e->documents->firstWhere('document_type', 'pan')?->file_path,
-            $e->documents->firstWhere('document_type', 'aadhaar')?->file_path ?? $e->aadhaar_document_path,
-            null,   // PF (old/legacy column)
-            $e->personal_email,
-            $e->entity?->name,
-            $e->is_pf_applicable ? 'Yes' : 'No',
-            $e->statutoryDetails?->uan_number,
-            $e->offer_letter_date,      // Carbon → Excel date via streamXlsx
-            null,   // Left Type — not stored
-        ]);
+        $rows = $employees->values()->map(function ($e, $i) {
+            // Several columns are stored encrypted (see Employee::$casts). A row
+            // whose ciphertext predates encryption being enabled, or was
+            // encrypted under a different APP_KEY, throws DecryptException on
+            // access — which would otherwise crash the whole export over one
+            // bad row instead of just leaving that cell blank.
+            $mobile             = $this->safeDecrypted($e, 'mobile');
+            $dateOfBirth        = $this->safeDecrypted($e, 'date_of_birth');
+            $personalEmail      = $this->safeDecrypted($e, 'personal_email');
+            $alternatePhone     = $this->safeDecrypted($e, 'alternate_phone');
+            $currentAddress     = $this->safeDecrypted($e, 'current_address');
+            $permanentAddress   = $this->safeDecrypted($e, 'permanent_address');
+            $emergencyContactName  = $this->safeDecrypted($e, 'emergency_contact_name');
+            $emergencyContactPhone = $this->safeDecrypted($e, 'emergency_contact_phone');
+
+            $uploadedDocLabels = $e->documents
+                ->pluck('document_type')
+                ->unique()
+                ->map(fn($type) => EmployeeDocument::UPLOAD_TYPES[$type] ?? $type)
+                ->implode(', ');
+
+            return [
+                $e->employee_id,
+                $i + 1,
+                trim(implode(' ', array_filter([$e->first_name, $e->middle_name, $e->last_name]))),
+                $e->employee_status,
+                $e->date_of_leaving,        // Carbon → Excel date (null = empty cell)
+                $e->reportingManager?->full_name,
+                $e->teamLeader?->full_name,
+                $e->attendance_group,
+                $e->branch?->name,
+                $mobile,
+                $e->statutoryDetails?->pan_number,
+                $e->marital_status,
+                $e->gender,
+                $dateOfBirth ? \Carbon\Carbon::parse($dateOfBirth) : null,   // Carbon → Excel date via streamXlsx
+                $e->date_of_joining,        // Carbon → Excel date via streamXlsx
+                $e->department?->name,
+                $e->designation?->name,
+                $e->current_city,
+                $e->statutoryDetails?->pf_number,
+                $e->statutoryDetails?->uan_number,
+                $e->statutoryDetails?->esic_number,
+                $e->primaryBank?->bank_name,
+                $e->primaryBank?->account_number,
+                $e->primaryBank?->ifsc_code,
+                $e->official_email,
+                $e->documents->firstWhere('document_type', 'pan')?->file_path,
+                $e->documents->firstWhere('document_type', 'aadhaar')?->file_path ?? $e->aadhaar_document_path,
+                null,   // PF (old/legacy column)
+                $personalEmail,
+                $e->entity?->name,
+                $e->is_pf_applicable ? 'Yes' : 'No',
+                $e->statutoryDetails?->uan_number,
+                $e->offer_letter_date,      // Carbon → Excel date via streamXlsx
+                null,   // Left Type — not stored
+
+                // ── Appended columns ──
+                $e->title,
+                $e->external_emp_id,
+                $e->badge_number,
+                $e->badge_id,
+                $e->grade?->name,
+                $e->costCenter?->name,
+                $e->holiday_calendar_id ? ($holidayCalendarNames[$e->holiday_calendar_id] ?? null) : null,
+                $e->official_email,
+                $personalEmail,
+                $alternatePhone,
+                $e->blood_group, // Form field removed, but existing data (if any) is still exported
+                $e->number_of_dependents,
+                $e->nationality,
+                $e->religion,
+                $e->caste_category,
+                $e->is_physically_handicapped ? 'Yes' : 'No',
+                $currentAddress,
+                $e->current_state,
+                $e->current_pincode,
+                $permanentAddress,
+                $e->permanent_city,
+                $e->permanent_state,
+                $e->permanent_pincode,
+                $e->date_of_confirmation,   // Carbon → Excel date via streamXlsx
+                $e->probation_period_months,
+                $e->probation_end_date,     // Carbon → Excel date via streamXlsx
+                $e->employment_type,
+                $e->work_type,
+                $e->is_payroll_active ? 'Yes' : 'No',
+                $e->is_esic_applicable ? 'Yes' : 'No',
+                $e->is_pt_applicable ? 'Yes' : 'No',
+                $e->is_lwf_applicable ? 'Yes' : 'No',
+                $e->is_tds_applicable ? 'Yes' : 'No',
+                $e->tds_regime,
+                $e->statutoryDetails?->pt_number,
+                $e->statutoryDetails?->nps_pran,
+                $e->primaryBank?->micr_code,
+                $e->primaryBank?->account_holder_name,
+                $emergencyContactName,
+                $emergencyContactPhone,
+                $e->emergency_contact_relation,
+                $e->pending_reporting_manager_ref,
+                $e->pending_team_leader_ref,
+                $uploadedDocLabels ?: 'None',
+            ];
+        });
 
         return $this->streamXlsx('employees', $headers, $rows);
     }
 
+    /**
+     * Reads an encrypted-cast attribute, returning null instead of throwing
+     * when the stored ciphertext can't be decrypted (pre-encryption legacy
+     * data, or a row encrypted under a different APP_KEY) — used by export()
+     * so one bad row doesn't 500 the whole download.
+     */
+    protected function safeDecrypted(Employee $employee, string $attribute)
+    {
+        try {
+            return $employee->getAttribute($attribute);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException) {
+            return null;
+        }
+    }
+
     public function masterHistory(\Illuminate\Http\Request $request)
     {
+        $this->authorize('employee_view');
+
         $search     = trim((string) $request->get('search', ''));
         $fieldType  = $request->get('field_type', ''); // bank_details | pan | email
         $changedVia = $request->get('changed_via', '');
@@ -372,6 +541,8 @@ class WebEmployeeController extends Controller
 
     public function destroy(Employee $employee)
     {
+        $this->authorize('employee_delete');
+
         $employee->delete(); // soft delete
         return redirect()->route('employees')->with('success', 'Employee deleted.');
     }
@@ -388,6 +559,8 @@ class WebEmployeeController extends Controller
      */
     public function bulkDestroy(Request $request)
     {
+        $this->authorize('employee_delete');
+
         $action = $request->input('action', 'archive'); // 'archive' | 'delete'
 
         // ── Resolve employee IDs ─────────────────────────────────────────────────

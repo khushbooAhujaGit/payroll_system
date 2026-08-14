@@ -41,11 +41,12 @@ class EmployeeController extends Controller
         // Filters
         if ($request->filled('search')) {
             $q = $request->search;
+            // 'mobile' is intentionally excluded — it's encrypted at rest, so a
+            // LIKE match against it can never succeed (ciphertext, random IV per row).
             $query->where(function ($sq) use ($q) {
                 $sq->where('first_name', 'like', "%{$q}%")
                     ->orWhere('last_name', 'like', "%{$q}%")
                     ->orWhere('employee_id', 'like', "%{$q}%")
-                    ->orWhere('mobile', 'like', "%{$q}%")
                     ->orWhere('official_email', 'like', "%{$q}%");
             });
         }
@@ -57,9 +58,15 @@ class EmployeeController extends Controller
         if ($request->filled('branch_id'))        $query->where('branch_id', $request->branch_id);
         if ($request->filled('on_probation'))     $query->onProbation();
 
-        // Sorting
-        $sortBy  = $request->get('sort_by', 'employee_id');
-        $sortDir = $request->get('sort_dir', 'asc');
+        // Sorting — whitelisted so a caller can't order by an encrypted column
+        // (ciphertext ordering is meaningless) or an arbitrary column name.
+        $sortableColumns = [
+            'employee_id', 'first_name', 'last_name', 'official_email',
+            'employee_status', 'date_of_joining', 'department_id', 'designation_id',
+            'created_at', 'updated_at',
+        ];
+        $sortBy  = in_array($request->get('sort_by'), $sortableColumns, true) ? $request->get('sort_by') : 'employee_id';
+        $sortDir = $request->get('sort_dir') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortDir);
 
         $employees = $query->paginate($request->get('per_page', 25));
@@ -248,7 +255,7 @@ class EmployeeController extends Controller
             $e->first_name,
             $e->last_name,
             $e->gender,
-            $e->date_of_birth?->format('d-m-Y'),
+            $e->date_of_birth ? \Carbon\Carbon::parse($e->date_of_birth)->format('d-m-Y') : null,
             $e->mobile,
             $e->official_email,
             $e->date_of_joining->format('d-m-Y'),

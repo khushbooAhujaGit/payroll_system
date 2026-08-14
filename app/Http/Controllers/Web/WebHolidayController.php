@@ -20,6 +20,8 @@ class WebHolidayController extends Controller
     use ParsesExcelDates;
     public function index(Request $request)
     {
+        $this->authorize('holidays_view');
+
         $year          = (int) $request->get('year', now()->year);
         $companyFilter = $request->get('company_id');
         $searchName    = trim((string) $request->get('search_name', ''));
@@ -61,6 +63,8 @@ class WebHolidayController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('holiday_add');
+
         $validated = $request->validate([
             'company_ids' => 'required|array|min:1',
             'company_ids.*' => 'exists:companies,id',
@@ -97,6 +101,8 @@ class WebHolidayController extends Controller
 
     public function storeWeekoffs(Request $request)
     {
+        $this->authorize('holiday_add');
+
         $validated = $request->validate([
             'company_ids'     => 'required|array|min:1',
             'company_ids.*'   => 'exists:companies,id',
@@ -178,6 +184,8 @@ class WebHolidayController extends Controller
 
     public function destroy(Holiday $holiday)
     {
+        $this->authorize('holiday_del');
+
         $calendarId = $holiday->holiday_calendar_id;
         $holiday->delete();
         return redirect()->route('holidays', ['calendar_id' => $calendarId])->with('success', 'Holiday deleted.');
@@ -185,6 +193,8 @@ class WebHolidayController extends Controller
 
     public function template()
     {
+        $this->authorize('holiday_add');
+
         $companies = Company::where('is_active', true)->orderBy('name')->pluck('name')->all();
 
         $spreadsheet = new Spreadsheet();
@@ -247,6 +257,8 @@ class WebHolidayController extends Controller
 
     public function import(Request $request)
     {
+        $this->authorize('holiday_add');
+
         $request->validate([
             'file'        => 'required|file|mimes:xlsx,xls,csv|max:5120',
             'calendar_id' => 'nullable|exists:holiday_calendars,id',

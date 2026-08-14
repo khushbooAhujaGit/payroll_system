@@ -23,7 +23,15 @@ class WebAuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $credentials['email'])->first();
+        $user = User::with('employee:id,date_of_leaving')->where('email', $credentials['email'])->first();
+
+        // Lazily enforce date_of_leaving here too (not just the nightly
+        // accounts:deactivate-leavers sweep) so access is cut off on their
+        // very next login attempt, not whenever the schedule next runs.
+        if ($user && $user->is_active && $user->employee?->date_of_leaving
+            && $user->employee->date_of_leaving->lt(now()->startOfDay())) {
+            $user->update(['is_active' => false]);
+        }
 
         if (!$user || !$user->is_active) {
             return back()
@@ -53,7 +61,9 @@ class WebAuthController extends Controller
             'description' => 'User logged in via web',
         ]);
 
-        return redirect()->intended(route('dashboard'));
+        $home = $user->isRestrictedToLeaveOnly() ? route('leave') : route('dashboard');
+
+        return redirect()->intended($home);
     }
 
     public function logout(Request $request)

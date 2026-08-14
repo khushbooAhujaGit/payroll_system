@@ -21,6 +21,13 @@
       <h2>Sign In</h2>
       <p class="hint">Enter your credentials to continue</p>
 
+      <?php if(session('success')): ?>
+        <div style="background:var(--grn2,#dcfce7);color:var(--grn,#16a34a);border-radius:7px;padding:10px 12px;font-size:12px;margin-bottom:14px">
+          <?php echo e(session('success')); ?>
+
+        </div>
+      <?php endif; ?>
+
       <?php if($errors->any()): ?>
         <div class="lerr" style="display:block;margin-bottom:12px">
           <?php echo e($errors->first()); ?>
@@ -40,6 +47,10 @@
         </div>
         <button type="submit" class="lbtn">Sign In →</button>
       </form>
+
+      <p style="text-align:center;margin-top:16px;font-size:12px">
+        <a href="<?php echo e(route('password.request')); ?>" style="color:var(--acc);text-decoration:none">Forgot your password?</a>
+      </p>
     </div>
   </div>
 </body>

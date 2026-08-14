@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Entity;
@@ -15,15 +16,71 @@ class WebDepartmentController extends Controller
 {
     public function index(Request $request)
     {
-        $companyId    = $this->resolveCompanyId($request);
-        $departments = Department::where('company_id', $companyId)->orderBy('name')->get();
-        $designations= Designation::where('company_id', $companyId)->orderBy('name')->get();
+        $this->authorize('department_view');
 
-        return view('masters.departments', compact('departments', 'designations', 'companyId'));
+        $companyId   = $this->resolveCompanyId($request);
+        $departments = Department::where('company_id', $companyId)->orderBy('name')->get();
+
+        return view('masters.departments', compact('departments', 'companyId'));
+    }
+
+    public function indexDesignations(Request $request)
+    {
+        $this->authorize('department_view');
+
+        $companyId    = $this->resolveCompanyId($request);
+        $designations = Designation::where('company_id', $companyId)->orderBy('name')->get();
+
+        return view('masters.designations', compact('designations', 'companyId'));
+    }
+
+    public function indexBranches(Request $request)
+    {
+        $this->authorize('branch_view');
+
+        $companyId = $this->resolveCompanyId($request);
+        $branches  = Branch::where('company_id', $companyId)->orderBy('name')->get();
+
+        return view('masters.branches', compact('branches', 'companyId'));
+    }
+
+    public function storeBranch(Request $request)
+    {
+        $this->authorize('branch_add');
+
+        $companyId = $this->resolveCompanyId($request);
+
+        $validated = $request->validate([
+            'name'    => 'required|string|max:100',
+            'code'    => 'nullable|string|max:20',
+            'city'    => 'nullable|string|max:100',
+            'state'   => 'nullable|string|max:100',
+            'address' => 'nullable|string|max:255',
+        ]);
+
+        Branch::create(array_merge($validated, ['company_id' => $companyId, 'is_active' => true]));
+        return redirect()->route('branches')->with('success', 'Branch created.');
+    }
+
+    /** JSON list of active branches for a given company — used to keep the Add/Edit Employee branch dropdown in sync with whichever company is selected in the modal. */
+    public function branchesByCompany(Request $request)
+    {
+        $this->authorize('employee_view');
+
+        $request->validate(['company_id' => 'required|exists:companies,id']);
+
+        return response()->json(
+            Branch::where('company_id', $request->company_id)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+        );
     }
 
     public function storeDepartment(Request $request)
     {
+        $this->authorize('department_add');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -38,6 +95,8 @@ class WebDepartmentController extends Controller
 
     public function storeDesignation(Request $request)
     {
+        $this->authorize('designation_manage');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -47,11 +106,13 @@ class WebDepartmentController extends Controller
         ]);
 
         Designation::create(array_merge($validated, ['company_id' => $companyId, 'is_active' => true]));
-        return redirect()->route('departments')->with('success', 'Designation created.');
+        return redirect()->route('designations')->with('success', 'Designation created.');
     }
 
     public function template()
     {
+        $this->authorize('department_add');
+
         $spreadsheet = new Spreadsheet();
 
         // Sheet 1 — Departments
@@ -78,6 +139,8 @@ class WebDepartmentController extends Controller
 
     public function import(Request $request)
     {
+        $this->authorize('department_add');
+
         $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv']);
         $companyId = $this->resolveCompanyId($request);
 

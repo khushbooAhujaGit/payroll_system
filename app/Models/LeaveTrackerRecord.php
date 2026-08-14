@@ -32,6 +32,7 @@ class LeaveTrackerRecord extends Model
         'employee_name',
         'leave_date',
         'leave_type',
+        'half_day_period',
         'team_leader_name',
         'reason_type',
         'reason',

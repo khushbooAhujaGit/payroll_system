@@ -17,14 +17,17 @@ class WebContractorController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('contractor_view');
+
         $companyId = $this->resolveCompanyId($request);
 
+        // 'pan', 'mobile', 'email' are intentionally excluded — they're encrypted
+        // at rest, so a LIKE match against them can never succeed (ciphertext,
+        // random IV per row).
         $contractors = Contractor::where('company_id', $companyId)
             ->when($request->search, fn($q) =>
                 $q->where('name', 'like', "%{$request->search}%")
-                  ->orWhere('pan', 'like', "%{$request->search}%")
-                  ->orWhere('mobile', 'like', "%{$request->search}%")
-                  ->orWhere('email', 'like', "%{$request->search}%")
+                  ->orWhere('contractor_id', 'like', "%{$request->search}%")
             )
             ->when($request->type, fn($q) => $q->where('contractor_type', $request->type))
             ->when($request->status !== null && $request->status !== '', fn($q) =>
@@ -42,6 +45,8 @@ class WebContractorController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('contractor_create');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -72,6 +77,8 @@ class WebContractorController extends Controller
 
     public function update(Request $request, Contractor $contractor)
     {
+        $this->authorize('contractor_edit');
+
         $validated = $request->validate([
             'name'                => 'required|string|max:200',
             'contractor_type'     => 'required|in:individual,company',
@@ -94,17 +101,23 @@ class WebContractorController extends Controller
 
     public function destroy(Contractor $contractor)
     {
+        $this->authorize('contractor_edit');
+
         $contractor->delete();
         return redirect()->route('contractors')->with('success', 'Contractor deleted.');
     }
 
     public function template()
     {
+        $this->authorize('contractor_view');
+
         return $this->excelImportService->generateTemplate(ContractorImporter::class);
     }
 
     public function import(Request $request)
     {
+        $this->authorize('contractor_create');
+
         $companyId = $this->resolveCompanyId($request);
 
         $request->validate([

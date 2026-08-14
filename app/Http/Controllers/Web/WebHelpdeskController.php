@@ -17,6 +17,8 @@ class WebHelpdeskController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('helpdesk_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $tickets = HelpdeskTicket::with([
@@ -43,6 +45,8 @@ class WebHelpdeskController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('helpdesk_raise');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -73,6 +77,8 @@ class WebHelpdeskController extends Controller
 
     public function resolve(Request $request, HelpdeskTicket $ticket)
     {
+        $this->authorize('helpdesk_resolve');
+
         $request->validate(['closure_remarks' => 'required|string']);
 
         $ticket->update([
@@ -93,6 +99,8 @@ class WebHelpdeskController extends Controller
 
     public function template()
     {
+        $this->authorize('helpdesk_view');
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Tickets');
@@ -109,6 +117,8 @@ class WebHelpdeskController extends Controller
 
     public function import(Request $request)
     {
+        $this->authorize('helpdesk_raise');
+
         $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv']);
 
         $companyId = $this->resolveCompanyId($request);

@@ -23,6 +23,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerIndex(Request $request)
     {
+        $this->authorize('reimbursment_tab');
+
         $month   = $request->get('month', now()->format('Y-m'));
         $search  = trim((string) $request->get('search', ''));
 
@@ -58,6 +60,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerStore(Request $request)
     {
+        $this->authorize('reimbursment_add');
+
         $v = $request->validate([
             'year_month'    => 'required|date_format:Y-m',
             'expense_date'  => 'nullable|date',
@@ -88,6 +92,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerImport(Request $request)
     {
+        $this->authorize('reimbursment_add');
+
         $request->validate([
             'month' => 'required|date_format:Y-m',
             'file'  => 'required|file|mimes:xlsx,xls,csv',
@@ -439,6 +445,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerTemplate()
     {
+        $this->authorize('reimbursment_tab');
+
         $wb = new Spreadsheet();
         $ws = $wb->getActiveSheet();
         $ws->setTitle('Template');
@@ -476,6 +484,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerImageUpload(Request $request)
     {
+        $this->authorize('reimbursment_add');
+
         $request->validate([
             'month'    => 'required|date_format:Y-m',
             'images'   => 'required|array|min:1',
@@ -504,6 +514,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerImageView(Request $request, string $month, string $filename)
     {
+        $this->authorize('reimbursment_tab');
+
         // Guard against path traversal
         $filename = basename($filename);
         $path     = 'reimb-images/' . $month . '/' . $filename;
@@ -522,6 +534,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerUpdateStatus(Request $request, ReimbursementTrackerRow $row)
     {
+        $this->authorize('reimbursment_edit');
+
         $request->validate(['status' => 'required|in:approved,rejected']);
 
         $row->update(['status' => $request->status]);
@@ -545,6 +559,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerDestroy(ReimbursementTrackerRow $row)
     {
+        $this->authorize('reimbursment_del');
+
         $month = $row->year_month;
         $row->delete();
         return redirect()->route('reimbursements.tracker', ['month' => $month])
@@ -557,6 +573,8 @@ class WebReimbursementReportController extends Controller
 
     public function trackerExport(Request $request)
     {
+        $this->authorize('reimbursment_tab');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
         $month = $request->get('month');
 
@@ -616,6 +634,8 @@ class WebReimbursementReportController extends Controller
 
     public function reportIndex(Request $request)
     {
+        $this->authorize('reimb_report');
+
         $month  = $request->get('month', now()->format('Y-m'));
         $search = trim((string) $request->get('search', ''));
 
@@ -634,8 +654,13 @@ class WebReimbursementReportController extends Controller
             ))
             ->orderBy('id');
 
+        // amount is encrypted at rest (see ReimbursementTrackerRow's
+        // EncryptedDecimal cast) — SQL can't SUM() ciphertext, so this has
+        // to fetch rows and total them in PHP, where Eloquent decrypts each
+        // one on access.
         $totalAmount = ReimbursementTrackerRow::where('year_month', $month)
             ->where('status', 'approved')
+            ->get(['amount'])
             ->sum('amount');
 
         $rows     = $liveQuery->paginate(25)->withQueryString();
@@ -654,6 +679,8 @@ class WebReimbursementReportController extends Controller
 
     public function reportGenerate(Request $request)
     {
+        $this->authorize('reimb_report');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
         $month = $request->get('month');
 
@@ -671,6 +698,8 @@ class WebReimbursementReportController extends Controller
 
     public function reportDownload(Request $request)
     {
+        $this->authorize('reimb_report');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
         $month = $request->get('month');
 
@@ -757,6 +786,8 @@ class WebReimbursementReportController extends Controller
 
     public function reportUnlock(Request $request)
     {
+        $this->authorize('reimb_report');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
         $month = $request->get('month');
 
@@ -772,6 +803,8 @@ class WebReimbursementReportController extends Controller
 
     public function reportDelete(Request $request)
     {
+        $this->authorize('reimb_report');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
         $month = $request->get('month');
         $label = Carbon::createFromFormat('Y-m', $month)->format('F Y');
@@ -788,6 +821,8 @@ class WebReimbursementReportController extends Controller
 
     public function reportSaved()
     {
+        $this->authorize('reimb_report');
+
         $snapshots = ReimbursementReportSnapshot::orderByDesc('year_month')->get();
 
         $userIds = $snapshots->pluck('locked_by')->filter()->unique()->all();
@@ -802,6 +837,8 @@ class WebReimbursementReportController extends Controller
 
     public function reportView(string $month)
     {
+        $this->authorize('reimb_report');
+
         if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
             return redirect()->route('reimbursements.report.saved')->with('error', 'Invalid month format.');
         }

@@ -30,3 +30,15 @@ Schedule::command('leave:carry-forward --year=' . (date('Y') - 1))->yearlyOn(4, 
 
 // Hourly: Clean up expired Sanctum tokens
 Schedule::command('sanctum:prune-expired --hours=24')->hourly();
+
+// Hourly: Clean up stale import error-export files (safety net; the download
+// route already deletes each file immediately after it's downloaded)
+Schedule::command('storage:prune-error-exports --hours=24')->hourly();
+
+// Nightly: Disable login for users whose employee record shows they've left
+// (date_of_leaving in the past) — also enforced lazily at login time.
+Schedule::command('accounts:deactivate-leavers')->dailyAt('00:15');
+
+// Weekly (Monday morning): notify employees whose average clocked hours
+// fell below 9/day for the week that just ended.
+Schedule::command('attendance:check-weekly-average')->weeklyOn(1, '08:00');

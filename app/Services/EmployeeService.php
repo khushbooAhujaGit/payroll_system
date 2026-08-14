@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Storage;
 
 class EmployeeService
 {
+    public function __construct(protected UserProvisioningService $userProvisioningService = new UserProvisioningService()) {}
+
     public function create(array $data): Employee
     {
         return DB::transaction(function () use ($data) {
@@ -78,6 +80,10 @@ class EmployeeService
             // Initial leave balance for this year
             $this->initLeaveBalances($employee);
 
+            // Default login account (password "rsc@2026") so the employee
+            // can sign in and change it themselves.
+            $this->userProvisioningService->createDefaultAccountFor($employee);
+
             return $employee->fresh(['department', 'designation', 'grade', 'company']);
         });
     }
@@ -99,7 +105,7 @@ class EmployeeService
         $pan = !empty($data['pan_number']) ? strtoupper(trim((string) $data['pan_number'])) : null;
         if ($pan) {
             $byPan = Employee::onlyTrashed()
-                ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number', $pan))
+                ->whereHas('statutoryDetails', fn($q) => $q->where('pan_number_hash', hash('sha256', $pan)))
                 ->first();
             if ($byPan) return $byPan;
         }
@@ -192,8 +198,13 @@ class EmployeeService
             'created_by'     => auth()->id() ?? null,
         ]);
 
+        // Rehire may not have an existing account (e.g. it was removed
+        // along with them) — this is a no-op if one already exists.
+        $this->userProvisioningService->createDefaultAccountFor($employee);
+
         return $employee->fresh(['department', 'designation', 'grade', 'company']);
     }
+    
 
     public function update(Employee $employee, array $data): Employee
     {

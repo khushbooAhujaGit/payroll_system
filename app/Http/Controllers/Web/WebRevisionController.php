@@ -21,6 +21,8 @@ class WebRevisionController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('salary_revision_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $revisions = SalaryRevision::with([
@@ -41,6 +43,8 @@ class WebRevisionController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('salary_revision_create');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -72,6 +76,8 @@ class WebRevisionController extends Controller
 
     public function approve(Request $request, SalaryRevision $revision)
     {
+        $this->authorize('salary_revision_approve');
+
         $request->validate(['action' => 'required|in:approved,rejected']);
 
         if ($request->action === 'rejected') {
@@ -131,11 +137,15 @@ class WebRevisionController extends Controller
 
     public function template()
     {
+        $this->authorize('salary_revision_view');
+
         return $this->excelImportService->generateTemplate(SalaryRevisionImporter::class);
     }
 
     public function import(Request $request)
     {
+        $this->authorize('salary_revision_create');
+
         $companyId = $this->resolveCompanyId($request);
 
         $request->validate([

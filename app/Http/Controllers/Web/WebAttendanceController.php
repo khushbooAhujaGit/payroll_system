@@ -25,7 +25,9 @@ class WebAttendanceController extends Controller
     ) {}
 
     public function index(Request $request)
-    { 
+    {
+        $this->authorize('attendance_view');
+
         // ── Entity resolution ─────────────────────────────────────────────
         // Admin users have no linked employee — let them pick entity from the
         // URL param.  Fall back to the first entity that has active employees.
@@ -41,7 +43,7 @@ class WebAttendanceController extends Controller
             // Pick the first entity that actually has active employees
             $companyId = Employee::where('employee_status', 'active')
                 ->whereNotNull('company_id')
-                ->value('company_id') ?? ($entities->first()?->id ?? 1);
+                ->value('company_id') ?? ($companies->first()?->id ?? 1);
         }
 
         $year     = (int) $request->get('year', now()->year);
@@ -118,6 +120,8 @@ class WebAttendanceController extends Controller
 
     public function mark(Request $request)
     {
+        $this->authorize('attendance_edit');
+
         $validated = $request->validate([
             'attendance_date'        => 'required|date',
             'records'                => 'required|array',
@@ -145,6 +149,8 @@ class WebAttendanceController extends Controller
 
     public function export(Request $request)
     {
+        $this->authorize('attendance_view');
+
         $userEntityId = auth()->user()->employee?->company_id;
         if ($request->filled('company_id')) {
             $companyId = (int) $request->get('company_id');
@@ -188,11 +194,15 @@ class WebAttendanceController extends Controller
 
     public function template()
     {
+        $this->authorize('attendance_view');
+
         return $this->excelImportService->generateTemplate(AttendanceImporter::class);
     }
 
     public function import(Request $request)
     {
+        $this->authorize('attendance_edit');
+
         $companyId = $this->resolveCompanyId($request);
 
         $request->validate([
@@ -211,6 +221,8 @@ class WebAttendanceController extends Controller
 
     public function storePunch(Request $request)
     {
+        $this->authorize('attendance_edit');
+
         $validated = $request->validate([
             'employee_id'     => 'required|exists:employees,id',
             'attendance_date' => 'required|date',
@@ -257,6 +269,8 @@ class WebAttendanceController extends Controller
 
     public function updatePunch(Request $request, AttendanceRawPunch $punch)
     {
+        $this->authorize('attendance_edit');
+
         $validated = $request->validate([
             'check_in'     => 'nullable|date_format:H:i',
             'check_out'    => 'nullable|date_format:H:i',
@@ -276,6 +290,8 @@ class WebAttendanceController extends Controller
 
     public function destroyPunch(AttendanceRawPunch $punch)
     {
+        $this->authorize('attendance_edit');
+
         $punch->delete();
         return redirect()->route('attendance')->with('success', 'Raw punch deleted.');
     }
@@ -295,6 +311,8 @@ class WebAttendanceController extends Controller
      */
     public function biometricImport(Request $request)
     {
+        $this->authorize('attendance_edit');
+
         $companyId = $this->resolveCompanyId($request);
 
         $request->validate([

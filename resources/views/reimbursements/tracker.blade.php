@@ -92,6 +92,7 @@
         <th>Remarks</th>
         <th style="text-align:center">Image</th>
         <th style="text-align:center">Status</th>
+        <th style="text-align:center">Payment</th>
         <th style="text-align:center">Actions</th>
       </tr>
     </thead>
@@ -113,19 +114,34 @@
           @if($row->image_filename)
             <a href="{{ route('reimbursements.tracker.image.view', ['month' => $row->year_month, 'filename' => $row->image_filename]) }}"
                target="_blank" class="btn sm" style="font-size:10px">🖼 View</a>
+          @elseif($row->document_path)
+            <a href="{{ route('reimbursements.tracker.document', $row) }}"
+               target="_blank" class="btn sm" style="font-size:10px">🖼 View</a>
           @else
             <span style="color:var(--t3);font-size:11px">—</span>
           @endif
         </td>
         <td style="text-align:center">
-          @php $sc = ['approved' => 'var(--grn)', 'rejected' => 'var(--red)'];
-               $sb = ['approved' => 'var(--grn2)', 'rejected' => 'var(--red2)']; @endphp
+          @php $sc = ['approved' => 'var(--grn)', 'rejected' => 'var(--red)', 'pending' => 'var(--yel)'];
+               $sb = ['approved' => 'var(--grn2)', 'rejected' => 'var(--red2)', 'pending' => 'var(--yel2)']; @endphp
           <span class="bx" style="color:{{ $sc[$row->status] ?? 'var(--t3)' }};background:{{ $sb[$row->status] ?? 'var(--s2)' }}">
             {{ ucfirst($row->status) }}
           </span>
         </td>
-        <td style="text-align:center;white-space:nowrap">
+        <td style="text-align:center">
           @if($row->status === 'approved')
+            <button class="btn sm" style="font-size:10px" onclick="om('payment-{{ $row->id }}')">
+              <span class="bx {{ $row->payment_status === 'paid' ? 'g' : 'gr' }}">{{ ucfirst($row->payment_status) }}</span>
+            </button>
+          @else
+            <span style="color:var(--t3);font-size:11px">—</span>
+          @endif
+        </td>
+        <td style="text-align:center;white-space:nowrap">
+          @if($row->employee_id && $row->status === 'pending')
+            {{-- Self-submitted claim awaiting the designated approver — not actionable from here, see Reimbursement Approvals. --}}
+            <span class="bx y" style="font-size:10px">Awaiting Approver</span>
+          @elseif($row->status === 'approved')
             <form method="POST" action="{{ route('reimbursements.tracker.status', $row) }}" style="display:inline"
                   data-has-report="{{ $isLocked ? 'true' : 'false' }}"
                   data-month="{{ \Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y') }}">
@@ -157,7 +173,7 @@
       <tr style="background:var(--s2);font-weight:700">
         <td colspan="4" style="text-align:right;padding:8px 12px">Total Approved:</td>
         <td style="text-align:right;padding:8px 12px;color:var(--grn)">₹{{ number_format($totalApproved, 2) }}</td>
-        <td colspan="4"></td>
+        <td colspan="5"></td>
       </tr>
     </tfoot>
   </table>
@@ -292,6 +308,44 @@
   </div>
 </div>
 
+{{-- Payment Status Modals (one per approved row) --}}
+@foreach($rows as $row)
+  @if($row->status === 'approved')
+    <div class="modal" id="payment-{{ $row->id }}">
+      <div class="mb">
+        <div class="mh">
+          <span class="mt">Payment Status — {{ $row->employee_name }}</span>
+          <button class="mc" onclick="cm('payment-{{ $row->id }}')">✕</button>
+        </div>
+        <form method="POST" action="{{ route('reimbursements.tracker.payment', $row) }}">
+          @csrf
+          <div class="fg2">
+            <div class="fld full">
+              <label class="req">Status</label>
+              <select name="payment_status" onchange="togglePaymentFields(this, '{{ $row->id }}')" required>
+                <option value="unpaid" {{ $row->payment_status === 'unpaid' ? 'selected' : '' }}>Unpaid</option>
+                <option value="paid" {{ $row->payment_status === 'paid' ? 'selected' : '' }}>Paid</option>
+              </select>
+            </div>
+            <div class="fld" id="payment-date-wrap-{{ $row->id }}" style="{{ $row->payment_status === 'paid' ? '' : 'display:none' }}">
+              <label class="req">Payment Date</label>
+              <input type="date" name="payment_date" value="{{ $row->payment_date?->toDateString() ?? now()->toDateString() }}">
+            </div>
+            <div class="fld" id="payment-ref-wrap-{{ $row->id }}" style="{{ $row->payment_status === 'paid' ? '' : 'display:none' }}">
+              <label>Reference / UTR</label>
+              <input type="text" name="payment_reference" value="{{ $row->payment_reference }}" placeholder="e.g. UTR12345">
+            </div>
+          </div>
+          <div class="mf">
+            <button type="button" class="btn" onclick="cm('payment-{{ $row->id }}')">Cancel</button>
+            <button type="submit" class="btn acc">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  @endif
+@endforeach
+
 @if($errors->any())
 <script>document.addEventListener('DOMContentLoaded', () => om('add-modal'))</script>
 @endif
@@ -300,6 +354,12 @@
 
 @push('scripts')
 <script>
+function togglePaymentFields(select, rowId) {
+  const show = select.value === 'paid';
+  document.getElementById('payment-date-wrap-' + rowId).style.display = show ? '' : 'none';
+  document.getElementById('payment-ref-wrap-' + rowId).style.display = show ? '' : 'none';
+}
+
 function confirmStatusChange(form) {
   if (form.dataset.hasReport === 'true') {
     Swal.fire({

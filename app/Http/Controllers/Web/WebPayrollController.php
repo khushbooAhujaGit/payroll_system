@@ -15,6 +15,8 @@ class WebPayrollController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('payroll_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $periods = PayrollPeriod::where('company_id', $companyId)
@@ -56,6 +58,8 @@ class WebPayrollController extends Controller
 
     public function createPeriod(Request $request)
     {
+        $this->authorize('payroll_run');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -85,6 +89,8 @@ class WebPayrollController extends Controller
 
     public function initRun(Request $request)
     {
+        $this->authorize('payroll_run');
+
         $validated = $request->validate([
             'payroll_period_id' => 'required|exists:payroll_periods,id',
             'run_type'          => 'required|in:regular,supplementary,arrear,bonus',

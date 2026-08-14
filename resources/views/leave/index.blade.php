@@ -3,198 +3,121 @@
 
 @section('page_actions')
   <button class="btn acc" onclick="om('leave-modal')">+ Apply Leave</button>
+  <a href="{{ route('leave.calendar') }}" class="btn">Calendar</a>
+  @if($isLeaveAdmin)
   <button class="btn" onclick="om('tracker-import-modal')">📤 Import Tracker</button>
+  @endif
   <a href="{{ route('leave.export') . '?' . http_build_query(request()->only('status')) }}" class="btn">⬇ Export</a>
+  @if($isLeaveAdmin)
+  <a href="{{ route('leave.tracker') }}" class="btn">View Full Tracker</a>
+  @endif
 @endsection
 
 @section('content')
 
-<div class="g4" style="margin-bottom:16px">
-  <div class="sc"><div class="lbl">Pending Applications</div><div class="val" style="color:var(--yel)">{{ $pending }}</div></div>
-  <div class="sc"><div class="lbl">Total Applications</div><div class="val">{{ $applications->total() }}</div></div>
-  <div class="sc">
-    <div class="lbl">Tracker Records (entity)</div>
-    <div class="val">{{ number_format($trackerTotal) }}</div>
-  </div>
-  <div class="sc">
-    <a href="{{ route('leave.tracker') }}" style="text-decoration:none;display:block">
-      <div class="lbl">All Tracker Records →</div>
-      <div class="val" style="font-size:13px;color:var(--acc)">View Full Tracker</div>
-    </a>
+@if($myLeaveBalances->isNotEmpty())
+{{-- My Leave Balances — the viewer's own CL/SL/CO/Maternity/Paternity etc.
+     balances for the current year. --}}
+<div class="card" style="margin-bottom:16px">
+  <div class="ch"><div class="ct">My Leave Balances ({{ now()->year }})</div></div>
+  <div style="padding:14px 18px;display:flex;flex-wrap:wrap;gap:12px">
+    @foreach($myLeaveBalances as $balance)
+      <div style="min-width:120px;padding:10px 14px;border:1px solid var(--b1);border-radius:8px">
+        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">
+          {{ $balance->leaveType?->name ?? '—' }}
+        </div>
+        <div style="font-size:18px;font-weight:700">{{ rtrim(rtrim(number_format($balance->available, 2), '0'), '.') }}</div>
+      </div>
+    @endforeach
   </div>
 </div>
+@endif
 
-{{-- Filter --}}
-<form method="GET" action="{{ route('leave') }}" class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end">
-  <div class="fld" style="min-width:140px">
-    <label>Status</label>
-    <select name="status">
-      <option value="">All</option>
-      <option value="pending"  {{ request('status') === 'pending'  ? 'selected' : '' }}>Pending</option>
-      <option value="approved" {{ request('status') === 'approved' ? 'selected' : '' }}>Approved</option>
-      <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Rejected</option>
-    </select>
+{{-- Status + date-range filter, plus (for a manager) the Self/Team tab
+     switcher, combined into one card. Tabs use the same link-toggle
+     pattern as the Spell Groups / Day-wise view on the tracker page —
+     each tab keeps its own search/pagination state via the query string. --}}
+<div class="card" style="margin-bottom:16px">
+  @if($isManager && !$isLeaveAdmin)
+  <div style="display:flex;gap:6px;margin-bottom:14px">
+    <a href="{{ request()->fullUrlWithQuery(['applications_tab' => 'self']) }}"
+       class="btn sm {{ $activeTab === 'self' ? 'acc' : '' }}">Self Application</a>
+    <a href="{{ request()->fullUrlWithQuery(['applications_tab' => 'team']) }}"
+       class="btn sm {{ $activeTab === 'team' ? 'acc' : '' }}">Team Application</a>
   </div>
-  <button type="submit" class="btn acc">Filter</button>
-  <a href="{{ route('leave') }}" class="btn">Reset</a>
-</form>
-
-<div class="card">
-  @if($applications->isNotEmpty())
-  <table>
-    <thead>
-      <tr><th>App #</th><th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr>
-    </thead>
-    <tbody>
-      @foreach($applications as $app)
-      <tr>
-        <td class="mono">{{ $app->application_number }}</td>
-        <td>{{ $app->employee?->full_name }}</td>
-        <td>{{ $app->leaveType?->name ?? '—' }}</td>
-        <td>{{ \Carbon\Carbon::parse($app->from_date)->format('d M Y') }}</td>
-        <td>{{ \Carbon\Carbon::parse($app->to_date)->format('d M Y') }}</td>
-        <td>{{ $app->days }}</td>
-        <td>
-          @php $color = ['pending'=>'var(--yel)','approved'=>'var(--grn)','rejected'=>'var(--red)'][$app->status] ?? 'var(--t3)'; @endphp
-          <span class="bx" style="color:{{ $color }}">{{ ucfirst($app->status) }}</span>
-        </td>
-        <td>
-          @if($app->status === 'pending')
-          <form method="POST" action="{{ route('leave.approve', $app) }}" style="display:inline">
-            @csrf
-            <input type="hidden" name="action" value="approved">
-            <button type="submit" class="btn sm" style="background:var(--grn2);color:var(--grn)">Approve</button>
-          </form>
-          <form method="POST" action="{{ route('leave.approve', $app) }}" style="display:inline">
-            @csrf
-            <input type="hidden" name="action" value="rejected">
-            <button type="submit" class="btn sm" style="background:var(--red2);color:var(--red)">Reject</button>
-          </form>
-          @endif
-        </td>
-      </tr>
-      @endforeach
-    </tbody>
-  </table>
-  <div style="margin-top:14px">{{ $applications->links() }}</div>
-  @else
-  <div class="empty"><div class="ico">🏖️</div><p>No leave applications found.</p></div>
   @endif
-</div>
-
-{{-- Leave Tracker Records --}}
-<div class="card" style="margin-top:20px">
-  <div class="ch" style="flex-wrap:wrap;gap:8px">
-    <div class="ct">Leave Tracker Records</div>
-    <div style="font-size:11px;color:var(--t3)">{{ number_format($trackerTotal) }} records for this entity</div>
-    <div style="margin-left:auto;display:flex;gap:6px">
-      <a href="{{ route('leave.tracker') }}" class="btn sm">View All</a>
-      <button class="btn sm acc" onclick="om('tracker-import-modal')">📤 Import</button>
-    </div>
-  </div>
-
-  {{-- Tracker Filters --}}
   <form method="GET" action="{{ route('leave') }}"
-    style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:10px 0 14px;border-bottom:1px solid var(--b2)">
-    <div class="fld" style="min-width:120px">
-      <label style="font-size:11px">Leave Type</label>
-      <select name="tracker_type" style="font-size:12px">
-        <option value="">All Types</option>
-        @foreach($trackerLeaveTypes as $tlt)
-          <option value="{{ $tlt }}" {{ request('tracker_type') == $tlt ? 'selected' : '' }}>{{ $tlt }}</option>
-        @endforeach
+    style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    @if($isManager && !$isLeaveAdmin)
+      <input type="hidden" name="applications_tab" value="{{ $activeTab }}">
+    @endif
+    <div class="fld" style="min-width:140px">
+      <label style="font-size:11px">Status</label>
+      <select name="status" style="font-size:12px">
+        <option value="">All</option>
+        <option value="pending"  {{ request('status') === 'pending'  ? 'selected' : '' }}>Pending</option>
+        <option value="approved" {{ request('status') === 'approved' ? 'selected' : '' }}>Approved</option>
+        <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Rejected</option>
       </select>
     </div>
     <div class="fld" style="min-width:140px">
-      <label style="font-size:11px">Employee ID / Name</label>
-      <input type="text" name="tracker_emp" value="{{ request('tracker_emp') }}"
-        placeholder="EMP code or name" style="font-size:12px">
+      <label style="font-size:11px">From</label>
+      <input type="date" name="date_from" value="{{ request('date_from') }}" style="font-size:12px">
     </div>
-    <div class="fld" style="min-width:130px">
-      <label style="font-size:11px">Month</label>
-      <input type="month" name="tracker_month" value="{{ request('tracker_month') }}" style="font-size:12px">
+    <div class="fld" style="min-width:140px">
+      <label style="font-size:11px">To</label>
+      <input type="date" name="date_to" value="{{ request('date_to') }}" style="font-size:12px">
     </div>
     <button type="submit" class="btn sm acc">Filter</button>
-    <a href="{{ route('leave') }}" class="btn sm">Reset</a>
+    <a href="{{ route('leave', ['applications_tab' => $activeTab]) }}" class="btn sm">Reset</a>
   </form>
-
-  @if($trackerGroups->isNotEmpty())
-  <table style="font-size:12px">
-    <thead>
-      <tr>
-        <th>Employee</th>
-        <th>EMP Code</th>
-        <th>Leave Type</th>
-        <th style="text-align:center">Days</th>
-        <th>From</th>
-        <th>To</th>
-        <th>Team Leader</th>
-        <th style="text-align:center">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      @foreach($trackerGroups as $grp)
-      <tr>
-        <td>
-          @if($grp->employee_id)
-            @php $emp = \App\Models\Employee::find($grp->employee_id); @endphp
-            {{ $emp ? $emp->full_name : $grp->employee_name }}
-          @else
-            <span style="color:var(--t3);font-style:italic">{{ $grp->employee_name ?? '—' }}</span>
-            <span style="font-size:9px;background:#fef3c7;color:#d97706;border-radius:3px;padding:1px 4px;margin-left:4px">unmatched</span>
-          @endif
-        </td>
-        <td class="mono" style="font-size:11px">{{ $grp->sheet_emp_id ?? '—' }}</td>
-        <td>
-          <span class="bx" style="background:var(--acc2);color:var(--acc);font-size:10px">
-            {{ $grp->leave_type }}
-          </span>
-        </td>
-        <td class="mono" style="text-align:center;font-weight:600">{{ $grp->total_days }}</td>
-        <td class="mono" style="white-space:nowrap;font-size:11px">
-          {{ \Carbon\Carbon::parse($grp->first_date)->format('d M Y') }}
-        </td>
-        <td class="mono" style="white-space:nowrap;font-size:11px">
-          {{ \Carbon\Carbon::parse($grp->last_date)->format('d M Y') }}
-        </td>
-        <td style="color:var(--t2);font-size:11px">{{ $grp->team_leader_name ?? '—' }}</td>
-        <td style="white-space:nowrap;text-align:center">
-          {{-- Edit individual records (go to tracker day-wise view) --}}
-          <a href="{{ route('leave.tracker', ['view' => 'daily', 'emp_id' => $grp->sheet_emp_id, 'leave_type' => $grp->leave_type, 'date_from' => $grp->first_date, 'date_to' => $grp->last_date]) }}"
-             class="btn sm" style="font-size:10px;padding:3px 8px">Edit →</a>
-          {{-- Delete entire spell --}}
-          <form method="POST" action="{{ route('leave.tracker.bulk_destroy') }}" style="display:inline"
-                onsubmit="return confirm('Delete all {{ $grp->total_days }} day(s) of {{ $grp->leave_type }} for this employee?')">
-            @csrf
-            <input type="hidden" name="sheet_emp_id" value="{{ $grp->sheet_emp_id }}">
-            <input type="hidden" name="leave_type"   value="{{ $grp->leave_type }}">
-            <input type="hidden" name="date_from"    value="{{ $grp->first_date }}">
-            <input type="hidden" name="date_to"      value="{{ $grp->last_date }}">
-            <button type="submit" class="btn sm" style="font-size:10px;padding:3px 8px;color:var(--red)">Delete</button>
-          </form>
-        </td>
-      </tr>
-      @endforeach
-    </tbody>
-  </table>
-  <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    {{ $trackerGroups->appends(request()->except('tracker_page'))->links() }}
-    <a href="{{ route('leave.tracker') }}" class="btn sm" style="flex-shrink:0">
-      View Day-wise Detail ({{ number_format($trackerTotal) }} entries) →
-    </a>
-  </div>
-  @else
-  <div class="empty" style="padding:24px">
-    <div class="ico">📋</div>
-    <p>No tracker records found{{ request()->hasAny(['tracker_type','tracker_emp','tracker_month']) ? ' for this filter' : ' yet' }}.</p>
-    @if(!request()->hasAny(['tracker_type','tracker_emp','tracker_month']))
-    <p style="font-size:12px;color:var(--t3);margin-top:4px">
-      Click <strong>📤 Import</strong> to upload the Leave Tracker xlsm file.
-    </p>
-    @endif
-  </div>
-  @endif
 </div>
+
+@if($isManager && !$isLeaveAdmin)
+  @if($activeTab === 'team')
+    {{-- Combined list: formal applications + tracker-only rows (bulk
+         imports/manual entries) for the team, one table. --}}
+    @include('leave._applications_table', [
+      'rows'         => $teamApplications,
+      'title'        => 'Team Application',
+      'searchParam'  => 'team_search',
+      'searchValue'  => request('team_search'),
+      'showBulk'     => true,
+      'isAdmin'      => false,
+      'viewerEmployeeId' => $viewerEmployeeId,
+      'emptyText'    => 'No leave records found for your team.',
+      'formId'       => 'team-applications-form',
+      'tabValue'     => 'team',
+    ])
+  @else
+    @include('leave._applications_table', [
+      'rows'         => $selfApplications,
+      'title'        => 'Self Application',
+      'searchParam'  => 'self_search',
+      'searchValue'  => request('self_search'),
+      'showBulk'     => false,
+      'isAdmin'      => false,
+      'viewerEmployeeId' => $viewerEmployeeId,
+      'emptyText'    => 'No leave records found.',
+      'formId'       => 'self-applications-form',
+      'tabValue'     => 'self',
+    ])
+  @endif
+@else
+  {{-- HR/Admin (unified, entity-wide, applications only) or a plain
+       employee (self only, combined with their tracker-only rows). --}}
+  @include('leave._applications_table', [
+    'rows'         => $applications,
+    'title'        => $isLeaveAdmin ? 'All Leave Applications' : 'My Applications',
+    'searchParam'  => 'search',
+    'searchValue'  => request('search'),
+    'showBulk'     => $isLeaveAdmin,
+    'isAdmin'      => $isAdmin ?? false,
+    'viewerEmployeeId' => $viewerEmployeeId,
+    'emptyText'    => 'No leave records found.',
+    'formId'       => 'all-applications-form',
+  ])
+@endif
 
 {{-- Apply Leave Modal --}}
 <div class="modal" id="leave-modal">
@@ -205,36 +128,73 @@
     </div>
     <form method="POST" action="{{ route('leave.apply') }}">
       @csrf
+      @error('duplicate')
+        <div class="ferr" style="margin-bottom:12px">{{ $message }}</div>
+      @enderror
       <div class="fg2">
         <div class="fld full">
-          <label>Employee (leave blank for self)</label>
-          <select name="employee_id">
-            <option value="">— Self —</option>
-            @foreach($employees as $emp)
-            <option value="{{ $emp->id }}">{{ $emp->full_name }} ({{ $emp->employee_id }})</option>
-            @endforeach
+          <label>{{ $isLeaveAdmin ? 'Employee (leave blank for self)' : 'Applying For' }}</label>
+          <select name="employee_id" @error('employee_id') class="inp-err" @enderror>
+            @if($isLeaveAdmin)
+              <option value="">— Self —</option>
+              @foreach($employees as $emp)
+              <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>{{ $emp->full_name }} ({{ $emp->employee_id }})</option>
+              @endforeach
+            @else
+              {{-- Own name + direct reports are already in the list — no
+                   separate "Self" placeholder needed; default straight to
+                   the logged-in employee. --}}
+              @foreach($employees as $emp)
+              <option value="{{ $emp->id }}" {{ old('employee_id', $viewerEmployeeId) == $emp->id ? 'selected' : '' }}>
+                {{ $emp->full_name }} ({{ $emp->employee_id }}){{ $emp->id === $viewerEmployeeId ? ' — Me' : '' }}
+              </option>
+              @endforeach
+            @endif
           </select>
+          @error('employee_id') <div class="ferr">{{ $message }}</div> @enderror
         </div>
         <div class="fld full">
           <label class="req">Leave Type</label>
-          <select name="leave_type_id" required
+          <select name="leave_type_id" id="leave-type-select" required onchange="toggleHalfDayPeriod()"
             @error('leave_type_id') class="inp-err" @enderror>
             <option value="">Select type</option>
             @foreach($leaveTypes as $lt)
-            <option value="{{ $lt->id }}" {{ old('leave_type_id') == $lt->id ? 'selected' : '' }}>{{ $lt->name }} ({{ $lt->code }})</option>
+            <option value="{{ $lt->id }}" data-half-day="{{ str_contains($lt->name, 'Half-Day') ? '1' : '0' }}"
+              {{ old('leave_type_id') == $lt->id ? 'selected' : '' }}>{{ $lt->name }} ({{ $lt->code }})</option>
             @endforeach
           </select>
           @error('leave_type_id') <div class="ferr">{{ $message }}</div> @enderror
         </div>
-        <div class="fld">
+        <div class="fld full" id="leave-half-day-wrap" style="display:none">
+          <label class="req">Which Half?</label>
+          <select name="half_day_period" id="leave-half-day-period">
+            <option value="first_half" {{ old('half_day_period') === 'first_half' ? 'selected' : '' }}>First Half</option>
+            <option value="second_half" {{ old('half_day_period') === 'second_half' ? 'selected' : '' }}>Second Half</option>
+          </select>
+        </div>
+        <div class="fld full">
+          <label class="req">Duration</label>
+          <select name="duration_type" id="leave-duration-type" onchange="toggleLeaveDuration()">
+            <option value="single" {{ old('duration_type', 'single') === 'single' ? 'selected' : '' }}>Single Day</option>
+            <option value="period" {{ old('duration_type') === 'period' ? 'selected' : '' }}>Period (date range)</option>
+          </select>
+        </div>
+        <div class="fld full" id="leave-single-date-wrap">
+          <label class="req">Date</label>
+          <input type="date" name="single_date" id="leave-single-date" value="{{ old('single_date') }}" min="{{ $minApplyDate }}"
+            @error('single_date') class="inp-err" @enderror>
+          <span style="font-size:10px;color:var(--t3)">Cannot be more than 30 days in the past.</span>
+          @error('single_date') <div class="ferr">{{ $message }}</div> @enderror
+        </div>
+        <div class="fld" id="leave-from-date-wrap" style="display:none">
           <label class="req">From Date</label>
-          <input type="date" name="from_date" required value="{{ old('from_date') }}"
+          <input type="date" name="from_date" id="leave-from-date" value="{{ old('from_date') }}" min="{{ $minApplyDate }}"
             @error('from_date') class="inp-err" @enderror>
           @error('from_date') <div class="ferr">{{ $message }}</div> @enderror
         </div>
-        <div class="fld">
+        <div class="fld" id="leave-to-date-wrap" style="display:none">
           <label class="req">To Date</label>
-          <input type="date" name="to_date" required value="{{ old('to_date') }}"
+          <input type="date" name="to_date" id="leave-to-date" value="{{ old('to_date') }}"
             @error('to_date') class="inp-err" @enderror>
           @error('to_date') <div class="ferr">{{ $message }}</div> @enderror
         </div>
@@ -288,7 +248,58 @@
   </div>
 </div>
 
+{{-- Leave Reason Modal (shared — filled in by JS on click) --}}
+<div class="modal" id="reason-modal">
+  <div class="mb" style="width:420px">
+    <div class="mh">
+      <span class="mt">Leave Reason</span>
+      <button class="mc" onclick="cm('reason-modal')">✕</button>
+    </div>
+    <p id="reason-modal-text" style="font-size:13px;color:var(--t2);line-height:1.6;white-space:pre-wrap"></p>
+    <div class="mf">
+      <button type="button" class="btn" onclick="cm('reason-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 @if($errors->any())
 <script>document.addEventListener('DOMContentLoaded',()=>om('leave-modal'))</script>
 @endif
+
+<script>
+  function toggleLeaveDuration() {
+    var mode = document.getElementById('leave-duration-type').value;
+    var singleWrap = document.getElementById('leave-single-date-wrap');
+    var fromWrap = document.getElementById('leave-from-date-wrap');
+    var toWrap = document.getElementById('leave-to-date-wrap');
+    var singleInput = document.getElementById('leave-single-date');
+    var fromInput = document.getElementById('leave-from-date');
+    var toInput = document.getElementById('leave-to-date');
+
+    var isSingle = mode === 'single';
+    singleWrap.style.display = isSingle ? '' : 'none';
+    fromWrap.style.display   = isSingle ? 'none' : '';
+    toWrap.style.display     = isSingle ? 'none' : '';
+    singleInput.required = isSingle;
+    fromInput.required   = !isSingle;
+    toInput.required     = !isSingle;
+  }
+  document.addEventListener('DOMContentLoaded', toggleLeaveDuration);
+
+  function toggleHalfDayPeriod() {
+    var select = document.getElementById('leave-type-select');
+    var wrap   = document.getElementById('leave-half-day-wrap');
+    var period = document.getElementById('leave-half-day-period');
+    var opt    = select.options[select.selectedIndex];
+    var isHalfDay = opt && opt.dataset.halfDay === '1';
+    wrap.style.display = isHalfDay ? '' : 'none';
+    period.required = isHalfDay;
+  }
+  document.addEventListener('DOMContentLoaded', toggleHalfDayPeriod);
+
+  function showLeaveReason(cell) {
+    document.getElementById('reason-modal-text').textContent = cell.dataset.reason;
+    om('reason-modal');
+  }
+</script>
 @endsection

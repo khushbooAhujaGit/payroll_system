@@ -308,7 +308,7 @@ Route::middleware('auth:sanctum')->group(function () {
             ->orderByDesc('created_at')
             ->paginate(50);
         return response()->json($logs);
-    })->middleware('permission:audit.view');
+    })->middleware('permission:audit_view');
 
     // ─── NOTIFICATIONS ───────────────────────────────────────────
     Route::get('/notifications', function (\Illuminate\Http\Request $request) {
@@ -337,23 +337,13 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ─── RBAC MANAGEMENT (Super Admin) ───────────────────────────
-    Route::prefix('rbac')->middleware('permission:rbac.manage')->group(function () {
+    Route::prefix('rbac')->middleware('permission:rbac_manage')->group(function () {
         Route::apiResource('roles', \App\Http\Controllers\Auth\RoleController::class);
         Route::get('/permissions',  fn() => response()->json(\App\Models\Permission::all()->groupBy('module')));
-        Route::post('/roles/{role}/permissions', function (\App\Models\Role $role, \Illuminate\Http\Request $req) {
-            foreach ($req->permissions as $permId => $abilities) {
-                $role->permissions()->syncWithPivotValues(
-                    [$permId],
-                    array_merge(['can_view' => false, 'can_create' => false, 'can_edit' => false, 'can_delete' => false, 'can_export' => false, 'can_approve' => false], $abilities),
-                    false
-                );
-            }
-            return response()->json(['message' => 'Permissions updated.']);
-        });
-        Route::post('/users/{user}/roles', function (\App\Models\User $user, \Illuminate\Http\Request $req) {
-            $user->roles()->syncWithPivotValues($req->role_ids, ['entity_id' => $req->entity_id], false);
-            return response()->json(['message' => 'Roles assigned.']);
-        });
+        Route::post('/roles/{role}/permissions', [\App\Http\Controllers\Auth\RoleController::class, 'syncPermissions']);
+        Route::get('/roles/{role}/users',         [\App\Http\Controllers\Auth\RoleController::class, 'users']);
+        Route::post('/users/{user}/roles',        [\App\Http\Controllers\Auth\RoleController::class, 'assignToUser']);
+        Route::delete('/users/{user}/roles/{role}', [\App\Http\Controllers\Auth\RoleController::class, 'removeFromUser']);
     });
 
 }); // end auth:sanctum

@@ -22,6 +22,8 @@ class WebSalaryController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('salary_details');
+
         $companyId   = $this->resolveCompanyId($request);
         $isAdmin    = auth()->user()?->hasRole('admin') ?? true;
         $monthParam = $request->get('month'); // YYYY-MM or null
@@ -95,6 +97,8 @@ class WebSalaryController extends Controller
 
     public function setSalary(Request $request, Employee $employee)
     {
+        $this->authorize('salary_details_add');
+
         $validated = $request->validate([
             'ctc_annual'    => 'required|numeric|min:1',
             'gross_monthly' => 'required|numeric|min:1',
@@ -154,12 +158,16 @@ class WebSalaryController extends Controller
 
     public function destroySalary(EmployeeSalary $salary)
     {
+        $this->authorize('salary_detais_del');
+
         $salary->delete();
         return redirect()->route('salary')->with('success', 'Salary record deleted.');
     }
 
     public function bulkDestroySalary(Request $request)
     {
+        $this->authorize('salary_detais_del');
+
         $selectAll  = $request->boolean('select_all');
         $companyId  = $this->resolveCompanyId($request);
         $search     = $request->input('search', '');
@@ -202,6 +210,8 @@ class WebSalaryController extends Controller
 
     public function template(Request $request)
     {
+        $this->authorize('salary_details');
+
         $companyId = $this->resolveCompanyId($request);
         $today    = now()->toDateString();
 
@@ -260,6 +270,8 @@ class WebSalaryController extends Controller
     
     public function import(Request $request)
     {
+        $this->authorize('salary_details_add');
+
         $companyId = $this->resolveCompanyId($request);
 
         $request->validate([

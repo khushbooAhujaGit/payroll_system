@@ -151,7 +151,7 @@
         <span class="mt">Add Employee</span>
         <button class="mc" onclick="cm('emp-modal')">✕</button>
       </div>
-      <form method="POST" action="{{ route('employees.store') }}">
+      <form method="POST" action="{{ route('employees.store') }}" enctype="multipart/form-data">
         @csrf
         <input type="hidden" name="employee_status" value="active">
 
@@ -207,15 +207,6 @@
             <input type="date" name="date_of_birth" value="{{ old('date_of_birth') }}">
           </div>
           <div class="fld">
-            <label>Blood Group</label>
-            <select name="blood_group">
-              <option value="">Select</option>
-              @foreach(['A+','A-','B+','B-','AB+','AB-','O+','O-'] as $bg)
-                <option value="{{ $bg }}" {{ old('blood_group') === $bg ? 'selected' : '' }}>{{ $bg }}</option>
-              @endforeach
-            </select>
-          </div>
-          <div class="fld">
             <label>Marital Status</label>
             <select name="marital_status">
               <option value="">Select</option>
@@ -237,8 +228,10 @@
         </div>
         <div class="fg2">
           <div class="fld">
-            <label>Official Email</label>
-            <input type="email" name="official_email" value="{{ old('official_email') }}">
+            <label class="req">Official Email</label>
+            <input type="email" name="official_email" required value="{{ old('official_email') }}"
+              @error('official_email') class="inp-err" @enderror>
+            @error('official_email') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
             <label class="req">Mobile (10 digits)</label>
@@ -281,44 +274,55 @@
             </select>
           </div>
           <div class="fld">
-            <label>Work Type *</label>
-            <select name="work_type" required>
+            <label class="req">Work Type</label>
+            <select name="work_type" id="add-work-type" required onchange="toggleClientName('add', this.value)"
+              @error('work_type') class="inp-err" @enderror>
               <option value="wfo"            {{ old('work_type', 'wfo') === 'wfo'            ? 'selected' : '' }}>Work from Office</option>
               <option value="wfh"            {{ old('work_type') === 'wfh'            ? 'selected' : '' }}>Work from Home</option>
               <option value="hybrid"         {{ old('work_type') === 'hybrid'         ? 'selected' : '' }}>Hybrid</option>
               <option value="client_location"{{ old('work_type') === 'client_location'? 'selected' : '' }}>Client Location</option>
             </select>
+            @error('work_type') <div class="ferr">{{ $message }}</div> @enderror
+          </div>
+          <div class="fld" id="add-client-name-wrap" style="display:{{ old('work_type') === 'client_location' ? 'flex' : 'none' }}">
+            <label class="req">Client Name</label>
+            <input type="text" name="client_name" value="{{ old('client_name') }}"
+              @error('client_name') class="inp-err" @enderror>
+            @error('client_name') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>Department</label>
-            <select name="department_id">
+            <label class="req">Department</label>
+            <select name="department_id" required @error('department_id') class="inp-err" @enderror>
               <option value="">Select Department</option>
               @foreach($departments as $dept)
                 <option value="{{ $dept->id }}" {{ old('department_id') == $dept->id ? 'selected' : '' }}>{{ $dept->name }}</option>
               @endforeach
             </select>
+            @error('department_id') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>Designation</label>
-            <select name="designation_id">
+            <label class="req">Designation</label>
+            <select name="designation_id" required @error('designation_id') class="inp-err" @enderror>
               <option value="">Select Designation</option>
               @foreach($designations as $d)
                 <option value="{{ $d->id }}" {{ old('designation_id') == $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
               @endforeach
             </select>
+            @error('designation_id') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>Branch / Location</label>
-            <select name="branch_id">
+            <label class="req">Branch / Location</label>
+            <select name="branch_id" id="add-branch" required @error('branch_id') class="inp-err" @enderror>
               <option value="">Select Branch</option>
               @foreach($branches as $b)
                 <option value="{{ $b->id }}" {{ old('branch_id') == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
               @endforeach
             </select>
+            @error('branch_id') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>Reporting Manager</label>
-            <select name="reporting_manager_id">
+            <label class="req">Reporting Manager</label>
+            <select name="reporting_manager_id" required @error('reporting_manager_id') class="inp-err" @enderror>
               <option value="">Select Manager</option>
               @foreach($managers as $mgr)
                 <option value="{{ $mgr->id }}" {{ old('reporting_manager_id') == $mgr->id ? 'selected' : '' }}>
@@ -326,11 +330,14 @@
                 </option>
               @endforeach
             </select>
+            @error('reporting_manager_id') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>Probation Period (months)</label>
-            <input type="number" name="probation_period_months" min="0" max="24"
-              value="{{ old('probation_period_months', 6) }}" placeholder="6">
+            <label class="req">Probation Period (months)</label>
+            <input type="number" name="probation_period_months" min="0" max="24" required
+              value="{{ old('probation_period_months', 6) }}" placeholder="6"
+              @error('probation_period_months') class="inp-err" @enderror>
+            @error('probation_period_months') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
             <label>Employee ID <span style="font-size:10px;color:var(--t3);font-weight:400">(auto-generated if blank)</span></label>
@@ -346,8 +353,9 @@
         <div class="fg2">
           <div class="fld">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" name="is_pf_applicable" value="1"
-                {{ old('is_pf_applicable', '1') ? 'checked' : '' }} style="width:16px;height:16px">
+              <input type="checkbox" name="is_pf_applicable" id="add-pf-applicable" value="1"
+                {{ old('is_pf_applicable', '1') ? 'checked' : '' }} style="width:16px;height:16px"
+                onchange="toggleUanRequired('add', this.checked)">
               PF Applicable
             </label>
           </div>
@@ -360,24 +368,26 @@
         </div>
         <div class="fg2">
           <div class="fld">
-            <label class="req">PAN Number</label>
-            <input type="text" name="pan_number" value="{{ old('pan_number') }}" required
+            <label>PAN Number</label>
+            <input type="text" name="pan_number" value="{{ old('pan_number') }}"
               placeholder="ABCDE1234F" maxlength="10" style="text-transform:uppercase"
               oninput="this.value=this.value.toUpperCase()"
               @error('pan_number') class="inp-err" @enderror>
             @error('pan_number') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label class="req">Aadhaar Number</label>
-            <input type="text" name="aadhaar_number" value="{{ old('aadhaar_number') }}" required
+            <label>Aadhaar Number</label>
+            <input type="text" name="aadhaar_number" value="{{ old('aadhaar_number') }}"
               placeholder="12-digit number" maxlength="12" pattern="\d{12}"
               @error('aadhaar_number') class="inp-err" @enderror>
             @error('aadhaar_number') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>UAN Number</label>
-            <input type="text" name="uan_number" value="{{ old('uan_number') }}"
-              placeholder="12-digit UAN" maxlength="12">
+            <label id="add-uan-label" class="{{ old('is_pf_applicable', '1') ? 'req' : '' }}">UAN Number</label>
+            <input type="text" name="uan_number" id="add-uan" value="{{ old('uan_number') }}"
+              placeholder="12-digit UAN" maxlength="12" {{ old('is_pf_applicable', '1') ? 'required' : '' }}
+              @error('uan_number') class="inp-err" @enderror>
+            @error('uan_number') <div class="ferr">{{ $message }}</div> @enderror
           </div>
         </div>
 
@@ -387,29 +397,29 @@
         </div>
         <div class="fg2">
           <div class="fld">
-            <label class="req">Bank Name</label>
-            <input type="text" name="bank_name" value="{{ old('bank_name') }}" required
+            <label>Bank Name</label>
+            <input type="text" name="bank_name" value="{{ old('bank_name') }}"
               placeholder="e.g. HDFC Bank"
               @error('bank_name') class="inp-err" @enderror>
             @error('bank_name') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label class="req">Account Number</label>
-            <input type="text" name="account_number" value="{{ old('account_number') }}" required
+            <label>Account Number</label>
+            <input type="text" name="account_number" value="{{ old('account_number') }}"
               @error('account_number') class="inp-err" @enderror>
             @error('account_number') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label class="req">IFSC Code</label>
-            <input type="text" name="ifsc_code" value="{{ old('ifsc_code') }}" required
+            <label>IFSC Code</label>
+            <input type="text" name="ifsc_code" value="{{ old('ifsc_code') }}"
               placeholder="HDFC0001234" maxlength="11" style="text-transform:uppercase"
               oninput="this.value=this.value.toUpperCase()"
               @error('ifsc_code') class="inp-err" @enderror>
             @error('ifsc_code') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label class="req">Account Holder Name</label>
-            <input type="text" name="account_holder_name" value="{{ old('account_holder_name') }}" required
+            <label>Account Holder Name</label>
+            <input type="text" name="account_holder_name" value="{{ old('account_holder_name') }}"
               placeholder="As per bank records"
               @error('account_holder_name') class="inp-err" @enderror>
             @error('account_holder_name') <div class="ferr">{{ $message }}</div> @enderror
@@ -422,14 +432,33 @@
         </div>
         <div class="fg2">
           <div class="fld">
-            <label>Contact Name</label>
-            <input type="text" name="emergency_contact_name" value="{{ old('emergency_contact_name') }}">
+            <label class="req">Contact Name</label>
+            <input type="text" name="emergency_contact_name" required value="{{ old('emergency_contact_name') }}"
+              @error('emergency_contact_name') class="inp-err" @enderror>
+            @error('emergency_contact_name') <div class="ferr">{{ $message }}</div> @enderror
           </div>
           <div class="fld">
-            <label>Contact Phone (10 digits)</label>
-            <input type="text" name="emergency_contact_phone" value="{{ old('emergency_contact_phone') }}"
-              pattern="\d{10}" maxlength="10" placeholder="9876543210">
+            <label class="req">Contact Phone (10 digits)</label>
+            <input type="text" name="emergency_contact_phone" required value="{{ old('emergency_contact_phone') }}"
+              pattern="\d{10}" maxlength="10" placeholder="9876543210"
+              @error('emergency_contact_phone') class="inp-err" @enderror>
+            @error('emergency_contact_phone') <div class="ferr">{{ $message }}</div> @enderror
           </div>
+        </div>
+
+        {{-- ── Documents ──────────────────────────────── --}}
+        <div style="margin:18px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
+          Documents
+        </div>
+        <div class="fg2">
+          @foreach (\App\Models\EmployeeDocument::UPLOAD_TYPES as $docType => $docLabel)
+          <div class="fld">
+            <label>{{ $docLabel }}</label>
+            <input type="file" name="documents[{{ $docType }}]" accept=".pdf,.jpg,.jpeg,.png"
+              @error("documents.$docType") class="inp-err" @enderror>
+            @error("documents.$docType") <div class="ferr">{{ $message }}</div> @enderror
+          </div>
+          @endforeach
         </div>
 
         <div class="mf" style="position:sticky;bottom:0;background:var(--s1);padding-top:12px;border-top:1px solid var(--b1)">
@@ -449,7 +478,7 @@
         <span class="mt">Edit Employee</span>
         <button class="mc" onclick="cm('emp-edit-modal')">✕</button>
       </div>
-      <form method="POST" id="emp-edit-form">
+      <form method="POST" id="emp-edit-form" enctype="multipart/form-data">
         @csrf
         <div id="edit-loading" style="text-align:center;padding:40px;color:var(--t3);display:none">
           Loading employee data…
@@ -484,15 +513,6 @@
             <div class="fld">
               <label>Date of Birth</label>
               <input type="date" name="date_of_birth" id="e-dob">
-            </div>
-            <div class="fld">
-              <label>Blood Group</label>
-              <select name="blood_group" id="e-blood-group">
-                <option value="">Select</option>
-                @foreach(['A+','A-','B+','B-','AB+','AB-','O+','O-'] as $bg)
-                  <option value="{{ $bg }}">{{ $bg }}</option>
-                @endforeach
-              </select>
             </div>
             <div class="fld">
               <label>Marital Status</label>
@@ -556,12 +576,16 @@
             </div>
             <div class="fld">
               <label>Work Type</label>
-              <select name="work_type" id="e-work-type">
+              <select name="work_type" id="e-work-type" onchange="toggleClientName('e', this.value)">
                 <option value="wfo">Work from Office</option>
                 <option value="wfh">Work from Home</option>
                 <option value="hybrid">Hybrid</option>
                 <option value="client_location">Client Location</option>
               </select>
+            </div>
+            <div class="fld" id="e-client-name-wrap" style="display:none">
+              <label>Client Name</label>
+              <input type="text" name="client_name" id="e-client-name">
             </div>
             <div class="fld">
               <label>Department</label>
@@ -616,7 +640,8 @@
           <div class="fg2">
             <div class="fld">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <input type="checkbox" name="is_pf_applicable" value="1" id="e-pf" style="width:16px;height:16px">
+                <input type="checkbox" name="is_pf_applicable" value="1" id="e-pf" style="width:16px;height:16px"
+                  onchange="toggleUanRequired('e', this.checked)">
                 PF Applicable
               </label>
             </div>
@@ -664,7 +689,7 @@
                 placeholder="12-digit number" maxlength="12">
             </div>
             <div class="fld">
-              <label>UAN Number</label>
+              <label id="e-uan-label">UAN Number</label>
               <input type="text" name="uan_number" id="e-uan" maxlength="12">
             </div>
           </div>
@@ -707,6 +732,19 @@
               <label>Contact Phone</label>
               <input type="text" name="emergency_contact_phone" id="e-emg-phone" maxlength="10">
             </div>
+          </div>
+
+          {{-- ── Documents ──────────────────────────────── --}}
+          <div style="margin:18px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
+            Documents
+          </div>
+          <div class="fg2">
+            @foreach (\App\Models\EmployeeDocument::UPLOAD_TYPES as $docType => $docLabel)
+            <div class="fld">
+              <label>{{ $docLabel }} <a href="#" id="e-doc-{{ $docType }}-link" target="_blank" style="display:none;font-weight:400;font-size:11px;margin-left:6px">(view current)</a></label>
+              <input type="file" name="documents[{{ $docType }}]" accept=".pdf,.jpg,.jpeg,.png">
+            </div>
+            @endforeach
           </div>
 
         </div>{{-- /#edit-body --}}
@@ -760,7 +798,6 @@
       setVal('e-last-name',     d.last_name);
       setVal('e-gender',        d.gender);
       setVal('e-dob',           d.date_of_birth);
-      setVal('e-blood-group',   d.blood_group);
       setVal('e-marital',       d.marital_status);
 
       // Contact
@@ -773,6 +810,8 @@
       setVal('e-status',        d.employee_status);
       setVal('e-emp-type',      d.employment_type);
       setVal('e-work-type',     d.work_type);
+      setVal('e-client-name',   d.client_name);
+      toggleClientName('e', d.work_type);
       setVal('e-dept',          d.department_id);
       setVal('e-desig',         d.designation_id);
       setVal('e-branch',        d.branch_id);
@@ -787,6 +826,7 @@
       setCheck('e-pt',          d.is_pt_applicable);
       setCheck('e-tds',         d.is_tds_applicable);
       setVal('e-tds-regime',    d.tds_regime);
+      toggleUanRequired('e', d.is_pf_applicable);
 
       // Statutory
       setVal('e-pan',           d.pan_number);
@@ -802,6 +842,16 @@
       // Emergency
       setVal('e-emg-name',      d.emergency_contact_name);
       setVal('e-emg-phone',     d.emergency_contact_phone);
+
+      // Documents — show a "view current" link for any type already uploaded
+      document.querySelectorAll('[id^="e-doc-"][id$="-link"]').forEach(a => a.style.display = 'none');
+      Object.entries(d.documents || {}).forEach(([type, doc]) => {
+        const link = document.getElementById('e-doc-' + type + '-link');
+        if (!link) return;
+        link.href = doc.download_url;
+        link.textContent = '(view: ' + doc.file_name + ')';
+        link.style.display = 'inline';
+      });
 
     } catch(e) {
       console.error('Failed to load employee data', e);
@@ -827,10 +877,53 @@
 
   function onCompanyChange(companyId) {
     const empIdInput = document.querySelector('#emp-modal input[name="employee_id"]');
-    if (!empIdInput) return;
-    const suggested = _empIdByCompany[companyId] || '';
-    empIdInput.value       = suggested;
-    empIdInput.placeholder = suggested || 'e.g. 202618053';
+    if (empIdInput) {
+      const suggested = _empIdByCompany[companyId] || '';
+      empIdInput.value       = suggested;
+      empIdInput.placeholder = suggested || 'e.g. 202618053';
+    }
+
+    // Branches belong to a company — refresh the list instead of showing
+    // whatever company the Employees page happens to be filtered to.
+    const branchSelect = document.getElementById('add-branch');
+    if (!branchSelect) return;
+    branchSelect.innerHTML = '<option value="">Loading…</option>';
+    if (!companyId) {
+      branchSelect.innerHTML = '<option value="">Select Branch</option>';
+      return;
+    }
+    fetch('{{ route("masters.branches.by-company") }}?company_id=' + encodeURIComponent(companyId))
+      .then(r => r.json())
+      .then(branches => {
+        branchSelect.innerHTML = '<option value="">Select Branch</option>';
+        branches.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b.id;
+          opt.textContent = b.name;
+          branchSelect.appendChild(opt);
+        });
+      })
+      .catch(() => { branchSelect.innerHTML = '<option value="">Select Branch</option>'; });
+  }
+
+  // Work Type = Client Location -> show/require the Client Name field.
+  function toggleClientName(prefix, workType) {
+    const wrap  = document.getElementById(prefix + '-client-name-wrap');
+    const input = wrap?.querySelector('input[name="client_name"]');
+    if (!wrap || !input) return;
+    const show = workType === 'client_location';
+    wrap.style.display = show ? 'flex' : 'none';
+    input.required = show;
+    if (!show) input.value = '';
+  }
+
+  // PF Applicable checked -> UAN Number becomes required.
+  function toggleUanRequired(prefix, isChecked) {
+    const input = document.getElementById(prefix + '-uan');
+    const label = document.getElementById(prefix + '-uan-label');
+    if (!input) return;
+    input.required = isChecked;
+    label?.classList.toggle('req', isChecked);
   }
 
   // ── Cross-page bulk selection (sessionStorage) ───────────────────────────

@@ -22,6 +22,8 @@ class WebLoanController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('loan_tab_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $loans = EmployeeLoan::with([
@@ -62,6 +64,8 @@ class WebLoanController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('loan_tab_add');
+
         $companyId = $this->resolveCompanyId($request);
 
         $validated = $request->validate([
@@ -131,6 +135,8 @@ class WebLoanController extends Controller
 
     public function approve(Request $request, EmployeeLoan $loan)
     {
+        $this->authorize('loan_tab_edit');
+
         $request->validate([
             'action'            => 'required|in:approved,rejected',
             'disbursement_date' => 'required_if:action,approved|date',
@@ -209,6 +215,8 @@ class WebLoanController extends Controller
 
     public function update(Request $request, EmployeeLoan $loan)
     {
+        $this->authorize('loan_tab_edit');
+
         $hasPaidEmis = $loan->installments()->where('status', 'paid')->exists();
 
         // Fields always editable
@@ -279,6 +287,8 @@ class WebLoanController extends Controller
 
     public function destroy(EmployeeLoan $loan)
     {
+        $this->authorize('loan_tab_del');
+
         // Allow deleting any loan — active loans will also reverse paid installments
         if ($loan->status === 'active') {
             // Reverse any paid installments before deletion
@@ -293,6 +303,8 @@ class WebLoanController extends Controller
 
     public function schedule(EmployeeLoan $loan)
     {
+        $this->authorize('loan_tab_view');
+
         $loan->load(['employee:id,employee_id,first_name,middle_name,last_name', 'installments' => fn($q) => $q->orderBy('installment_number')]);
         return response()->json([
             'loan'         => [
@@ -316,11 +328,15 @@ class WebLoanController extends Controller
 
     public function template()
     {
+        $this->authorize('loan_tab_view');
+
         return $this->excelImportService->generateTemplate(LoanImporter::class);
     }
 
     public function import(Request $request)
     {
+        $this->authorize('loan_tab_add');
+
         $companyId = $this->resolveCompanyId($request);
 
         $request->validate([

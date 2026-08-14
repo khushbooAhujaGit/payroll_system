@@ -73,7 +73,8 @@
             text-overflow: ellipsis;
         }
 
-        .ss-opt:hover {
+        .ss-opt:hover,
+        .ss-opt.ss-hl {
             background: var(--s2);
         }
 
@@ -81,6 +82,11 @@
             background: var(--acc2);
             color: var(--acc);
             font-weight: 600;
+        }
+
+        .ss-opt.ss-hl.ss-sel {
+            background: var(--acc2);
+            filter: brightness(0.96);
         }
 
         .ss-none {
@@ -104,83 +110,150 @@
             </div>
         </div>
         <nav>
+            <?php if (! (auth()->user()?->isRestrictedToLeaveOnly())): ?>
             <div class="nl">Overview</div>
             <a class="ni <?php echo e(request()->routeIs('dashboard') ? 'on' : ''); ?>"
-                href="<?php echo e(route('dashboard')); ?>"><span>📊</span> Dashboard</a>
+                href="<?php echo e(route('dashboard')); ?>">Dashboard</a>
+            <?php endif; ?>
 
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['employee_view', 'bioid_view', 'attendance_view', 'attendance_self_view', 'attendance_analytics_view', 'leave_management_view', 'reimbursment_self_view'])): ?>
             <div class="nl">HR</div>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('employee_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('employees') ? 'on' : ''); ?>"
-                href="<?php echo e(route('employees')); ?>"><span>👥</span> Employees</a>
-            <a class="ni <?php echo e(request()->routeIs('bio_ids') ? 'on' : ''); ?>" href="<?php echo e(route('bio_ids')); ?>"><span>🔖</span>
+                href="<?php echo e(route('employees')); ?>">Employees</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('bioid_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('bio_ids') ? 'on' : ''); ?>" href="<?php echo e(route('bio_ids')); ?>">
                 Bio IDs</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('attendance_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('attendance') ? 'on' : ''); ?>"
-                href="<?php echo e(route('attendance')); ?>"><span>🕐</span> Attendance</a>
-            <a class="ni <?php echo e(request()->routeIs('leave') ? 'on' : ''); ?>" href="<?php echo e(route('leave')); ?>"><span>🏖️</span>
+                href="<?php echo e(route('attendance')); ?>">Attendance</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('attendance_self_view')): ?>
+            <?php if(auth()->user()->employee): ?>
+            <a class="ni <?php echo e(request()->routeIs('my-attendance') ? 'on' : ''); ?>"
+                href="<?php echo e(route('my-attendance')); ?>">My Attendance</a>
+            <?php endif; ?>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('attendance_edit')): ?>
+            <a class="ni <?php echo e(request()->routeIs('attendance.change_requests*') ? 'on' : ''); ?>"
+                href="<?php echo e(route('attendance.change_requests')); ?>">Attendance Requests</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('attendance_analytics_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('attendance.analytics') ? 'on' : ''); ?>"
+                href="<?php echo e(route('attendance.analytics')); ?>">Attendance Analytics</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('leave_management_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('leave') ? 'on' : ''); ?>" href="<?php echo e(route('leave')); ?>">
                 Leave Management</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('reimbursment_self_view')): ?>
+            <?php if(auth()->user()->employee): ?>
+            <a class="ni <?php echo e(request()->routeIs('my-reimbursements') ? 'on' : ''); ?>"
+                href="<?php echo e(route('my-reimbursements')); ?>">My Reimbursements</a>
+            <?php endif; ?>
+            <?php endif; ?>
+            <?php endif; ?>
 
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['payroll_view', 'salary_details', 'incentive_view', 'monthly_tds_view'])): ?>
             <div class="nl">Payroll</div>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('payroll_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('payroll', 'salary.report*') ? 'on' : ''); ?>"
-                href="<?php echo e(route('payroll')); ?>"><span>💰</span> Payroll & Reports</a>
-            <a class="ni <?php echo e(request()->routeIs('salary') ? 'on' : ''); ?>" href="<?php echo e(route('salary')); ?>"><span>🧾</span>
+                href="<?php echo e(route('payroll')); ?>">Payroll & Reports</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('salary_details')): ?>
+            <a class="ni <?php echo e(request()->routeIs('salary') ? 'on' : ''); ?>" href="<?php echo e(route('salary')); ?>">
                 Salary Details</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('incentive_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('incentives') ? 'on' : ''); ?>"
-                href="<?php echo e(route('incentives')); ?>"><span>🎁</span> Incentives</a>
+                href="<?php echo e(route('incentives')); ?>">Incentives</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('monthly_tds_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('tds.monthly') ? 'on' : ''); ?>"
-                href="<?php echo e(route('tds.monthly')); ?>"><span>📑</span> Monthly TDS</a>
+                href="<?php echo e(route('tds.monthly')); ?>">Monthly TDS</a>
+            <?php endif; ?>
+            <?php endif; ?>
 
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['loan_tab_view', 'reimbursment_tab', 'reimb_report', 'reimbursment_approve'])): ?>
             <div class="nl">Finance</div>
-            <a class="ni <?php echo e(request()->routeIs('loans') ? 'on' : ''); ?>" href="<?php echo e(route('loans')); ?>"><span>🏦</span>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('loan_tab_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('loans') ? 'on' : ''); ?>" href="<?php echo e(route('loans')); ?>">
                 Loans / Advance</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('reimbursment_tab')): ?>
             <a class="ni <?php echo e(request()->routeIs('reimbursements.tracker*') ? 'on' : ''); ?>"
-                href="<?php echo e(route('reimbursements.tracker')); ?>"><span>📋</span> Reimbursements</a>
+                href="<?php echo e(route('reimbursements.tracker')); ?>">Reimbursements</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('reimbursment_approve')): ?>
+            <a class="ni <?php echo e(request()->routeIs('reimbursements.approvals*') ? 'on' : ''); ?>"
+                href="<?php echo e(route('reimbursements.approvals')); ?>">Reimbursement Approvals</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('reimb_report')): ?>
             <a class="ni <?php echo e(request()->routeIs('reimbursements.report*') ? 'on' : ''); ?>"
-                href="<?php echo e(route('reimbursements.report.saved')); ?>"><span>📊</span> Reimb. Report</a>
-            <a class="ni <?php echo e(request()->routeIs('contractors') ? 'on' : ''); ?>"
-                href="<?php echo e(route('contractors')); ?>"><span>🏭</span> Contractors</a>
+                href="<?php echo e(route('reimbursements.report.saved')); ?>">Reimb. Report</a>
+            <?php endif; ?>
+            <?php endif; ?>
 
-            <div class="nl">Statutory</div>
-            <a class="ni <?php echo e(request()->routeIs('statutory') ? 'on' : ''); ?>"
-                href="<?php echo e(route('statutory')); ?>"><span>📋</span> Compliance</a>
-            <a class="ni <?php echo e(request()->routeIs('tds') ? 'on' : ''); ?>" href="<?php echo e(route('tds')); ?>"><span>📄</span> TDS
-                Slabs</a>
-
-            <div class="nl">More</div>
-            <a class="ni <?php echo e(request()->routeIs('holidays') ? 'on' : ''); ?>"
-                href="<?php echo e(route('holidays')); ?>"><span>🗓️</span> Holidays</a>
-            <a class="ni <?php echo e(request()->routeIs('helpdesk') ? 'on' : ''); ?>"
-                href="<?php echo e(route('helpdesk')); ?>"><span>🎫</span> Helpdesk</a>
-            <a class="ni <?php echo e(request()->routeIs('reports') ? 'on' : ''); ?>"
-                href="<?php echo e(route('reports')); ?>"><span>📊</span> Reports</a>
-
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['holidays_view', 'company_view', 'department_view', 'branch_view', 'leave_policies_view', 'rbac_roles_manage', 'user_view'])): ?>
             <div class="nl">Masters</div>
+             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('holidays_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('holidays') ? 'on' : ''); ?>"
+                href="<?php echo e(route('holidays')); ?>">Holidays</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('company_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('masters') ? 'on' : ''); ?>"
-                href="<?php echo e(route('masters')); ?>"><span>🏢</span> Company / Entity</a>
+                href="<?php echo e(route('masters')); ?>">Company / Entity</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('department_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('departments') ? 'on' : ''); ?>"
-                href="<?php echo e(route('departments')); ?>"><span>🏗️</span> Departments</a>
+                href="<?php echo e(route('departments')); ?>">Departments</a>
+            <a class="ni <?php echo e(request()->routeIs('designations') ? 'on' : ''); ?>"
+                href="<?php echo e(route('designations')); ?>">Designations</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('branch_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('branches') ? 'on' : ''); ?>"
+                href="<?php echo e(route('branches')); ?>">Branches</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('leave_policies_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('leave.policies') ? 'on' : ''); ?>"
-                href="<?php echo e(route('leave.policies')); ?>"><span>📋</span> Leave Policies</a>
+                href="<?php echo e(route('leave.policies')); ?>">Leave Policies</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('rbac_roles_manage')): ?>
+            <a class="ni <?php echo e(request()->routeIs('rbac.roles', 'rbac.permission_groups', 'rbac.permissions', 'rbac.index') ? 'on' : ''); ?>"
+                href="<?php echo e(route('rbac.roles')); ?>">Role &amp; Permissions</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('user_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('users.*') ? 'on' : ''); ?>"
+                href="<?php echo e(route('users.index')); ?>">Users</a>
+            <?php endif; ?>
+            <?php endif; ?>
 
         </nav>
         <div class="sf">
+            <a href="<?php echo e(route('profile.show')); ?>" class="up" style="text-decoration:none;color:inherit" title="My Profile">
+                <div class="uav"><?php echo e(strtoupper(substr(auth()->user()->name ?? auth()->user()->email, 0, 1))); ?>
+
+                </div>
+                <div style="flex:1;min-width:0">
+                    <div
+                        style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        <?php echo e(auth()->user()->name ?? auth()->user()->email); ?>
+
+                    </div>
+                    <div style="font-size:10px;color:var(--t3)">
+                        <?php echo e(auth()->user()->roles->first()?->name ?? 'user'); ?>
+
+                    </div>
+                </div>
+            </a>
             <form method="POST" action="<?php echo e(route('logout')); ?>" id="logout-form">
                 <?php echo csrf_field(); ?>
-                <div class="up" onclick="document.getElementById('logout-form').submit()" title="Sign out">
-                    <div class="uav"><?php echo e(strtoupper(substr(auth()->user()->name ?? auth()->user()->email, 0, 1))); ?>
-
-                    </div>
-                    <div style="flex:1;min-width:0">
-                        <div
-                            style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                            <?php echo e(auth()->user()->name ?? auth()->user()->email); ?>
-
-                        </div>
-                        <div style="font-size:10px;color:var(--t3)">
-                            <?php echo e(auth()->user()->roles->first()?->slug ?? 'user'); ?>
-
-                        </div>
-                    </div>
-                    <span style="color:var(--t3);font-size:11px">⏻</span>
-                </div>
+                <button type="submit" title="Sign out"
+                    style="background:none;border:none;color:var(--t3);font-size:12px;cursor:pointer;padding:6px 8px;width:100%;text-align:left">
+                    ⏻ Sign out
+                </button>
             </form>
         </div>
     </aside>
@@ -189,6 +262,37 @@
         <div class="hdr">
             <h2><?php echo $__env->yieldContent('title', 'Dashboard'); ?></h2>
             <div style="display:flex;gap:6px" id="pacts"><?php echo $__env->yieldContent('page_actions'); ?></div>
+            <div class="bell-wrap">
+                <button type="button" class="bell-btn" onclick="toggleBell(event)" title="Notifications">
+                    🔔
+                    <?php if($unreadNotifCount > 0): ?>
+                        <span class="bell-badge"><?php echo e($unreadNotifCount > 9 ? '9+' : $unreadNotifCount); ?></span>
+                    <?php endif; ?>
+                </button>
+                <div class="bell-drop" id="bellDrop">
+                    <div class="bell-hd">
+                        <span>Notifications</span>
+                        <?php if($unreadNotifCount > 0): ?>
+                            <form method="POST" action="<?php echo e(route('notifications.read_all')); ?>">
+                                <?php echo csrf_field(); ?>
+                                <button type="submit" class="bell-mark-all">Mark all read</button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                    <div class="bell-list">
+                        <?php $__empty_1 = true; $__currentLoopData = $recentNotifications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $n): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                            <a href="<?php echo e(route('notifications.open', $n->id)); ?>"
+                                class="bell-item <?php echo e($n->read_at ? '' : 'unread'); ?>">
+                                <div class="bell-item-title"><?php echo e($n->data['title'] ?? 'Notification'); ?></div>
+                                <div class="bell-item-msg"><?php echo e($n->data['message'] ?? ''); ?></div>
+                                <div class="bell-item-time"><?php echo e($n->created_at->diffForHumans()); ?></div>
+                            </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                            <div class="bell-empty">No notifications yet.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="pg" id="pg">
             <?php if(session('error') && session('error_file')): ?>
@@ -291,6 +395,18 @@
         const fmtD = d => d ? String(d).slice(0, 10) : '-';
         const om = id => $(id).classList.add('on');
         const cm = id => $(id).classList.remove('on');
+
+        // ── Notification bell ─────────────────────────────────────────────
+        function toggleBell(e) {
+            e.stopPropagation();
+            $('bellDrop').classList.toggle('on');
+        }
+        document.addEventListener('click', e => {
+            const drop = $('bellDrop');
+            if (drop && drop.classList.contains('on') && !e.target.closest('.bell-wrap')) {
+                drop.classList.remove('on');
+            }
+        });
 
         function toast(msg, t = 'ok') {
             const el = $('toast');
@@ -427,6 +543,8 @@
                 wrap.appendChild(drop);
 
                 /* ---------- helpers ---------- */
+                var hlIdx = -1; // index into the currently rendered .ss-opt list (keyboard highlight)
+
                 function selectedOpt() {
                     return Array.from(sel.options).find(o => o.value == sel.value);
                 }
@@ -436,6 +554,33 @@
                     inp.value = (o && o.value) ? o.text : '';
                 }
                 syncDisplay();
+
+                function optEls() {
+                    return Array.from(drop.querySelectorAll('.ss-opt'));
+                }
+
+                function applyHighlight() {
+                    var els = optEls();
+                    els.forEach(function(el, i) {
+                        el.classList.toggle('ss-hl', i === hlIdx);
+                    });
+                    if (hlIdx >= 0 && els[hlIdx]) {
+                        els[hlIdx].scrollIntoView({
+                            block: 'nearest'
+                        });
+                    }
+                }
+
+                function choose(el) {
+                    var o = el._opt;
+                    if (!o) return;
+                    sel.value = o.value;
+                    syncDisplay();
+                    hideDrop();
+                    sel.dispatchEvent(new Event('change', {
+                        bubbles: true
+                    }));
+                }
 
                 function render(q) {
                     drop.innerHTML = '';
@@ -447,14 +592,14 @@
                         var d = document.createElement('div');
                         d.className = 'ss-opt' + (o.value == sel.value ? ' ss-sel' : '');
                         d.textContent = o.text;
+                        d._opt = o;
                         d.addEventListener('mousedown', function(e) {
                             e.preventDefault();
-                            sel.value = o.value;
-                            syncDisplay();
-                            hideDrop();
-                            sel.dispatchEvent(new Event('change', {
-                                bubbles: true
-                            }));
+                            choose(d);
+                        });
+                        d.addEventListener('mouseenter', function() {
+                            hlIdx = optEls().indexOf(d);
+                            applyHighlight();
                         });
                         drop.appendChild(d);
                         shown++;
@@ -465,6 +610,10 @@
                         em.textContent = 'No results';
                         drop.appendChild(em);
                     }
+                    // Land the keyboard highlight on the current selection, if visible
+                    var els = optEls();
+                    hlIdx = els.findIndex(el => el.classList.contains('ss-sel'));
+                    applyHighlight();
                 }
 
                 function showDrop(q) {
@@ -476,6 +625,7 @@
                 function hideDrop() {
                     drop.style.display = 'none';
                     inp.classList.remove('ss-open');
+                    hlIdx = -1;
                     syncDisplay();
                 }
 
@@ -495,7 +645,33 @@
                     setTimeout(hideDrop, 200);
                 });
                 inp.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') hideDrop();
+                    if (e.key === 'Escape') {
+                        hideDrop();
+                        return;
+                    }
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (drop.style.display === 'none') {
+                            render(inp.value === (selectedOpt()?.text || '') ? '' : inp.value);
+                            drop.style.display = 'block';
+                            inp.classList.add('ss-open');
+                        }
+                        var count = optEls().length;
+                        if (!count) return;
+                        if (e.key === 'ArrowDown') {
+                            hlIdx = hlIdx < count - 1 ? hlIdx + 1 : 0;
+                        } else {
+                            hlIdx = hlIdx > 0 ? hlIdx - 1 : count - 1;
+                        }
+                        applyHighlight();
+                        return;
+                    }
+                    if (e.key === 'Enter') {
+                        if (drop.style.display === 'none') return;
+                        e.preventDefault();
+                        var els = optEls();
+                        if (hlIdx >= 0 && els[hlIdx]) choose(els[hlIdx]);
+                    }
                 });
 
                 /* exposed so setVal() can sync display after programmatic changes */

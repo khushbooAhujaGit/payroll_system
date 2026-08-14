@@ -13,6 +13,8 @@ class WebTdsController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('tds_slab_view');
+
         $currentFy = now()->month >= 4 ? now()->year : now()->year - 1;
         $fy        = $request->get('fy', $currentFy);
 
@@ -28,6 +30,8 @@ class WebTdsController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('tds_slab_manage');
+
         $v = $request->validate([
             'financial_year'  => 'required|integer|min:2000|max:2099',
             'regime'          => 'required|in:old,new',
@@ -46,6 +50,8 @@ class WebTdsController extends Controller
 
     public function update(Request $request, TdsSlab $slab)
     {
+        $this->authorize('tds_slab_manage');
+
         $v = $request->validate([
             'income_from'    => 'required|numeric|min:0',
             'income_to'      => 'nullable|numeric|gt:income_from',
@@ -62,6 +68,8 @@ class WebTdsController extends Controller
 
     public function destroy(TdsSlab $slab)
     {
+        $this->authorize('tds_slab_manage');
+
         $fy = $slab->financial_year;
         $slab->delete();
         return redirect()->route('tds', ['fy' => $fy])
@@ -70,6 +78,8 @@ class WebTdsController extends Controller
 
     public function template()
     {
+        $this->authorize('tds_slab_view');
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('TDS Slabs');
@@ -90,6 +100,8 @@ class WebTdsController extends Controller
 
     public function import(Request $request)
     {
+        $this->authorize('tds_slab_manage');
+
         $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv']);
 
         try {

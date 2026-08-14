@@ -44,6 +44,8 @@ class WebSalaryReportController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('payroll_view');
+
         $companyId = $request->has('company_id')
             ? (int) $request->get('company_id')
             : 0;
@@ -122,6 +124,8 @@ class WebSalaryReportController extends Controller
 
     public function viewLockedReport(string $month): \Illuminate\Http\RedirectResponse|\Illuminate\View\View
     {
+        $this->authorize('payroll_view');
+
         if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
             return redirect()->route('salary.report.saved')->with('error', 'Invalid month format.');
         }
@@ -170,6 +174,8 @@ class WebSalaryReportController extends Controller
 
     public function download(Request $request)
     {
+        $this->authorize('payroll_view');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
         $companyId = $request->has('company_id')
             ? (int) $request->get('company_id')
@@ -415,8 +421,24 @@ class WebSalaryReportController extends Controller
         // LOP = only days where admin explicitly marked punch_in_approval = 'not_approved'
         // on the Attendance Report page. Leave Tracker records are informational only
         // and do NOT affect LOP or salary deductions.
+        //
+        // Exam Leave (EXL) is a deliberate, narrow exception to that rule — item #14
+        // of the spec explicitly requires it to reduce pay and Net Paid Days for the
+        // reporting month, unlike every other leave type.
         $notApprovedPunches = AttendanceApproval::where('punch_in_approval', 'not_approved')
             ->whereBetween('attendance_date', [
+                Carbon::createFromDate($year, $mon, 1)->startOfMonth()->toDateString(),
+                Carbon::createFromDate($year, $mon, 1)->endOfMonth()->toDateString(),
+            ])
+            ->whereIn('employee_id', $empIds)
+            ->get()
+            ->groupBy('employee_id')
+            ->map(fn($g) => $g->count());
+
+        $examLeaveDays = LeaveTrackerRecord::where('leave_type', 'EXL')
+            ->where('is_active', true)
+            ->where('is_approved', true)
+            ->whereBetween('leave_date', [
                 Carbon::createFromDate($year, $mon, 1)->startOfMonth()->toDateString(),
                 Carbon::createFromDate($year, $mon, 1)->endOfMonth()->toDateString(),
             ])
@@ -722,6 +744,9 @@ class WebSalaryReportController extends Controller
             // ── Attendance LOP (this month's not-approved punches only) ──────
             $lopAtt = (int) ($notApprovedPunches[$emp->id] ?? 0);
 
+            // ── Exam Leave LOP (this month's approved Exam Leave days) ────────
+            $examLeaveLop = (int) ($examLeaveDays[$emp->id] ?? 0);
+
             // ── Carry-forward LOP ─────────────────────────────────────────────
             // Two sources (mutually exclusive by design, summed together):
             //   1. Attendance not-approved from prior months that were NEVER locked
@@ -729,8 +754,8 @@ class WebSalaryReportController extends Controller
             $carryFwdLop = (int) ($carryForwardLop[$emp->id]          ?? 0)
                          + (int) ($deferredLopFromSnapshots[$emp->id] ?? 0);
 
-            // Total computed LOP = attendance (this month) + leave delta + carry-forward
-            $computedLop = $lopAtt + $lopLeaveThisMonth + $carryFwdLop;
+            // Total computed LOP = attendance (this month) + leave delta + carry-forward + Exam Leave
+            $computedLop = $lopAtt + $lopLeaveThisMonth + $carryFwdLop + $examLeaveLop;
 
             // DEBUG: Log total LOP for specific employees
             if ($emp->employee_id === '202421013') {
@@ -938,6 +963,8 @@ class WebSalaryReportController extends Controller
 
     public function updateOverride(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
     {
+        $this->authorize('payroll_override');
+
         $validated = $request->validate([
             'employee_id'  => 'required|exists:employees,id',
             'year_month'   => 'required|date_format:Y-m',
@@ -1050,6 +1077,8 @@ class WebSalaryReportController extends Controller
 
     public function lockSnapshot(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
     {
+        $this->authorize('payroll_lock');
+
         $request->validate([
             'month'      => 'required|date_format:Y-m',
             'company_id' => 'nullable|integer',
@@ -1228,6 +1257,8 @@ class WebSalaryReportController extends Controller
 
     public function unlockSnapshot(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
     {
+        $this->authorize('payroll_lock');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
 
         $month    = $request->get('month');
@@ -1274,6 +1305,8 @@ class WebSalaryReportController extends Controller
     // Delete snapshot entirely — stays on the Saved Reports page (no redirect to working report)
     public function deleteSnapshot(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
     {
+        $this->authorize('payroll_edit');
+
         $request->validate(['month' => 'required|date_format:Y-m']);
 
         $month   = $request->get('month');
@@ -1290,6 +1323,8 @@ class WebSalaryReportController extends Controller
 
     public function reuploadSnapshot(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
     {
+        $this->authorize('payroll_edit');
+
         $request->validate([
             'file'           => 'required|file|mimes:xlsx,xls|max:20480',
             'expected_month' => 'nullable|date_format:Y-m',
@@ -1702,6 +1737,8 @@ class WebSalaryReportController extends Controller
 
     public function savedReports(): \Illuminate\View\View
     {
+        $this->authorize('payroll_view');
+
         $byMonth = SalaryReportSnapshot::orderByDesc('year_month')->get()
             ->groupBy('year_month')
             ->map(function ($snaps) {

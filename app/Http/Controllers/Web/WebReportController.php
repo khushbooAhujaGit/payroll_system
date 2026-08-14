@@ -33,6 +33,8 @@ class WebReportController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('reports_view');
+
         $companyId = $this->resolveCompanyId($request);
 
         $headcount = Employee::query()
@@ -70,6 +72,8 @@ class WebReportController extends Controller
 
     public function attendance(Request $request)
     {
+        $this->authorize('reports_view');
+
         $companyId  = $this->resolveCompanyId($request);
         $monthStr  = $request->get('month');
         $empFilter = $request->get('emp_id');
@@ -108,6 +112,8 @@ class WebReportController extends Controller
 
     public function attendanceExport(Request $request)
     {
+        $this->authorize('reports_view');
+
         $companyId = $this->resolveCompanyId($request);
         $monthStr  = $request->get('month');
         $empFilter = $request->get('emp_id');
@@ -207,6 +213,8 @@ class WebReportController extends Controller
 
     public function reuploadAttendance(Request $request)
     {
+        $this->authorize('attendance_edit');
+
         $request->validate([
             'file'           => 'required|file|mimes:xlsx,xls|max:20480',
             'expected_month' => 'required|date_format:Y-m',
@@ -319,6 +327,8 @@ class WebReportController extends Controller
 
     public function updateApproval(Request $request)
     {
+        $this->authorize('attendance_edit');
+
         $validated = $request->validate([
             'employee_id'        => 'required|exists:employees,id',
             'attendance_date'    => 'required|date',

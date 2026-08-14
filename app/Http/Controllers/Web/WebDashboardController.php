@@ -14,6 +14,10 @@ class WebDashboardController extends Controller
 {
     public function index(Request $request)
     {
+        if ($request->user()?->isRestrictedToLeaveOnly()) {
+            return redirect()->route('leave');
+        }
+
         $companyId = $this->resolveCompanyId($request);
 
         $today = now()->toDateString();
