@@ -12,6 +12,7 @@ class UpdateEmployeeRequest extends FormRequest
     {
         return [
             'branch_id'              => 'sometimes|nullable|exists:branches,id',
+            'location_id'            => 'sometimes|nullable|exists:locations,id',
             'department_id'          => 'sometimes|nullable|exists:departments,id',
             'designation_id'         => 'sometimes|nullable|exists:designations,id',
             'grade_id'               => 'sometimes|nullable|exists:grades,id',

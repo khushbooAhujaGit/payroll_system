@@ -3,9 +3,12 @@
 <?php $__env->startSection('page_actions'); ?>
   <button class="btn acc" onclick="om('att-modal')">✔ Mark Attendance</button>
   <button class="btn" onclick="om('punch-add-modal')">+ Add Punch</button>
-  <button class="btn" onclick="om('biometric-upload-modal')">🖱 Bulk Upload</button>
+  <button class="btn" onclick="om('biometric-upload-modal')">🖱 Biometric Upload</button>
+  <button class="btn" onclick="om('wfh-upload-modal')">🏠 WFH / Client Upload</button>
+  <button class="btn" onclick="om('manual-upload-modal')">🧾 Manual Upload</button>
   <a href="<?php echo e(route('attendance.export') . '?' . http_build_query(request()->only('company_id','year','month'))); ?>" class="btn">⬇ Export</a>
   <a href="<?php echo e(route('reports.attendance', ['month' => request('year', now()->year).'-'.str_pad(request('month', now()->month),2,'0',STR_PAD_LEFT)])); ?>" class="btn">📊 Attendance Report</a>
+  <button class="btn" onclick="om('mail-recipients-modal')">✉️ Exception Mail Settings</button>
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('content'); ?>
@@ -64,14 +67,7 @@
         <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
       </select>
     </div>
-    <div class="fld" style="min-width:200px">
-      <label>Search Name / Emp ID</label>
-      <input type="text" name="search" value="<?php echo e($search ?? ''); ?>" placeholder="e.g. John or EMP001">
-    </div>
     <button type="submit" class="btn acc">Load</button>
-    <?php if(!empty($search)): ?>
-      <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn">✕ Clear</a>
-    <?php endif; ?>
     <?php if($biometricDataRange?->min_date): ?>
     <div style="font-size:11px;color:var(--t3);align-self:center;padding-bottom:2px">
       📡 Biometric data available:
@@ -85,6 +81,23 @@
     <?php endif; ?>
   </form>
 
+  
+  <form method="GET" action="<?php echo e(route('attendance')); ?>" data-ajax-filter class="card"
+    style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
+    <input type="hidden" name="year" value="<?php echo e($year); ?>">
+    <input type="hidden" name="month" value="<?php echo e($month); ?>">
+    <div class="fld" style="min-width:200px">
+      <label>Search Name / Emp ID</label>
+      <input type="text" name="search" value="<?php echo e($search ?? ''); ?>" placeholder="e.g. John or EMP001">
+    </div>
+    <button type="submit" class="btn acc">Search</button>
+    <?php if(!empty($search)): ?>
+      <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn" data-ajax-reset>✕ Clear</a>
+    <?php endif; ?>
+  </form>
+
+  <div id="ajax-results">
   <div class="card" style="display:none !important;">
     <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
       <div class="ct">Attendance — <?php echo e(\Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')); ?></div>
@@ -232,7 +245,7 @@
       <div class="empty">
         <div class="ico">🔍</div>
         <p>No employees matching "<?php echo e(e($search)); ?>".</p>
-        <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn acc" style="margin-top:10px">Clear Search</a>
+        <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
       </div>
     <?php else: ?>
       <div class="empty">
@@ -333,11 +346,12 @@
       <div class="empty" style="padding:24px">
         <div class="ico">🔍</div>
         <p>No biometric records matching "<?php echo e(e($search)); ?>" for <?php echo e(\Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')); ?>.</p>
-        <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn acc" style="margin-top:10px">Clear Search</a>
+        <a href="<?php echo e(route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month])); ?>" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
       </div>
     <?php endif; ?>
   </div>
   <?php endif; ?>
+  </div> 
 
   
   <div class="modal" id="att-modal">
@@ -410,24 +424,66 @@
 <?php $__env->stopSection(); ?>
 
 
-<div class="modal" id="upload-modal">
+<div class="modal" id="wfh-upload-modal">
   <div class="mb">
     <div class="mh">
-      <span class="mt">Bulk Upload Attendance</span>
-      <button class="mc" onclick="cm('upload-modal')">✕</button>
+      <span class="mt">WFH / Client Location Attendance Upload</span>
+      <button class="mc" onclick="cm('wfh-upload-modal')">✕</button>
     </div>
-    <form method="POST" action="<?php echo e(route('attendance.import')); ?>" enctype="multipart/form-data">
+
+    <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;
+                padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.7">
+      For employees whose Work Type is <strong>Work From Home</strong> or <strong>Client Location</strong> —
+      no biometric machine needed. Columns: <span class="mono">EMP ID · Name · Date · Check In · Check Out</span>.
+      Leave both Check In and Check Out blank for an absent day.
+      Rows for employees who aren't WFH / Client Location are rejected — use Biometric Upload or Manual Upload for them instead.
+      <br><a href="<?php echo e(route('attendance.wfh_template')); ?>" class="btn sm" style="margin-top:8px">📥 Download Template</a>
+    </div>
+
+    <form method="POST" action="<?php echo e(route('attendance.wfh_import')); ?>" enctype="multipart/form-data">
       <?php echo csrf_field(); ?>
-      <div style="font-size:12px;color:var(--t2);background:var(--s2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        The attendance date is read directly from the Excel sheet. No month selection needed.
-      </div>
       <div class="fld" style="margin-bottom:14px">
         <label>Excel File (.xlsx / .xls) *</label>
-        <input type="file" name="file" accept=".xlsx,.xls" required multiple
+        <input type="file" name="file" accept=".xlsx,.xls" required
           style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
       </div>
       <div class="mf">
-        <button type="button" class="btn" onclick="cm('upload-modal')">Cancel</button>
+        <button type="button" class="btn" onclick="cm('wfh-upload-modal')">Cancel</button>
+        <button type="submit" class="btn acc">📤 Upload &amp; Import</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div class="modal" id="manual-upload-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">Manual Attendance Upload</span>
+      <button class="mc" onclick="cm('manual-upload-modal')">✕</button>
+    </div>
+
+    <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;
+                padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.7">
+      For <strong>any employee</strong> — no biometric machine file needed. Columns:
+      <span class="mono">EMP ID · Name · Date · Check In · Check Out · HR Remark</span>. At least one of
+      Check In / Check Out is required, and <strong>HR Remark is required</strong> on every row —
+      say why the punch is being added or corrected. If attendance already exists for that
+      employee + date (from the biometric machine or any other source), it's <strong>updated</strong>
+      with these values instead of creating a duplicate — use this to correct a bad punch or
+      backfill a day the machine missed.
+      <br><a href="<?php echo e(route('attendance.manual_template')); ?>" class="btn sm" style="margin-top:8px">📥 Download Template</a>
+    </div>
+
+    <form method="POST" action="<?php echo e(route('attendance.manual_import')); ?>" enctype="multipart/form-data">
+      <?php echo csrf_field(); ?>
+      <div class="fld" style="margin-bottom:14px">
+        <label>Excel File (.xlsx / .xls) *</label>
+        <input type="file" name="file" accept=".xlsx,.xls" required
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
+      </div>
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('manual-upload-modal')">Cancel</button>
         <button type="submit" class="btn acc">📤 Upload &amp; Import</button>
       </div>
     </form>
@@ -560,6 +616,49 @@
       <div class="mf">
         <button type="button" class="btn" onclick="cm('punch-edit-modal')">Cancel</button>
         <button type="submit" class="btn acc">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div class="modal" id="mail-recipients-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">Daily Exception Mail Settings</span>
+      <button class="mc" onclick="cm('mail-recipients-modal')">✕</button>
+    </div>
+
+    <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;
+                padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.7">
+      Every day at 10:30 AM, these addresses get <strong>one combined email</strong>
+      covering every company in the system — who hasn't marked attendance yet
+      or is on leave today, broken out section by section per company — with
+      an Excel of the full day's attendance for everyone attached. This is a
+      shared setting, not per-company. Leave "To" blank to stop sending this
+      report entirely.
+    </div>
+
+    <form method="POST" action="<?php echo e(route('attendance.mail_recipients.update')); ?>">
+      <?php echo csrf_field(); ?>
+      <input type="hidden" name="year" value="<?php echo e($year); ?>">
+      <input type="hidden" name="month" value="<?php echo e($month); ?>">
+      <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
+
+      <div class="fld" style="margin-bottom:14px">
+        <label>To *</label>
+        <textarea name="to_emails" rows="3" required
+          placeholder="One per line, or comma-separated — e.g. hr@company.com, admin@company.com"><?php echo e(old('to_emails', $mailRecipient->to_emails ?? '')); ?></textarea>
+      </div>
+      <div class="fld" style="margin-bottom:14px">
+        <label>Cc</label>
+        <textarea name="cc_emails" rows="2"
+          placeholder="Optional — one per line, or comma-separated"><?php echo e(old('cc_emails', $mailRecipient->cc_emails ?? '')); ?></textarea>
+      </div>
+
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('mail-recipients-modal')">Cancel</button>
+        <button type="submit" class="btn acc">Save</button>
       </div>
     </form>
   </div>

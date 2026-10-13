@@ -38,5 +38,10 @@ return [
         'sender_email' => env('MS_GRAPH_SENDER_EMAIL'),
     ],
 
+    'chatwoot' => [
+        'base_url' => env('CHATWOOT_BASE_URL'),
+        'platform_token' => env('CHATWOOT_PLATFORM_TOKEN'),
+    ],
+
 
 ];

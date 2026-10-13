@@ -10,11 +10,13 @@
 <div class="card">
   <div class="ch"><div class="ct">My Claims</div></div>
   @if($claims->isNotEmpty())
+  <div class="tw">
   <table>
     <thead>
       <tr>
         <th>Date</th>
         <th>Amount</th>
+        <th>Category</th>
         <th>Remarks</th>
         <th>Document</th>
         <th>Approval Status</th>
@@ -26,6 +28,9 @@
       <tr>
         <td>{{ $claim->expense_date ? \Carbon\Carbon::parse($claim->expense_date)->format('d M Y') : '—' }}</td>
         <td style="font-weight:600">₹{{ number_format($claim->amount, 2) }}</td>
+        <td style="color:var(--t2);font-size:12px" title="{{ $claim->category === 'Other' ? $claim->other_category_text : '' }}">
+          {{ $claim->category ?? '—' }}{{ $claim->category === 'Other' && $claim->other_category_text ? ' — ' . $claim->other_category_text : '' }}
+        </td>
         <td style="color:var(--t2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $claim->remarks }}">
           {{ $claim->remarks ?? '—' }}
         </td>
@@ -61,6 +66,7 @@
       @endforeach
     </tbody>
   </table>
+  </div>
   <div style="margin-top:14px">{{ $claims->links() }}</div>
   @else
   <div class="empty"><div class="ico">💳</div><p>No claims submitted yet.</p></div>
@@ -86,6 +92,22 @@
           <input type="number" name="amount" required min="0.01" step="0.01" value="{{ old('amount') }}">
         </div>
         <div class="fld full">
+          <label class="req">Category</label>
+          <select name="category" required onchange="toggleOtherCategory(this)" @error('category') class="inp-err" @enderror>
+            <option value="">Select category</option>
+            @foreach(\App\Models\ReimbursementTrackerRow::CATEGORIES as $cat)
+            <option value="{{ $cat }}" {{ old('category') === $cat ? 'selected' : '' }}>{{ $cat }}</option>
+            @endforeach
+          </select>
+          @error('category') <div class="ferr">{{ $message }}</div> @enderror
+        </div>
+        <div class="fld full" id="other-category-wrap" style="{{ old('category') === 'Other' ? '' : 'display:none' }}">
+          <label class="req">Please specify</label>
+          <input type="text" name="other_category_text" maxlength="150" placeholder="What is this expense for?"
+            value="{{ old('other_category_text') }}" @error('other_category_text') class="inp-err" @enderror>
+          @error('other_category_text') <div class="ferr">{{ $message }}</div> @enderror
+        </div>
+        <div class="fld full">
           <label>Remarks</label>
           <input type="text" name="remarks" placeholder="e.g. Client visit travel" value="{{ old('remarks') }}">
         </div>
@@ -106,5 +128,17 @@
 @if($errors->any())
 <script>document.addEventListener('DOMContentLoaded', () => om('submit-claim-modal'))</script>
 @endif
+
+@push('scripts')
+<script>
+function toggleOtherCategory(select) {
+  const wrap  = document.getElementById('other-category-wrap');
+  const input = wrap.querySelector('input[name="other_category_text"]');
+  const show  = select.value === 'Other';
+  wrap.style.display = show ? '' : 'none';
+  if (!show) input.value = '';
+}
+</script>
+@endpush
 
 @endsection

@@ -11,7 +11,7 @@ class AttendanceRawPunch extends Model
 
     protected $fillable = [
         'employee_id', 'bio_id_full', 'bio_number', 'machine_name',
-        'attendance_date', 'check_in', 'check_out', 'is_absent',
+        'attendance_date', 'check_in', 'check_out', 'is_absent', 'remarks',
         'source_file', 'uploaded_by',
     ];
 

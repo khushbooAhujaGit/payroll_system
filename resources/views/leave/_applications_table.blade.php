@@ -24,12 +24,18 @@
     $tabValue      optional — 'self'/'team' when this card is one of two tabs,
                    so the approve/reject/bulk-approve redirect lands back on
                    the same tab instead of resetting to the default
+    $leaveSummaries optional — array keyed by employee_id of
+                   ['cl','sl','co','pending'], shown as extra columns
+                   whenever $showBulk is true (HR/Admin/manager reviewing
+                   someone else's leave) — never on a self-view table, where
+                   "My Leave Balances" above already covers the viewer's own
+                   numbers.
 --}}
-@php $tabValue = $tabValue ?? null; @endphp
+@php $tabValue = $tabValue ?? null; $leaveSummaries = $leaveSummaries ?? []; @endphp
 <div class="card" style="margin-top:16px">
   <div class="ch"><div class="ct">{{ $title }}</div></div>
 
-  <form method="GET" action="{{ route('leave') }}"
+  <form method="GET" action="{{ route('leave') }}" data-ajax-filter
     style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:10px 0 14px;border-bottom:1px solid var(--b2)">
     {{-- preserve every other card's query-string state --}}
     @foreach(request()->except([$searchParam, 'page', 'self_page', 'team_page']) as $key => $val)
@@ -45,7 +51,7 @@
     </div>
     <button type="submit" class="btn sm acc">Filter</button>
     @if($searchValue)
-      <a href="{{ route('leave', request()->except([$searchParam])) }}" class="btn sm">Reset</a>
+      <a href="{{ route('leave', request()->except([$searchParam])) }}" class="btn sm" data-ajax-reset>Reset</a>
     @endif
   </form>
 
@@ -53,13 +59,18 @@
   <form method="POST" action="{{ route('leave.bulk_approve') }}" id="{{ $formId }}">
     @csrf
     @if($tabValue)<input type="hidden" name="applications_tab" value="{{ $tabValue }}">@endif
+    <div class="tw">
     <table>
       <thead>
         <tr>
           @if($showBulk)
           <th style="width:24px"><input type="checkbox" onclick="document.querySelectorAll('#{{ $formId }} .row-chk').forEach(c => c.checked = this.checked)"></th>
           @endif
-          <th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th>Actions</th>
+          <th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th>
+          @if($showBulk)
+          <th>CL</th><th>SL</th><th>CO</th><th>Pending</th>
+          @endif
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -71,6 +82,7 @@
               ? route('leave.approve', $row->application)
               : route('leave.tracker_request.approve', $row->trackerRecord);
           $checkboxName = $row->kind === 'application' ? 'application_ids[]' : 'tracker_ids[]';
+          $summary = $leaveSummaries[$row->employee?->id] ?? null;
         @endphp
         <tr>
           @if($showBulk)
@@ -98,6 +110,12 @@
             @php $color = ['pending'=>'var(--yel)','approved'=>'var(--grn)','rejected'=>'var(--red)'][$row->status] ?? 'var(--t3)'; @endphp
             <span class="bx" style="color:{{ $color }}">{{ ucfirst($row->status) }}</span>
           </td>
+          @if($showBulk)
+          <td class="mono">{{ $summary['cl'] ?? '—' }}</td>
+          <td class="mono">{{ $summary['sl'] ?? '—' }}</td>
+          <td class="mono">{{ $summary['co'] ?? '—' }}</td>
+          <td class="mono">{{ $summary['pending'] ?? '—' }}</td>
+          @endif
           <td>
             {{-- Individual approve/reject re-targets this same outer <form>
                  to the row's approve route via formaction — forms can't
@@ -114,6 +132,7 @@
         @endforeach
       </tbody>
     </table>
+    </div>
 
     @if($showBulk)
     <div style="display:flex;gap:8px;margin-top:12px">

@@ -336,6 +336,40 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 
+    // ─── MOBILE APP — ATTENDANCE GEOFENCING (ATTENDANCE_APP_PLAN.md §5) ───
+    Route::prefix('app')->group(function () {
+        Route::get('location',                     [\App\Http\Controllers\Api\AttendanceAppController::class, 'location']);
+        Route::get('attendance/today',              [\App\Http\Controllers\Api\AttendanceAppController::class, 'today']);
+        Route::post('location',                     [\App\Http\Controllers\Api\AttendanceAppController::class, 'setLocation']);
+        Route::post('attendance/mark-in',           [\App\Http\Controllers\Api\AttendanceAppController::class, 'markIn']);
+        Route::post('attendance/mark-out',          [\App\Http\Controllers\Api\AttendanceAppController::class, 'markOut']);
+        Route::post('attendance/deviation-reason',  [\App\Http\Controllers\Api\AttendanceAppController::class, 'deviationReason']);
+
+        Route::get('leave/summary',                 [\App\Http\Controllers\Api\LeaveAppController::class, 'summary']);
+        Route::get('leave/applications',             [\App\Http\Controllers\Api\LeaveAppController::class, 'applications']);
+        Route::post('leave/apply',                   [\App\Http\Controllers\Api\LeaveAppController::class, 'apply']);
+
+        Route::get('payslips',                       [\App\Http\Controllers\Api\PayslipAppController::class, 'index']);
+        Route::get('payslips/{month}/url',           [\App\Http\Controllers\Api\PayslipAppController::class, 'payslipUrl'])->where('month', '\d{4}-\d{2}');
+        Route::get('payslips/form16/{fy}/url',       [\App\Http\Controllers\Api\PayslipAppController::class, 'form16Url'])->where('fy', '\d{4}-\d{2}');
+
+        Route::get('attendance/history',             [\App\Http\Controllers\Api\AttendanceHistoryAppController::class, 'history']);
+        Route::post('attendance/change-request',      [\App\Http\Controllers\Api\AttendanceHistoryAppController::class, 'requestChange']);
+        Route::get('attendance/analytics',            [\App\Http\Controllers\Api\AttendanceHistoryAppController::class, 'analytics']);
+
+        Route::get('holidays',                        [\App\Http\Controllers\Api\HolidayAppController::class, 'index']);
+
+        Route::get('my-team',                         [\App\Http\Controllers\Api\MyTeamAppController::class, 'index']);
+
+        Route::get('reimbursements',                  [\App\Http\Controllers\Api\ReimbursementAppController::class, 'index']);
+        Route::get('reimbursements/categories',       [\App\Http\Controllers\Api\ReimbursementAppController::class, 'categories']);
+        Route::post('reimbursements',                 [\App\Http\Controllers\Api\ReimbursementAppController::class, 'submit']);
+
+        Route::get('profile',                         [\App\Http\Controllers\Api\ProfileAppController::class, 'show']);
+        Route::put('profile',                         [\App\Http\Controllers\Api\ProfileAppController::class, 'update']);
+        Route::post('profile/employee-details',       [\App\Http\Controllers\Api\ProfileAppController::class, 'updateEmployeeDetails']);
+    });
+
     // ─── RBAC MANAGEMENT (Super Admin) ───────────────────────────
     Route::prefix('rbac')->middleware('permission:rbac_manage')->group(function () {
         Route::apiResource('roles', \App\Http\Controllers\Auth\RoleController::class);

@@ -1,0 +1,60 @@
+# Work Done — HRMS Payroll Platform (via Claude)
+
+**Repo:** `D:\hrms-payroll`
+**Scope:** Everything built, fixed, or investigated in this Claude session. Not based on git history — this is a plain list of the work itself.
+
+---
+
+## Leave Management
+
+- Explained the Comp-Off leave set-off logic end to end, then re-verified it on request — found the set-off logic (CL deducted first, spilling into a separate Comp-Off pool) was only ever built into an **unused legacy API controller**, never wired into the actual website. Fixed the deduct/restore bug in that controller (cancelling a leave with a Comp-Off set-off was inflating CL and draining Comp-Off incorrectly) and tightened an overly broad category match that was also catching Birthday Leave / Punch Missing. The live-app gap (set-off never actually running for real users) is still flagged as open.
+- Built `LeaveEntitlementService` as the one real, live source of CL/SL/Comp-Off balances (replacing a dead `leave_balances` table that was never actually updated).
+- Fixed the Dashboard's leave balance display, which was broken/duplicated — rebuilt as separate stat cards per leave type (CL/SL/CO).
+- Added Compensation-Off balance display to the Leave Management page (CL/SL were already there).
+- Redesigned the Dashboard so each leave type shows as its own stat card instead of one combined total.
+- Added per-employee CL/SL/CO/Pending leave-count columns, visible to HR/Reporting Manager/Team Leader/Admin, on the Employees page and (as a fallback for roles without Employees access) the Leave Management page.
+- Diagnosed and fixed a Leave Management date-range filter bug — filtering by date returned "No leave records found" even when the Tracker page clearly showed matching data. Root cause: the HR/Admin unified view was silently excluding bulk-imported/manual tracker rows, even when a filter was actively applied. Fixed so that restriction only applies to the default, unfiltered view.
+- Built a daily 9:00 AM email reminder to each employee's reporting manager and to HR, listing pending leave approvals (one digest per recipient, not one email per request), with its own log file for troubleshooting. Verified working end to end without sending any real test email.
+- Diagnosed why the reminder "wasn't firing" after deployment — it was scheduled correctly, just hadn't hit its once-daily 09:00 window yet; confirmed via `php artisan schedule:list`.
+- Built an in-app bell notification for pending leave approvals — fires to the applicant's manager and HR the moment a leave is submitted, stays in their notification bell until read or the leave is resolved (auto-clears on approve/reject).
+
+## Payroll / Payslips
+
+- Diagnosed why employees weren't receiving payslip PDFs — found a hardcoded test-recipient override in the mail service. Per explicit scoping, switched **only payslip sending** to real recipient addresses (left every other notification type on the test mailbox).
+- Made payslip emails send automatically when a payroll report is locked/saved, instead of requiring a separate manual "Send Payslips" click — with an explicit check that this never fires from merely viewing/previewing the report page.
+- Diagnosed several rounds of "payslip emails still not arriving" (stale live-server config cache, bad test data in a OneDrive-style link column, a long-running queue worker holding stale in-memory code after a deploy).
+- Converted payslip sending from synchronous (50+ sequential Graph API calls, making Save/Re-lock hang for a minute or more) to Laravel queued background jobs.
+- Made the `[TEST MAIL]` subject-line prefix apply unconditionally to every outbound email, regardless of recipient, and verified this by tracing every file that sends mail.
+- Diagnosed a real email that arrived without the prefix — traced to a long-running queue worker still running old in-memory code after a deploy (standard Laravel gotcha, explained to avoid recurrence).
+- Added company logos (Ashil Shah & Associates, Rutul Shah & Co LLP, TNBT Technology) to the top-left of the payslip PDF, matched per company by name.
+- Fixed the payslip PDF's Net Pay row to align with the Amount column (previously a separate centered box) and made it bold.
+- Confirmed and documented exactly how the payslip recipient email is resolved (`official_email` first, falling back to `personal_email`), and confirmed payslip emails only ever go to employees actually included in that month's locked payroll report — never anyone outside it.
+
+## Attendance
+
+- Added pagination, search, and column sorting to the Attendance Report page, which was loading ~1,800+ rows at once with no pagination.
+
+## Employee & HR Masters
+
+- Added an Edit option for Companies on the Masters page (previously add/delete only).
+- Added Edit, Delete, and Bulk Delete to the Department, Designation, and Branch master pages (previously add-only for all three) — each with a guard that blocks deleting a record still assigned to an employee.
+- Found and fixed a pre-existing bug where the Designation "Level" field silently never saved anywhere — the database column for it never actually existed. Added the missing column and confirmed Level now saves and edits correctly.
+- Built a brand-new **Location** master (separate from Branch) and split the Employee form's old combined "Branch / Location" field by Work Type: Work from Office → Branch, Work from Home → Location, Hybrid → both (required), Client Location → neither. Verified all four states behave correctly in a live browser test, and confirmed the change doesn't affect any of the 118 existing employees (all currently "Work from Office").
+- Made OneDrive document downloading for bulk-uploaded employees happen automatically at upload time, instead of requiring a separate manual command.
+- Diagnosed a production "Internal Server Error: mkdir(): Permission denied" on employee creation — traced through cPanel/SSH to a file-ownership mismatch (the `employee_documents` folder was owned by `root` instead of the hosting account) and walked through the fix; also caught a sibling folder (`form16`) with the same latent issue before it caused the same error later.
+
+## Diagnostics & Data Fixes (not new features)
+
+- Diagnosed a recurring login-deactivation bug (one employee's account kept re-deactivating on every login attempt even after being manually reactivated) — root cause was an inconsistent `date_of_leaving` / `employee_status` combination on that employee's record; fixed directly in the data.
+- Discovered the local database runs on the MyISAM storage engine for 100 of 109 tables — meaning `DB::transaction()`/rollback doesn't actually work anywhere in this app, no foreign-key enforcement, and table-level locking. Flagged as a real production data-integrity risk (not yet acted on, per your call to note it for now). This also meant several of my own "rolled back" verification scripts earlier in the session had silently left stray test rows behind — found and manually cleaned all of them up once the issue was discovered.
+- Walked through, with exact SQL and a safer alternative, how to redirect employee email addresses to a test mailbox for safe payroll testing — including why the `personal_email` column (Laravel-encrypted) can't just be overwritten with plain SQL, and why `official_email` can.
+
+## Process / Documentation
+
+- Ran a full point-by-point cross-check of the client's 52-item "HRMS System Workflow" requirements spreadsheet against the live codebase — confirmed roughly 45 items are genuinely implemented as specified, surfaced the one item marked "done" that isn't actually live (the Comp-Off gap above), and flagged a few permission-scope and reminder-cadence discrepancies that need a decision from you rather than a unilateral fix.
+
+---
+
+## Note on how this list was compiled
+
+This is a plain record of what was done in this Claude session, not a git-based reconstruction — it doesn't include work done outside this session (by you or anyone else), and it isn't cross-checked against commit history. If you need it tied to actual commits/dates for audit purposes, that requires the git-based version instead.

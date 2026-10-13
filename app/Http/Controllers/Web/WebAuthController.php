@@ -61,9 +61,7 @@ class WebAuthController extends Controller
             'description' => 'User logged in via web',
         ]);
 
-        $home = $user->isRestrictedToLeaveOnly() ? route('leave') : route('dashboard');
-
-        return redirect()->intended($home);
+        return redirect()->intended(route('dashboard'));
     }
 
     public function logout(Request $request)

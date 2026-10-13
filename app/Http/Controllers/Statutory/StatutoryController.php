@@ -12,12 +12,15 @@ use App\Models\PfEcrRegister;
 use App\Models\ComplianceChallan;
 use App\Models\PayrollRun;
 use App\Models\PayrollEmployeeRecord;
+use App\Services\PublicFileStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class StatutoryController extends Controller
 {
+    public function __construct(protected PublicFileStore $publicFileStore) {}
+
     // ─────────────────────────────────────────────
     // PF SETTINGS
     // ─────────────────────────────────────────────
@@ -277,7 +280,7 @@ class StatutoryController extends Controller
 
         $receiptPath = null;
         if ($request->hasFile('receipt')) {
-            $receiptPath = $request->file('receipt')->store("challans/{$challan->company_id}", 'local');
+            $receiptPath = $this->publicFileStore->store($request->file('receipt'), 'challans');
         }
 
         $challan->update([

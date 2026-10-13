@@ -36,11 +36,11 @@
   <div class="sub">Private plaintext record — not visible anywhere in the main application</div>
 
   {{-- Filter bar --}}
-  <form method="GET" class="bar">
+  <form method="GET" class="bar" id="filter-form">
     <input type="hidden" name="t" value="{{ $token }}">
     <div>
       <div style="font-size:11px;color:#64748b;margin-bottom:3px">Month</div>
-      <select name="month" onchange="this.form.submit()">
+      <select name="month">
         <option value="">All months</option>
         @foreach($months as $m)
           <option value="{{ $m }}" {{ request('month') === $m ? 'selected' : '' }}>{{ $m }}</option>
@@ -52,13 +52,14 @@
       <input type="text" name="emp" value="{{ request('emp') }}" placeholder="Search emp ID…">
     </div>
     <button type="submit" class="btn btn-p">Filter</button>
-    <a href="?t={{ $token }}" class="btn btn-s">Reset</a>
+    <a href="?t={{ $token }}" class="btn btn-s" id="reset-link">Reset</a>
     <a href="?t={{ $token }}&month={{ request('month') }}&export=1" class="btn btn-g"
        onclick="this.href='{{ route('owner.shadow-log.export') }}?t={{ $token }}&month={{ request('month') }}'">
       ⬇ Export Excel
     </a>
   </form>
 
+  <div id="ajax-results">
   <div class="total">{{ number_format($logs->total()) }} records &nbsp;·&nbsp; Page {{ $logs->currentPage() }} of {{ $logs->lastPage() }}</div>
 
   <table>
@@ -122,6 +123,62 @@
       <span>Next →</span>
     @endif
   </div>
+  </div>
+
+  {{-- Self-contained AJAX: this page has no shared layout, so it can't use
+       layouts/app.blade.php's _ajaxFetchResults — fetch + DOMParser + swap
+       #ajax-results, same approach as the rest of the app. --}}
+  <script>
+  (function() {
+    var region = document.getElementById('ajax-results');
+    var form   = document.getElementById('filter-form');
+
+    function ajaxFetch(url) {
+      region.style.opacity = '0.55';
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function(html) {
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          var fresh = doc.getElementById('ajax-results');
+          if (!fresh) { window.location.href = url; return; }
+          region.innerHTML = fresh.innerHTML;
+          history.pushState({}, '', url);
+          wirePagLinks();
+        })
+        .catch(function() { window.location.href = url; })
+        .finally(function() { region.style.opacity = ''; });
+    }
+
+    function formUrl() {
+      var params = new URLSearchParams(new FormData(form));
+      Array.from(params.keys()).forEach(function(k) { if (params.get(k) === '') params.delete(k); });
+      return '?' + params.toString();
+    }
+
+    form.addEventListener('submit', function(e) { e.preventDefault(); ajaxFetch(formUrl()); });
+    form.querySelector('select[name=month]').addEventListener('change', function() { ajaxFetch(formUrl()); });
+
+    var t;
+    form.querySelector('input[name=emp]').addEventListener('keyup', function(e) {
+      if (e.key === 'Enter') { clearTimeout(t); ajaxFetch(formUrl()); return; }
+      clearTimeout(t);
+      t = setTimeout(function() { ajaxFetch(formUrl()); }, 400);
+    });
+
+    document.getElementById('reset-link').addEventListener('click', function(e) {
+      e.preventDefault(); ajaxFetch(this.getAttribute('href'));
+    });
+
+    function wirePagLinks() {
+      region.querySelectorAll('.pag a[href]').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+          e.preventDefault(); ajaxFetch(this.getAttribute('href'));
+        });
+      });
+    }
+    wirePagLinks();
+  })();
+  </script>
 
 </body>
 </html>

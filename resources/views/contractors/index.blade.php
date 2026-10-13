@@ -25,7 +25,7 @@
 </div>
 
 {{-- Filters --}}
-<form method="GET" action="{{ route('contractors') }}" class="card"
+<form method="GET" action="{{ route('contractors') }}" class="card" data-ajax-filter
       style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <div class="fld" style="flex:1;min-width:200px">
     <label>Search (name / PAN / mobile / email)</label>
@@ -48,9 +48,10 @@
     </select>
   </div>
   <button type="submit" class="btn acc">Filter</button>
-  <a href="{{ route('contractors') }}" class="btn">Reset</a>
+  <a href="{{ route('contractors') }}" class="btn" data-ajax-reset>Reset</a>
 </form>
 
+<div id="ajax-results">
 <div class="card">
   @if($contractors->isNotEmpty())
   <table>
@@ -110,6 +111,7 @@
   </div>
   @endif
 </div>
+</div> {{-- #ajax-results --}}
 
 {{-- Add Contractor Modal --}}
 <div class="modal" id="ctr-add-modal">

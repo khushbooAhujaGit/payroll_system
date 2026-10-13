@@ -342,7 +342,13 @@ class ExcelImportService
         $validation->setAllowBlank(true);
         $validation->setShowInputMessage(true);
         $validation->setShowErrorMessage(true);
-        $validation->setShowDropDown(false);   // false = show the dropdown arrow in Excel
+        // PhpSpreadsheet inverts this when writing the XML (writer does
+        // `!getShowDropDown()`), and the OOXML showDropDown attribute itself
+        // means "suppress the dropdown" when true — so true here is what
+        // actually makes Excel show the dropdown arrow. false (the old
+        // value here) silently hid it while still showing the input prompt,
+        // which is exactly the bug reported: prompt visible, no dropdown.
+        $validation->setShowDropDown(true);
         $validation->setPromptTitle('Select or type');
         $validation->setPrompt("Choose an existing {$columnLabel} from the list, or type a new one to create it.");
         $validation->setErrorTitle('New value');

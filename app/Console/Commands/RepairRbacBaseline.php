@@ -46,6 +46,7 @@ class RepairRbacBaseline extends Command
             'employee_view', 'employee_add', 'employee_edit', 'employee_delete', 'employee_export',
             'helpdesk_view', 'helpdesk_raise', 'helpdesk_resolve',
             'contractor_view', 'contractor_create', 'contractor_edit',
+            'my_team_view',
         ],
         'Attendance' => [
             'attendance_view', 'attendance_edit',
@@ -60,11 +61,12 @@ class RepairRbacBaseline extends Command
             'department_view', 'department_add',
             'designation_manage',
             'branch_view', 'branch_add',
+            'location_view', 'location_add',
             'holidays_view', 'holiday_add', 'holiday_del',
         ],
         'Payroll' => [
             'payroll_view', 'payroll_run', 'payroll_lock', 'payroll_override', 'payroll_edit',
-            'salary_details', 'salary_details_add', 'salary_detais_del',
+            'salary_details', 'salary_details_add', 'salary_detais_del', 'salary_self_view',
             'salary_revision_view', 'salary_revision_create', 'salary_revision_approve',
             'incentive_view', 'incentive_add', 'incentive_delete',
             'monthly_tds_view', 'monthly_tds_add', 'monthly_tds_del',
@@ -94,7 +96,7 @@ class RepairRbacBaseline extends Command
         'attendance_view', 'attendance_edit', 'attendance_self_view', 'attendance_analytics_view',
         'leave_management_view', 'leave_management_add', 'leave_management_edit',
         'leave_policies_view',
-        'department_view', 'branch_view', 'designation_manage',
+        'department_view', 'branch_view', 'location_view', 'designation_manage',
         'holidays_view', 'holiday_add',
         'payroll_view', 'salary_details',
         'incentive_view',
@@ -111,6 +113,8 @@ class RepairRbacBaseline extends Command
         'leave_management_view', 'leave_management_add', 'holidays_view',
         'attendance_self_view', 'attendance_analytics_view',
         'reimbursment_self_add', 'reimbursment_self_view',
+        'salary_self_view',
+        'my_team_view',
     ];
 
     public function handle(): int

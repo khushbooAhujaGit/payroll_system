@@ -4,14 +4,16 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceApproval;
-use App\Models\AttendanceRawPunch;
 use App\Models\Employee;
 use App\Models\LeaveTrackerRecord;
 use App\Models\PayrollEmployeeRecord;
 use App\Models\PayrollRun;
+use App\Services\AttendanceDayResolver;
 use App\Services\FastXlsxWriter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -26,6 +28,10 @@ class WebReportController extends Controller
 
     /** Clocked hours threshold for ">9:00 Hours" remark */
     private const MIN_WORK_HOURS = 9;
+
+    public function __construct(private AttendanceDayResolver $resolver)
+    {
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Reports Dashboard
@@ -70,6 +76,9 @@ class WebReportController extends Controller
     // Attendance Report — Web Preview
     // ─────────────────────────────────────────────────────────────────────────
 
+    /** Columns the report table can be sorted by — whitelisted against arbitrary sort keys from the query string. */
+    private const ATTENDANCE_SORTABLE = ['date_ymd', 'emp_name', 'emp_id', 'punch_in_type', 'punch_out_type', 'leave_type'];
+
     public function attendance(Request $request)
     {
         $this->authorize('reports_view');
@@ -77,6 +86,10 @@ class WebReportController extends Controller
         $companyId  = $this->resolveCompanyId($request);
         $monthStr  = $request->get('month');
         $empFilter = $request->get('emp_id');
+        $search    = trim((string) $request->get('search', ''));
+        $sortBy    = in_array($request->get('sort'), self::ATTENDANCE_SORTABLE, true) ? $request->get('sort') : 'date_ymd';
+        $sortDir   = $request->get('dir') === 'desc' ? 'desc' : 'asc';
+        $perPage   = 100;
 
         $allEmployees = Employee::query()
             ->where('employee_status', 'active')
@@ -87,22 +100,69 @@ class WebReportController extends Controller
         if (!$monthStr || !preg_match('/^\d{4}-\d{2}$/', $monthStr)) {
             return view('reports.attendance', [
                 'rows'        => [],
+                'allRowsCount' => 0,
+                'summary'     => null,
                 'monthStr'    => null,
                 'from'        => null,
                 'to'          => null,
                 'companyId'    => $companyId,
                 'allEmployees'=> $allEmployees,
                 'empFilter'   => $empFilter,
+                'search'      => $search,
+                'sortBy'      => $sortBy,
+                'sortDir'     => $sortDir,
             ]);
         }
 
         $from = Carbon::parse($monthStr . '-01')->startOfMonth();
         $to   = $from->copy()->endOfMonth();
 
-        $rows = $this->buildAttendanceRows($companyId, $from, $to, $empFilter);
+        // Full month's worth of employee×day rows — built entirely in memory
+        // (see buildAttendanceRows()'s own joins), so pagination/search/sort
+        // happen here on the resulting array rather than at the DB layer.
+        // The Excel export deliberately calls buildAttendanceRows() directly
+        // and stays unfiltered/unpaginated — "export" means everything.
+        $allRows = collect($this->buildAttendanceRows($companyId, $from, $to, $empFilter));
+
+        if ($search !== '') {
+            $needle = mb_strtolower($search);
+            $allRows = $allRows->filter(fn($r) =>
+                str_contains(mb_strtolower($r['emp_name']), $needle) ||
+                str_contains(mb_strtolower($r['emp_id']), $needle)
+            )->values();
+        }
+
+        // Summary reflects the searched set (what's actually in view), not
+        // just the current page — otherwise "Total Rows" would show 100
+        // instead of the real filtered total.
+        $summary = [
+            'total'   => $allRows->count(),
+            'present' => $allRows->filter(fn($r) => in_array($r['punch_in_type'], ['On Time', 'LateTimeIn'], true))->count(),
+            'late'    => $allRows->filter(fn($r) => $r['punch_in_type'] === 'LateTimeIn')->count(),
+            'missing' => $allRows->filter(fn($r) => $r['punch_in_type'] === 'Punch Missing' && !$r['has_leave'] && !$r['is_weekend'])->count(),
+            'leave'   => $allRows->filter(fn($r) => $r['has_leave'])->count(),
+        ];
+
+        // PHP's sort has been stable since 8.0, so sorting by date first and
+        // then by the target column keeps same-name/type rows in
+        // chronological order as a tiebreaker, instead of shuffled.
+        $sorted = $sortBy === 'date_ymd'
+            ? $allRows->sortBy('date_ymd', SORT_REGULAR, $sortDir === 'desc')
+            : $allRows->sortBy('date_ymd')->sortBy($sortBy, SORT_REGULAR, $sortDir === 'desc');
+        $sorted = $sorted->values();
+
+        $page = (int) $request->get('page', 1);
+        $rows = new LengthAwarePaginator(
+            $sorted->forPage($page, $perPage),
+            $sorted->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return view('reports.attendance', compact(
-            'rows', 'monthStr', 'from', 'to', 'companyId', 'allEmployees', 'empFilter'
+            'rows', 'summary', 'monthStr', 'from', 'to', 'companyId', 'allEmployees',
+            'empFilter', 'search', 'sortBy', 'sortDir'
         ));
     }
 
@@ -183,7 +243,9 @@ class WebReportController extends Controller
             $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
             $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
             $validation->setAllowBlank(false);
-            $validation->setShowDropDown(false);
+            // PhpSpreadsheet inverts this in the XML writer, so true is what
+            // actually shows the in-cell dropdown arrow — see ExcelImportService.
+            $validation->setShowDropDown(true);
             $validation->setShowErrorMessage(true);
             $validation->setErrorTitle('Invalid value');
             $validation->setError('Please select "Approved" or "Not Approved".');
@@ -377,11 +439,12 @@ class WebReportController extends Controller
 
         $employeeIds = $employees->pluck('id')->all();
 
-        // All punches grouped by "employee_id_date"
-        $allPunches = AttendanceRawPunch::whereIn('employee_id', $employeeIds)
-            ->whereBetween('attendance_date', [$from->toDateString(), $to->toDateString()])
-            ->get()
-            ->groupBy(fn($p) => $p->employee_id . '_' . $p->attendance_date->format('Y-m-d'));
+        // All punches grouped by "employee_id_date" — resolved (override-
+        // and app-punch-event-aware; see AttendanceDayResolver), not a raw
+        // attendance_raw_punches read. Returns the same punch-shaped
+        // collection either way, so every line below (min/max, the 05:30
+        // artifact guard, clocked-time, punch-in type, etc.) is unchanged.
+        $allPunches = $this->resolver->punchesForRange($employeeIds, $from->toDateString(), $to->toDateString());
 
         // All leave records grouped by "employee_id_date"
         $allLeaves = LeaveTrackerRecord::whereIn('employee_id', $employeeIds)

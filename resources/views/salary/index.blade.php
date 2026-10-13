@@ -3,6 +3,7 @@
 
 @section('page_actions')
   @if(!$isHistoric)
+    <button class="btn acc" onclick="openSalAddModal()">+ Add Salary</button>
     <a href="{{ route('salary.template') }}" class="btn">📥 Template</a>
     <button class="btn" onclick="om('sal-import-modal')">📤 Import</button>
   @endif
@@ -13,7 +14,7 @@
 @section('content')
 
   {{-- Filter bar --}}
-  <form method="GET" action="{{ route('salary') }}" class="card"
+  <form method="GET" action="{{ route('salary') }}" class="card" data-ajax-filter
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <input type="hidden" name="company_id" value="{{ $companyId }}">
     <div class="fld" style="flex:1;min-width:160px">
@@ -27,7 +28,7 @@
         onfocus="this.style.borderColor='var(--acc)'" onblur="this.style.borderColor='var(--b1)'">
     </div>
     <button type="submit" class="btn acc">Filter</button>
-    <a href="{{ route('salary') }}" class="btn">Reset</a>
+    <a href="{{ route('salary') }}" class="btn" data-ajax-reset>Reset</a>
   </form>
 
   {{-- Historical view notice --}}
@@ -41,6 +42,7 @@
     </div>
   @endif
 
+  <div id="ajax-results">
   {{-- Bulk form — standalone, NOT wrapping the table (avoids nested-forms issue).
        Checkboxes inside the table are linked here via form="bulk-form". --}}
   @if(!$isHistoric)
@@ -174,6 +176,7 @@
       </div>
     @endif
   </div>
+  </div> {{-- #ajax-results --}}
 
   {{-- Set/Edit Salary Modal (shown in current view only) --}}
   @if(!$isHistoric)
@@ -186,6 +189,15 @@
         <form method="POST" id="sal-form">
           @csrf
           <div class="fg2">
+            <div class="fld full" id="sal-modal-employee-wrap" style="display:none">
+              <label class="req">Employee</label>
+              <select id="sal-employee-select" required onchange="onSalEmployeeChange(this.value)">
+                <option value="">Select employee</option>
+                @foreach($allEmployeesForSalary as $emp)
+                  <option value="{{ $emp->id }}">{{ $emp->employee_id }} — {{ $emp->full_name }}</option>
+                @endforeach
+              </select>
+            </div>
             <div class="fld">
               <label class="req">CTC Annual (₹)</label>
               <input type="number" name="ctc_annual" id="sal-ctc" required min="1" step="1"
@@ -258,11 +270,28 @@
     <script>
       /* ── Set / Edit salary modal ─────────────────────────── */
       function openSalModal(empId, name, ctc, gross) {
+        document.getElementById('sal-modal-employee-wrap').style.display = 'none';
         document.getElementById('sal-modal-title').textContent = 'Salary — ' + name;
         document.getElementById('sal-form').action = '/salary/' + empId + '/set';
         document.getElementById('sal-ctc').value  = ctc   || '';
         document.getElementById('sal-gross').value = gross || '';
         om('sal-modal');
+      }
+
+      /* ── Add salary for a manually-picked employee ─────────── */
+      function openSalAddModal() {
+        document.getElementById('sal-modal-employee-wrap').style.display = 'flex';
+        document.getElementById('sal-modal-title').textContent = 'Add Salary';
+        document.getElementById('sal-employee-select').value = '';
+        document.getElementById('sal-form').action = '';
+        document.getElementById('sal-ctc').value = '';
+        document.getElementById('sal-gross').value = '';
+        if (window._ssSync) window._ssSync(document.getElementById('sal-employee-select'));
+        om('sal-modal');
+      }
+
+      function onSalEmployeeChange(empId) {
+        document.getElementById('sal-form').action = empId ? '/salary/' + empId + '/set' : '';
       }
       function calcGross() {
         const ctc = parseFloat(document.getElementById('sal-ctc').value) || 0;
@@ -398,6 +427,12 @@
 
       // Initialise on page load
       document.addEventListener('DOMContentLoaded', restoreSelections);
+
+      // Searching/filtering now swaps #ajax-results in place instead of a
+      // full reload — the per-filter storage key already means "a changed
+      // filter starts a fresh selection" (see comment above), so replicate
+      // that: clear any in-progress selection whenever the region refreshes.
+      document.getElementById('ajax-results')?.addEventListener('ajax:loaded', clearAllPages);
 
       function confirmBulkDelete() {
         const stored = _getStored();

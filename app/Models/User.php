@@ -41,9 +41,11 @@ class User extends Authenticatable
 
     /**
      * Employee-role holders (including structural Managers — Manager isn't a
-     * separate role in this app) are restricted to Leave Management and
-     * their own Profile: no Dashboard. Anyone who also holds Admin or HR
-     * keeps full access.
+     * separate role in this app) get their own personal Dashboard (their
+     * leave balance, attendance, payslip, team approvals if they manage
+     * anyone) plus Leave Management and their own Profile — not the
+     * company-wide HR/Admin dashboard or any other module. Anyone who also
+     * holds Admin or HR keeps full access.
      */
     public function isRestrictedToLeaveOnly(): bool
     {

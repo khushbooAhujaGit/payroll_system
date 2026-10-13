@@ -4,9 +4,12 @@
 @section('page_actions')
   <button class="btn acc" onclick="om('att-modal')">✔ Mark Attendance</button>
   <button class="btn" onclick="om('punch-add-modal')">+ Add Punch</button>
-  <button class="btn" onclick="om('biometric-upload-modal')">🖱 Bulk Upload</button>
+  <button class="btn" onclick="om('biometric-upload-modal')">🖱 Biometric Upload</button>
+  <button class="btn" onclick="om('wfh-upload-modal')">🏠 WFH / Client Upload</button>
+  <button class="btn" onclick="om('manual-upload-modal')">🧾 Manual Upload</button>
   <a href="{{ route('attendance.export') . '?' . http_build_query(request()->only('company_id','year','month')) }}" class="btn">⬇ Export</a>
   <a href="{{ route('reports.attendance', ['month' => request('year', now()->year).'-'.str_pad(request('month', now()->month),2,'0',STR_PAD_LEFT)]) }}" class="btn">📊 Attendance Report</a>
+  <button class="btn" onclick="om('mail-recipients-modal')">✉️ Exception Mail Settings</button>
 @endsection
 
 @section('content')
@@ -31,13 +34,15 @@
     </div>
   </div>
 
-  {{-- Month / Entity filter --}}
+  {{-- Month / Entity — a real navigation, since Export and the Attendance
+       Report link (in the header) depend on these too. --}}
   <form method="GET" action="{{ route('attendance') }}" class="card"
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     @if($companies->count() > 1)
     <div class="fld" style="min-width:200px">
       <label>Entity / Company</label>
       <select name="company_id">
+        <option value="all" {{ $companyId === 'all' ? 'selected' : '' }}>All Companies</option>
         @foreach($companies as $ent)
           <option value="{{ $ent->id }}" {{ $companyId == $ent->id ? 'selected' : '' }}>
             {{ $ent->name }}
@@ -64,14 +69,7 @@
         @endforeach
       </select>
     </div>
-    <div class="fld" style="min-width:200px">
-      <label>Search Name / Emp ID</label>
-      <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="e.g. John or EMP001">
-    </div>
     <button type="submit" class="btn acc">Load</button>
-    @if(!empty($search))
-      <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn">✕ Clear</a>
-    @endif
     @if($biometricDataRange?->min_date)
     <div style="font-size:11px;color:var(--t3);align-self:center;padding-bottom:2px">
       📡 Biometric data available:
@@ -83,6 +81,23 @@
     @endif
   </form>
 
+  {{-- Search — narrows the already-loaded month, so this one is AJAX --}}
+  <form method="GET" action="{{ route('attendance') }}" data-ajax-filter class="card"
+    style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <input type="hidden" name="company_id" value="{{ $companyId }}">
+    <input type="hidden" name="year" value="{{ $year }}">
+    <input type="hidden" name="month" value="{{ $month }}">
+    <div class="fld" style="min-width:200px">
+      <label>Search Name / Emp ID</label>
+      <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="e.g. John or EMP001">
+    </div>
+    <button type="submit" class="btn acc">Search</button>
+    @if(!empty($search))
+      <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn" data-ajax-reset>✕ Clear</a>
+    @endif
+  </form>
+
+  <div id="ajax-results">
   <div class="card" style="display:none !important;">
     <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
       <div class="ct">Attendance — {{ \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y') }}</div>
@@ -228,7 +243,7 @@
       <div class="empty">
         <div class="ico">🔍</div>
         <p>No employees matching "{{ e($search) }}".</p>
-        <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+        <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
       </div>
     @else
       <div class="empty">
@@ -326,11 +341,12 @@
       <div class="empty" style="padding:24px">
         <div class="ico">🔍</div>
         <p>No biometric records matching "{{ e($search) }}" for {{ \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y') }}.</p>
-        <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+        <a href="{{ route('attendance', ['company_id'=>$companyId,'year'=>$year,'month'=>$month]) }}" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
       </div>
     @endif
   </div>
   @endif
+  </div> {{-- #ajax-results --}}
 
   {{-- Mark Attendance Modal --}}
   <div class="modal" id="att-modal">
@@ -402,25 +418,73 @@
   </div>
 @endsection
 
-{{-- Attendance Upload Modal --}}
-<div class="modal" id="upload-modal">
+{{-- WFH / Client Location Attendance Upload Modal — EMP ID + Date + Check
+     In + Check Out, for employees with no physical punch device. Separate
+     from Biometric Upload above, which is machine-XLS only. --}}
+<div class="modal" id="wfh-upload-modal">
   <div class="mb">
     <div class="mh">
-      <span class="mt">Bulk Upload Attendance</span>
-      <button class="mc" onclick="cm('upload-modal')">✕</button>
+      <span class="mt">WFH / Client Location Attendance Upload</span>
+      <button class="mc" onclick="cm('wfh-upload-modal')">✕</button>
     </div>
-    <form method="POST" action="{{ route('attendance.import') }}" enctype="multipart/form-data">
+
+    <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;
+                padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.7">
+      For employees whose Work Type is <strong>Work From Home</strong> or <strong>Client Location</strong> —
+      no biometric machine needed. Columns: <span class="mono">EMP ID · Name · Date · Check In · Check Out</span>.
+      Leave both Check In and Check Out blank for an absent day.
+      Rows for employees who aren't WFH / Client Location are rejected — use Biometric Upload or Manual Upload for them instead.
+      <br><a href="{{ route('attendance.wfh_template') }}" class="btn sm" style="margin-top:8px">📥 Download Template</a>
+    </div>
+
+    <form method="POST" action="{{ route('attendance.wfh_import') }}" enctype="multipart/form-data">
       @csrf
-      <div style="font-size:12px;color:var(--t2);background:var(--s2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        The attendance date is read directly from the Excel sheet. No month selection needed.
-      </div>
       <div class="fld" style="margin-bottom:14px">
         <label>Excel File (.xlsx / .xls) *</label>
-        <input type="file" name="file" accept=".xlsx,.xls" required multiple
+        <input type="file" name="file" accept=".xlsx,.xls" required
           style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
       </div>
       <div class="mf">
-        <button type="button" class="btn" onclick="cm('upload-modal')">Cancel</button>
+        <button type="button" class="btn" onclick="cm('wfh-upload-modal')">Cancel</button>
+        <button type="submit" class="btn acc">📤 Upload &amp; Import</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{-- Manual Attendance Upload Modal — EMP ID + Date + Check In + Check Out,
+     for ANY employee, no machine needed. Corrects whatever raw-punch row is
+     already there for that employee+date (from any source) or creates one —
+     the bulk-upload counterpart to + Add Punch, meant for HR to fix/backfill
+     attendance after reviewing raised Change Requests. --}}
+<div class="modal" id="manual-upload-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">Manual Attendance Upload</span>
+      <button class="mc" onclick="cm('manual-upload-modal')">✕</button>
+    </div>
+
+    <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;
+                padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.7">
+      For <strong>any employee</strong> — no biometric machine file needed. Columns:
+      <span class="mono">EMP ID · Name · Date · Check In · Check Out · HR Remark</span>. At least one of
+      Check In / Check Out is required, and <strong>HR Remark is required</strong> on every row —
+      say why the punch is being added or corrected. If attendance already exists for that
+      employee + date (from the biometric machine or any other source), it's <strong>updated</strong>
+      with these values instead of creating a duplicate — use this to correct a bad punch or
+      backfill a day the machine missed.
+      <br><a href="{{ route('attendance.manual_template') }}" class="btn sm" style="margin-top:8px">📥 Download Template</a>
+    </div>
+
+    <form method="POST" action="{{ route('attendance.manual_import') }}" enctype="multipart/form-data">
+      @csrf
+      <div class="fld" style="margin-bottom:14px">
+        <label>Excel File (.xlsx / .xls) *</label>
+        <input type="file" name="file" accept=".xlsx,.xls" required
+          style="background:var(--s2);border:1.5px dashed var(--b2);border-radius:8px;padding:14px;cursor:pointer;width:100%">
+      </div>
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('manual-upload-modal')">Cancel</button>
         <button type="submit" class="btn acc">📤 Upload &amp; Import</button>
       </div>
     </form>
@@ -553,6 +617,52 @@
       <div class="mf">
         <button type="button" class="btn" onclick="cm('punch-edit-modal')">Cancel</button>
         <button type="submit" class="btn acc">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{-- Daily Exception Mail Settings Modal (item 56) — who gets the 10:30 AM
+     report. Global/singleton: one shared list, and the email it triggers is
+     a single combined report covering every company in the system (each as
+     its own section), not one email per company. --}}
+<div class="modal" id="mail-recipients-modal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt">Daily Exception Mail Settings</span>
+      <button class="mc" onclick="cm('mail-recipients-modal')">✕</button>
+    </div>
+
+    <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;
+                padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.7">
+      Every day at 10:30 AM, these addresses get <strong>one combined email</strong>
+      covering every company in the system — who hasn't marked attendance yet
+      or is on leave today, broken out section by section per company — with
+      an Excel of the full day's attendance for everyone attached. This is a
+      shared setting, not per-company. Leave "To" blank to stop sending this
+      report entirely.
+    </div>
+
+    <form method="POST" action="{{ route('attendance.mail_recipients.update') }}">
+      @csrf
+      <input type="hidden" name="year" value="{{ $year }}">
+      <input type="hidden" name="month" value="{{ $month }}">
+      <input type="hidden" name="company_id" value="{{ $companyId }}">
+
+      <div class="fld" style="margin-bottom:14px">
+        <label>To *</label>
+        <textarea name="to_emails" rows="3" required
+          placeholder="One per line, or comma-separated — e.g. hr@company.com, admin@company.com">{{ old('to_emails', $mailRecipient->to_emails ?? '') }}</textarea>
+      </div>
+      <div class="fld" style="margin-bottom:14px">
+        <label>Cc</label>
+        <textarea name="cc_emails" rows="2"
+          placeholder="Optional — one per line, or comma-separated">{{ old('cc_emails', $mailRecipient->cc_emails ?? '') }}</textarea>
+      </div>
+
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('mail-recipients-modal')">Cancel</button>
+        <button type="submit" class="btn acc">Save</button>
       </div>
     </form>
   </div>

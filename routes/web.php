@@ -6,6 +6,7 @@ use App\Http\Controllers\Web\WebBioIdController;
 use App\Http\Controllers\Web\WebDashboardController;
 use App\Http\Controllers\Web\WebDepartmentController;
 use App\Http\Controllers\Web\WebEmployeeController;
+use App\Http\Controllers\Web\WebForm16Controller;
 use App\Http\Controllers\Web\WebHelpdeskController;
 use App\Http\Controllers\Web\WebHolidayController;
 use App\Http\Controllers\Web\WebIncentiveController;
@@ -14,7 +15,9 @@ use App\Http\Controllers\Web\WebLoanController;
 use App\Http\Controllers\Web\WebMasterController;
 use App\Http\Controllers\Web\WebMonthlyTdsController;
 use App\Http\Controllers\Web\WebMyAttendanceController;
+use App\Http\Controllers\Web\WebMyPayslipController;
 use App\Http\Controllers\Web\WebMyReimbursementController;
+use App\Http\Controllers\Web\WebMyTeamController;
 use App\Http\Controllers\Web\WebNotificationController;
 use App\Http\Controllers\Web\WebPasswordResetController;
 use App\Http\Controllers\Web\WebPayrollController;
@@ -66,9 +69,7 @@ Route::get('/error-export/{filename}', function (string $filename) {
 // ── AUTHENTICATED PAGES ────────────────────────────────────────────
 Route::middleware('auth')->group(function () {
 
-    Route::get('/', fn(\Illuminate\Http\Request $request) => redirect()->route(
-        $request->user()?->isRestrictedToLeaveOnly() ? 'leave' : 'dashboard'
-    ));
+    Route::get('/', fn() => redirect()->route('dashboard'));
 
     // Dashboard
     Route::get('/dashboard', [WebDashboardController::class, 'index'])->name('dashboard');
@@ -89,7 +90,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/employees/{employee}/edit-data',     [WebEmployeeController::class, 'editData'])->name('employees.edit_data');
     Route::get('/employees/documents/{document}',     [WebEmployeeController::class, 'downloadDocument'])->name('employees.documents.download');
     Route::post('/employees/{employee}',              [WebEmployeeController::class, 'update'])->name('employees.update');
+    Route::post('/employees/{employee}/mark-as-left', [WebEmployeeController::class, 'markAsLeft'])->name('employees.mark_as_left');
     Route::delete('/employees/{employee}',            [WebEmployeeController::class, 'destroy'])->name('employees.destroy');
+    Route::get('/my-team',                            [WebMyTeamController::class, 'index'])->name('my-team');
 
     // ── Contractors ───────────────────────────────
     Route::get('/contractors',               [\App\Http\Controllers\Web\WebContractorController::class, 'index'])->name('contractors');
@@ -114,6 +117,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/attendance/template',                 [WebAttendanceController::class, 'template'])->name('attendance.template');
     Route::post('/attendance/import',                  [WebAttendanceController::class, 'import'])->name('attendance.import');
     Route::post('/attendance/biometric-import',        [WebAttendanceController::class, 'biometricImport'])->name('attendance.biometric_import');
+    Route::get('/attendance/wfh-template',              [WebAttendanceController::class, 'wfhTemplate'])->name('attendance.wfh_template');
+    Route::post('/attendance/wfh-import',               [WebAttendanceController::class, 'wfhImport'])->name('attendance.wfh_import');
+    Route::get('/attendance/manual-template',            [WebAttendanceController::class, 'manualTemplate'])->name('attendance.manual_template');
+    Route::post('/attendance/manual-import',             [WebAttendanceController::class, 'manualImport'])->name('attendance.manual_import');
+    Route::post('/attendance/mail-recipients',          [WebAttendanceController::class, 'updateMailRecipients'])->name('attendance.mail_recipients.update');
     Route::post('/attendance/punch',                   [WebAttendanceController::class, 'storePunch'])->name('attendance.punch.store');
     Route::post('/attendance/punch/{punch}/update',    [WebAttendanceController::class, 'updatePunch'])->name('attendance.punch.update');
     Route::delete('/attendance/punch/{punch}',         [WebAttendanceController::class, 'destroyPunch'])->name('attendance.punch.destroy');
@@ -122,6 +130,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/my-attendance',                        [WebMyAttendanceController::class, 'index'])->name('my-attendance');
     Route::post('/my-attendance/change-request',        [WebMyAttendanceController::class, 'requestChange'])->name('my-attendance.change_request');
     Route::get('/attendance/change-requests',           [WebMyAttendanceController::class, 'pendingRequests'])->name('attendance.change_requests');
+    Route::get('/attendance/change-requests/export',     [WebMyAttendanceController::class, 'exportChangeRequests'])->name('attendance.change_requests.export');
     Route::post('/attendance/change-requests/{regularization}/resolve', [WebMyAttendanceController::class, 'resolveRequest'])->name('attendance.change_requests.resolve');
     Route::get('/attendance/analytics',                 [WebMyAttendanceController::class, 'analytics'])->name('attendance.analytics');
 
@@ -193,6 +202,17 @@ Route::middleware('auth')->group(function () {
     Route::post('/salary-report/unlock',          [WebSalaryReportController::class, 'unlockSnapshot'])->name('salary.report.unlock');
     Route::post('/salary-report/delete-snapshot', [WebSalaryReportController::class, 'deleteSnapshot'])->name('salary.report.delete');
     Route::post('/salary-report/reupload',        [WebSalaryReportController::class, 'reuploadSnapshot'])->name('salary.report.reupload');
+    Route::post('/salary-report/send-payslips',   [WebSalaryReportController::class, 'sendPayslips'])->name('salary.report.send_payslips');
+    Route::get('/salary-report/payslip/{month}/{employee}', [WebSalaryReportController::class, 'downloadPayslip'])->name('salary.report.payslip.download')->where('month', '\d{4}-\d{2}');
+
+    // ── Form 16 ─────────────────────────────────────
+    Route::get('/form16',                         [WebForm16Controller::class, 'index'])->name('form16');
+    Route::get('/form16/{employee}/{fy}',         [WebForm16Controller::class, 'download'])->name('form16.download')->where('fy', '\d{4}-\d{2}');
+
+    // ── My Payslips (self-service) ─────────────────
+    Route::get('/my-payslips',                    [WebMyPayslipController::class, 'index'])->name('my-payslips');
+    Route::get('/my-payslips/{month}',            [WebMyPayslipController::class, 'download'])->name('my-payslips.download')->where('month', '\d{4}-\d{2}');
+    Route::get('/my-payslips/form16/{fy}',        [WebMyPayslipController::class, 'form16'])->name('my-payslips.form16')->where('fy', '\d{4}-\d{2}');
 
     // ── Salary Revisions ───────────────────────────
     Route::get('/revisions',                      [WebRevisionController::class, 'index'])->name('revisions');
@@ -283,6 +303,7 @@ Route::middleware('auth')->group(function () {
     // ── Masters ────────────────────────────────────
     Route::get('/masters',                           [WebMasterController::class, 'index'])->name('masters');
     Route::post('/masters/company',                  [WebMasterController::class, 'storeCompany'])->name('masters.company');
+    Route::put('/masters/company/{company}',         [WebMasterController::class, 'updateCompany'])->name('masters.company.update');
     Route::delete('/masters/company/{company}',      [WebMasterController::class, 'destroyCompany'])->name('masters.company.destroy');
 
     // ── Departments ────────────────────────────────
@@ -290,15 +311,34 @@ Route::middleware('auth')->group(function () {
     Route::post('/departments',             [WebDepartmentController::class, 'storeDepartment'])->name('departments.store');
     Route::get('/departments/template',     [WebDepartmentController::class, 'template'])->name('departments.template');
     Route::post('/departments/import',      [WebDepartmentController::class, 'import'])->name('departments.import');
+    Route::get('/departments/by-company',   [WebDepartmentController::class, 'departmentsByCompany'])->name('masters.departments.by-company');
+    Route::post('/departments/bulk-delete', [WebDepartmentController::class, 'bulkDestroyDepartments'])->name('departments.bulk-delete');
+    Route::put('/departments/{department}',    [WebDepartmentController::class, 'updateDepartment'])->name('departments.update');
+    Route::delete('/departments/{department}', [WebDepartmentController::class, 'destroyDepartment'])->name('departments.destroy');
 
     // ── Designations ───────────────────────────────
     Route::get('/designations',             [WebDepartmentController::class, 'indexDesignations'])->name('designations');
     Route::post('/designations',            [WebDepartmentController::class, 'storeDesignation'])->name('masters.designations.store');
+    Route::get('/designations/by-company',  [WebDepartmentController::class, 'designationsByCompany'])->name('masters.designations.by-company');
+    Route::post('/designations/bulk-delete', [WebDepartmentController::class, 'bulkDestroyDesignations'])->name('designations.bulk-delete');
+    Route::put('/designations/{designation}',    [WebDepartmentController::class, 'updateDesignation'])->name('designations.update');
+    Route::delete('/designations/{designation}', [WebDepartmentController::class, 'destroyDesignation'])->name('designations.destroy');
 
     // ── Branches ───────────────────────────────────
     Route::get('/branches',                 [WebDepartmentController::class, 'indexBranches'])->name('branches');
     Route::post('/branches',                [WebDepartmentController::class, 'storeBranch'])->name('masters.branches.store');
     Route::get('/branches/by-company',      [WebDepartmentController::class, 'branchesByCompany'])->name('masters.branches.by-company');
+    Route::post('/branches/bulk-delete',    [WebDepartmentController::class, 'bulkDestroyBranches'])->name('branches.bulk-delete');
+    Route::put('/branches/{branch}',        [WebDepartmentController::class, 'updateBranch'])->name('branches.update');
+    Route::delete('/branches/{branch}',     [WebDepartmentController::class, 'destroyBranch'])->name('branches.destroy');
+
+    // ── Locations ───────────────────────────────────
+    Route::get('/locations',                [WebDepartmentController::class, 'indexLocations'])->name('locations');
+    Route::post('/locations',               [WebDepartmentController::class, 'storeLocation'])->name('masters.locations.store');
+    Route::get('/locations/by-company',     [WebDepartmentController::class, 'locationsByCompany'])->name('masters.locations.by-company');
+    Route::post('/locations/bulk-delete',   [WebDepartmentController::class, 'bulkDestroyLocations'])->name('locations.bulk-delete');
+    Route::put('/locations/{location}',     [WebDepartmentController::class, 'updateLocation'])->name('locations.update');
+    Route::delete('/locations/{location}',  [WebDepartmentController::class, 'destroyLocation'])->name('locations.destroy');
 
     // ── Role & Permissions (super_admin only — enforced in WebRbacController) ──
     Route::prefix('rbac')->name('rbac.')->group(function () {

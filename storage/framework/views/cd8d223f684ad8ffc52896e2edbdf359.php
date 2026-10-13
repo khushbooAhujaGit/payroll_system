@@ -5,6 +5,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In — HRMS Payroll</title>
+  <link rel="icon" href="<?php echo e(asset('favicon-32.png')); ?>" sizes="32x32" type="image/png">
+  <link rel="icon" href="<?php echo e(asset('favicon-256.png')); ?>" sizes="256x256" type="image/png">
+  <link rel="apple-touch-icon" href="<?php echo e(asset('favicon-256.png')); ?>">
   <link rel="stylesheet" href="/css/hrms.css">
 </head>
 
@@ -12,7 +15,7 @@
   <div class="login-wrap">
     <div class="lb">
       <div class="ll">
-        <div class="ico">💼</div>
+        <div class="ico"><img src="<?php echo e(asset('favicon-256.png')); ?>" alt="" style="width:24px;height:24px;border-radius:4px"></div>
         <div>
           <h1>HRMS Payroll</h1>
           <div class="sub">Enterprise Platform</div>
@@ -39,7 +42,7 @@
         <?php echo csrf_field(); ?>
         <div class="fg">
           <label>Email</label>
-          <input type="email" name="email" value="<?php echo e(old('email')); ?>" placeholder="admin@hrms.local" required autofocus>
+          <input type="email" name="email" value="<?php echo e(old('email')); ?>" placeholder="name@company.com" required autofocus>
         </div>
         <div class="fg">
           <label>Password</label>

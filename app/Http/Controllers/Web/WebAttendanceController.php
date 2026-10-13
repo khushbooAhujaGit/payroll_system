@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Imports\AttendanceImporter;
+use App\Imports\ManualAttendanceImporter;
+use App\Imports\WfhAttendanceImporter;
 use App\Models\Attendance;
+use App\Models\AttendanceMailRecipient;
 use App\Models\AttendanceRawPunch;
 use App\Models\Employee;
 use App\Models\Entity;
@@ -36,7 +39,7 @@ class WebAttendanceController extends Controller
         $companies = Company::orderBy('name')->get(['id', 'name']);
 
         if ($request->filled('company_id')) {
-            $companyId = (int) $request->get('company_id');
+            $companyId = $request->get('company_id') === 'all' ? 'all' : (int) $request->get('company_id');
         } elseif ($userEntityId) {
             $companyId = $userEntityId;
         } else {
@@ -68,6 +71,7 @@ class WebAttendanceController extends Controller
         // Employee grid (attendance calendar rows) — paginated 25/page
         $employees = Employee::query()
             ->currentlyEmployed()
+            ->when($companyId !== 'all', fn($q) => $q->where('company_id', $companyId))
             ->with(['department'])
             ->when($searchScope, $searchScope)
             ->orderBy('employee_id')
@@ -82,7 +86,7 @@ class WebAttendanceController extends Controller
             ->get()
             ->groupBy('employee_id');
 
-        $todaySummary = Attendance::whereHas('employee', fn($q) => $q->currentlyEmployed())
+        $todaySummary = Attendance::whereHas('employee', fn($q) => $q->currentlyEmployed()->when($companyId !== 'all', fn($q2) => $q2->where('company_id', $companyId)))
             ->where('attendance_date', now()->toDateString())
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
@@ -98,7 +102,7 @@ class WebAttendanceController extends Controller
 
         // Biometric Punch Records flat table — paginated 50/page, filtered by search
         $rawPunchesPaginated = AttendanceRawPunch::whereBetween('attendance_date', [$from, $to])
-            ->whereHas('employee', fn($q) => $q->currentlyEmployed()->when($searchScope, $searchScope))
+            ->whereHas('employee', fn($q) => $q->currentlyEmployed()->when($companyId !== 'all', fn($q2) => $q2->where('company_id', $companyId))->when($searchScope, $searchScope))
             ->with(['employee:id,first_name,middle_name,last_name,employee_id'])
             ->orderBy('attendance_date')
             ->orderBy('employee_id')
@@ -107,14 +111,18 @@ class WebAttendanceController extends Controller
 
         // What date ranges actually have biometric data for this entity?
         // Used to show a hint in the UI when no data found.
-        $biometricDataRange = AttendanceRawPunch::whereHas('employee', fn($q) => $q)
+        $biometricDataRange = AttendanceRawPunch::whereHas('employee', fn($q) => $q->when($companyId !== 'all', fn($q2) => $q2->where('company_id', $companyId)))
             ->selectRaw('MIN(attendance_date) as min_date, MAX(attendance_date) as max_date')
             ->first();
+
+        // Daily exception-mail recipients (item 56) — settings modal on this
+        // page. Global/singleton: one shared list, covering every company.
+        $mailRecipient = AttendanceMailRecipient::first();
 
         return view('attendance.index', compact(
             'employees', 'records', 'todaySummary',
             'year', 'month', 'from', 'to', 'companyId', 'rawPunches', 'rawPunchesPaginated', 'companies',
-            'biometricDataRange', 'search'
+            'biometricDataRange', 'search', 'mailRecipient'
         ));
     }
 
@@ -153,7 +161,7 @@ class WebAttendanceController extends Controller
 
         $userEntityId = auth()->user()->employee?->company_id;
         if ($request->filled('company_id')) {
-            $companyId = (int) $request->get('company_id');
+            $companyId = $request->get('company_id') === 'all' ? 'all' : (int) $request->get('company_id');
         } elseif ($userEntityId) {
             $companyId = $userEntityId;
         } else {
@@ -165,7 +173,12 @@ class WebAttendanceController extends Controller
         $from  = Carbon::createFromDate($year, $month, 1)->startOfMonth()->toDateString();
         $to    = Carbon::createFromDate($year, $month, 1)->endOfMonth()->toDateString();
 
-        $records = Attendance::whereHas('employee', fn($q) => $q)
+        // Previously whereHas('employee', fn($q) => $q) — a no-op closure
+        // that filtered nothing, so this export silently included every
+        // company's attendance regardless of the selected Entity/Company
+        // dropdown. Scoped properly now; 'all' explicitly opts out of the
+        // filter instead of that happening as an unintended side effect.
+        $records = Attendance::whereHas('employee', fn($q) => $q->when($companyId !== 'all', fn($q2) => $q2->where('company_id', $companyId)))
             ->with(['employee:id,first_name,middle_name,last_name,employee_id,department_id', 'employee.department:id,name'])
             ->whereBetween('attendance_date', [$from, $to])
             ->orderBy('attendance_date')
@@ -217,6 +230,113 @@ class WebAttendanceController extends Controller
         );
 
         return $this->handleImportResult($result, 'attendance', 'attendance record');
+    }
+
+    // ─────────────────────────────────────────────
+    // WFH / CLIENT LOCATION ATTENDANCE UPLOAD
+    // (EMP ID + Date + Status — no physical punch device, separate from
+    // the Biometric Upload pipeline above)
+    // ─────────────────────────────────────────────
+
+    public function wfhTemplate()
+    {
+        $this->authorize('attendance_view');
+
+        return $this->excelImportService->generateTemplate(WfhAttendanceImporter::class);
+    }
+
+    public function wfhImport(Request $request)
+    {
+        $this->authorize('attendance_edit');
+
+        $companyId = $this->resolveCompanyId($request);
+
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:20480',
+        ]);
+
+        $result = $this->excelImportService->import(
+            $request->file('file'),
+            'wfh_attendance',
+            WfhAttendanceImporter::class,
+            [
+                'company_id'  => $companyId,
+                'uploaded_by' => auth()->id(),
+                'source_file' => $request->file('file')->getClientOriginalName(),
+            ]
+        );
+
+        return $this->handleImportResult($result, 'attendance', 'WFH / Client Location attendance record');
+    }
+
+    // ─────────────────────────────────────────────
+    // MANUAL ATTENDANCE UPLOAD
+    // (EMP ID + Date + Check In + Check Out — any employee, no machine
+    // needed; corrects/backfills whatever raw-punch row is already there
+    // for that employee+date, or creates one. See ManualAttendanceImporter
+    // for the exact upsert rule — this is the HR-side counterpart to
+    // employees raising Change Requests on My Attendance.)
+    // ─────────────────────────────────────────────
+
+    public function manualTemplate()
+    {
+        $this->authorize('attendance_view');
+
+        return $this->excelImportService->generateTemplate(ManualAttendanceImporter::class);
+    }
+
+    public function manualImport(Request $request)
+    {
+        $this->authorize('attendance_edit');
+
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:20480',
+        ]);
+
+        $result = $this->excelImportService->import(
+            $request->file('file'),
+            'manual_attendance',
+            ManualAttendanceImporter::class,
+            [
+                'uploaded_by' => auth()->id(),
+                'source_file' => $request->file('file')->getClientOriginalName(),
+            ]
+        );
+
+        return $this->handleImportResult($result, 'attendance', 'attendance record');
+    }
+
+    // ─────────────────────────────────────────────
+    // DAILY EXCEPTION MAIL RECIPIENTS (item 56)
+    // ─────────────────────────────────────────────
+
+    public function updateMailRecipients(Request $request)
+    {
+        $this->authorize('attendance_edit');
+
+        $validated = $request->validate([
+            'to_emails' => 'required|string',
+            'cc_emails' => 'nullable|string',
+        ]);
+
+        // Reject if nothing parses out to a real address, even though the
+        // raw textarea had content (e.g. just stray commas/whitespace).
+        if (empty(AttendanceMailRecipient::parseEmailList($validated['to_emails']))) {
+            return redirect()->route('attendance', $request->only('year', 'month', 'company_id'))
+                ->with('error', 'Enter at least one valid "To" email address.');
+        }
+
+        // Singleton — one shared list for every company, so always update
+        // the existing row (if any) rather than keying off company_id.
+        $recipient = AttendanceMailRecipient::first() ?? new AttendanceMailRecipient();
+        $recipient->fill([
+            'to_emails'  => $validated['to_emails'],
+            'cc_emails'  => $validated['cc_emails'] ?? null,
+            'updated_by' => auth()->id(),
+        ])->save();
+
+        return redirect()->route('attendance', $request->only('year', 'month', 'company_id'))
+            ->with('success', 'Daily exception mail recipients updated.');
     }
 
     public function storePunch(Request $request)

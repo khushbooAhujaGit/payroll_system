@@ -166,7 +166,7 @@ class SalaryImporter extends BaseImporter
         if ($empId === '') return null;
 
         if (!array_key_exists($empId, $this->empCache)) {
-            $this->empCache[$empId] = Employee::where('employee_id', $empId)->first();
+            $this->empCache[$empId] = Employee::findByEmployeeIdLoose($empId);
         }
 
         return $this->empCache[$empId];

@@ -9,6 +9,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\CompOff;
 use App\Models\Employee;
+use App\Services\PublicFileStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,8 @@ use Carbon\CarbonPeriod;
 
 class LeaveController extends Controller
 {
+    public function __construct(protected PublicFileStore $publicFileStore) {}
+
     // ─────────────────────────────────────────────
     // LEAVE TYPES
     // ─────────────────────────────────────────────
@@ -172,7 +175,7 @@ class LeaveController extends Controller
         try {
             $documentPath = null;
             if ($request->hasFile('document')) {
-                $documentPath = $request->file('document')->store("leave_docs/{$employee->id}", 'local');
+                $documentPath = $this->publicFileStore->store($request->file('document'), 'leave_docs');
             }
 
             $application = LeaveApplication::create([
@@ -506,31 +509,108 @@ class LeaveController extends Controller
             ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))->toArray();
     }
 
+    /**
+     * Comp-Off is meant to be spent down first: a CL application draws
+     * against any available Comp-Off balance before touching the
+     * employee's own CL pool, so approved Comp-Off doesn't just sit
+     * alongside CL indefinitely.
+     *
+     * Matches strictly on code === 'CL', not category === 'casual' — the
+     * "casual" category is shared by several unrelated auto-generated types
+     * from the leave-tracker import (Birthday Leave, Anniversary Leave,
+     * Punch Missing, Employee Left, Approval Pending, Exam Leave...), all
+     * of them is_active and none of them a real Comp-Off-eligible CL
+     * application. Only the canonical Casual Leave type should trigger this.
+     */
     protected function deductLeaveBalance(LeaveApplication $application): void
     {
+        $year          = Carbon::parse($application->from_date)->year;
+        $leaveType     = $application->leaveType;
+        $daysRemaining = $application->days;
+
+        if ($leaveType && strtoupper($leaveType->code) === 'CL') {
+            $compOffType = LeaveType::where('company_id', $leaveType->company_id)
+                ->where('category', 'comp_off')->first();
+
+            if ($compOffType) {
+                $compOffBalance = LeaveBalance::where([
+                    'employee_id'   => $application->employee_id,
+                    'leave_type_id' => $compOffType->id,
+                    'year'          => $year,
+                ])->first();
+
+                if ($compOffBalance && $compOffBalance->available > 0) {
+                    $setOff = min($daysRemaining, $compOffBalance->available);
+                    $compOffBalance->increment('availed', $setOff);
+                    $compOffBalance->update(['closing_balance' => $compOffBalance->available]);
+                    $daysRemaining -= $setOff;
+
+                    // Recorded so a later cancellation can reverse the exact
+                    // same split instead of crediting everything back to CL.
+                    $application->update(['comp_off_setoff_days' => $setOff]);
+                }
+            }
+        }
+
+        if ($daysRemaining <= 0) {
+            return;
+        }
+
         $balance = LeaveBalance::where([
             'employee_id'   => $application->employee_id,
             'leave_type_id' => $application->leave_type_id,
-            'year'          => Carbon::parse($application->from_date)->year,
+            'year'          => $year,
         ])->first();
 
         if ($balance) {
-            $balance->increment('availed', $application->days);
+            $balance->increment('availed', $daysRemaining);
             $balance->update(['closing_balance' => $balance->available]);
         }
     }
 
+    /**
+     * Mirrors deductLeaveBalance()'s split exactly — a CL application that
+     * set off some days against Comp-Off must give those specific days back
+     * to Comp-Off, not to CL, or cancelling repeatedly would inflate CL and
+     * permanently drain Comp-Off.
+     */
     protected function restoreLeaveBalance(LeaveApplication $application): void
     {
-        $balance = LeaveBalance::where([
-            'employee_id'   => $application->employee_id,
-            'leave_type_id' => $application->leave_type_id,
-            'year'          => Carbon::parse($application->from_date)->year,
-        ])->first();
+        $year          = Carbon::parse($application->from_date)->year;
+        $setOffDays    = (float) $application->comp_off_setoff_days;
+        $leaveType     = $application->leaveType;
 
-        if ($balance) {
-            $balance->decrement('availed', $application->days);
-            $balance->update(['closing_balance' => $balance->available]);
+        if ($setOffDays > 0 && $leaveType) {
+            $compOffType = LeaveType::where('company_id', $leaveType->company_id)
+                ->where('category', 'comp_off')->first();
+
+            if ($compOffType) {
+                $compOffBalance = LeaveBalance::where([
+                    'employee_id'   => $application->employee_id,
+                    'leave_type_id' => $compOffType->id,
+                    'year'          => $year,
+                ])->first();
+
+                if ($compOffBalance) {
+                    $compOffBalance->decrement('availed', $setOffDays);
+                    $compOffBalance->update(['closing_balance' => $compOffBalance->available]);
+                }
+            }
+        }
+
+        $ownTypeDays = $application->days - $setOffDays;
+
+        if ($ownTypeDays > 0) {
+            $balance = LeaveBalance::where([
+                'employee_id'   => $application->employee_id,
+                'leave_type_id' => $application->leave_type_id,
+                'year'          => $year,
+            ])->first();
+
+            if ($balance) {
+                $balance->decrement('availed', $ownTypeDays);
+                $balance->update(['closing_balance' => $balance->available]);
+            }
         }
     }
 

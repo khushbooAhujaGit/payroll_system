@@ -1,9 +1,9 @@
 
-<?php $tabValue = $tabValue ?? null; ?>
+<?php $tabValue = $tabValue ?? null; $leaveSummaries = $leaveSummaries ?? []; ?>
 <div class="card" style="margin-top:16px">
   <div class="ch"><div class="ct"><?php echo e($title); ?></div></div>
 
-  <form method="GET" action="<?php echo e(route('leave')); ?>"
+  <form method="GET" action="<?php echo e(route('leave')); ?>" data-ajax-filter
     style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:10px 0 14px;border-bottom:1px solid var(--b2)">
     
     <?php $__currentLoopData = request()->except([$searchParam, 'page', 'self_page', 'team_page']); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $key => $val): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
@@ -19,7 +19,7 @@
     </div>
     <button type="submit" class="btn sm acc">Filter</button>
     <?php if($searchValue): ?>
-      <a href="<?php echo e(route('leave', request()->except([$searchParam]))); ?>" class="btn sm">Reset</a>
+      <a href="<?php echo e(route('leave', request()->except([$searchParam]))); ?>" class="btn sm" data-ajax-reset>Reset</a>
     <?php endif; ?>
   </form>
 
@@ -33,7 +33,11 @@
           <?php if($showBulk): ?>
           <th style="width:24px"><input type="checkbox" onclick="document.querySelectorAll('#<?php echo e($formId); ?> .row-chk').forEach(c => c.checked = this.checked)"></th>
           <?php endif; ?>
-          <th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th>Actions</th>
+          <th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th>
+          <?php if($showBulk): ?>
+          <th>CL</th><th>SL</th><th>CO</th><th>Pending</th>
+          <?php endif; ?>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -45,6 +49,7 @@
               ? route('leave.approve', $row->application)
               : route('leave.tracker_request.approve', $row->trackerRecord);
           $checkboxName = $row->kind === 'application' ? 'application_ids[]' : 'tracker_ids[]';
+          $summary = $leaveSummaries[$row->employee?->id] ?? null;
         ?>
         <tr>
           <?php if($showBulk): ?>
@@ -72,6 +77,12 @@
             <?php $color = ['pending'=>'var(--yel)','approved'=>'var(--grn)','rejected'=>'var(--red)'][$row->status] ?? 'var(--t3)'; ?>
             <span class="bx" style="color:<?php echo e($color); ?>"><?php echo e(ucfirst($row->status)); ?></span>
           </td>
+          <?php if($showBulk): ?>
+          <td class="mono"><?php echo e($summary['cl'] ?? '—'); ?></td>
+          <td class="mono"><?php echo e($summary['sl'] ?? '—'); ?></td>
+          <td class="mono"><?php echo e($summary['co'] ?? '—'); ?></td>
+          <td class="mono"><?php echo e($summary['pending'] ?? '—'); ?></td>
+          <?php endif; ?>
           <td>
             
             <?php if($isActionable): ?>

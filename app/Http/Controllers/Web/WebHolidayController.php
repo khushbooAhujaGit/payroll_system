@@ -231,7 +231,9 @@ class WebHolidayController extends Controller
             $validation->setType(DataValidation::TYPE_LIST);
             $validation->setErrorStyle(DataValidation::STYLE_WARNING);
             $validation->setAllowBlank(false);
-            $validation->setShowDropDown(false);
+            // PhpSpreadsheet inverts this in the XML writer, so true is what
+            // actually shows the in-cell dropdown arrow — see ExcelImportService.
+            $validation->setShowDropDown(true);
             $validation->setShowInputMessage(true);
             $validation->setPromptTitle('Select Company');
             $validation->setPrompt('Choose the company this holiday applies to.');

@@ -14,6 +14,7 @@
       <tr>
         <th>Date</th>
         <th>Amount</th>
+        <th>Category</th>
         <th>Remarks</th>
         <th>Document</th>
         <th>Approval Status</th>
@@ -25,6 +26,7 @@
       <tr>
         <td><?php echo e($claim->expense_date ? \Carbon\Carbon::parse($claim->expense_date)->format('d M Y') : '—'); ?></td>
         <td style="font-weight:600">₹<?php echo e(number_format($claim->amount, 2)); ?></td>
+        <td style="color:var(--t2);font-size:12px"><?php echo e($claim->category ?? '—'); ?></td>
         <td style="color:var(--t2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?php echo e($claim->remarks); ?>">
           <?php echo e($claim->remarks ?? '—'); ?>
 
@@ -86,6 +88,30 @@
         <div class="fld">
           <label class="req">Amount (₹)</label>
           <input type="number" name="amount" required min="0.01" step="0.01" value="<?php echo e(old('amount')); ?>">
+        </div>
+        <div class="fld full">
+          <label class="req">Category</label>
+          <select name="category" required <?php $__errorArgs = ['category'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <option value="">Select category</option>
+            <?php $__currentLoopData = \App\Models\ReimbursementTrackerRow::CATEGORIES; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cat): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <option value="<?php echo e($cat); ?>" <?php echo e(old('category') === $cat ? 'selected' : ''); ?>><?php echo e($cat); ?></option>
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+          </select>
+          <?php $__errorArgs = ['category'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
         </div>
         <div class="fld full">
           <label>Remarks</label>

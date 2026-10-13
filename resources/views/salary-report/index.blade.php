@@ -15,7 +15,9 @@
 
 @section('content')
 
-{{-- Month picker form --}}
+{{-- Month picker form — a real navigation: changing month/firm changes far
+     more than the preview table (lock banner, summary cards, action
+     buttons), so this one deliberately stays a full page load. --}}
 <div class="card" style="margin-bottom:16px">
   <div class="ch"><div class="ct">Generate Salary Report</div></div>
   <form method="GET" action="{{ route('salary.report') }}"
@@ -35,7 +37,16 @@
         @endforeach
       </select>
     </div>
-    @if($month)
+    <button type="submit" class="btn acc">Preview →</button>
+  </form>
+
+  {{-- Search / Filter-by — narrows the already-loaded preview table only,
+       so this one is AJAX: fixed month+company_id carried as hidden fields. --}}
+  @if($month)
+  <form method="GET" action="{{ route('salary.report') }}" data-ajax-filter
+    style="display:flex;gap:10px;align-items:flex-end;padding:8px 0 4px;flex-wrap:wrap;border-top:1px solid var(--b1);margin-top:4px">
+    <input type="hidden" name="month" value="{{ $month }}">
+    <input type="hidden" name="company_id" value="{{ $companyId }}">
     <div class="fld" style="min-width:200px">
       <label>Search Emp ID / Name</label>
       <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="e.g. EMP001 or John…">
@@ -50,12 +61,12 @@
         <option value="lop"       {{ ($filter??'')==='lop'       ? 'selected' : '' }}>Has LOP</option>
       </select>
     </div>
-    @endif
-    <button type="submit" class="btn acc">Preview →</button>
+    <button type="submit" class="btn acc">Apply</button>
     @if(!empty($search) || !empty($filter))
-      <a href="{{ route('salary.report', ['month' => $month, 'company_id' => $companyId]) }}" class="btn">✕ Clear</a>
+      <a href="{{ route('salary.report', ['month' => $month, 'company_id' => $companyId]) }}" class="btn" data-ajax-reset>✕ Clear</a>
     @endif
   </form>
+  @endif
 </div>
 
 @if($month && $rows->total() > 0)
@@ -104,6 +115,17 @@
     <button class="btn sm" onclick="om('reupload-modal')" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">
       📤 Re-upload Edited
     </button>
+    <form method="POST" action="{{ route('salary.report.send_payslips') }}" style="display:inline">
+      @csrf
+      <input type="hidden" name="month" value="{{ $month }}">
+      <button type="button" class="btn sm" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0"
+        onclick="swConfirm(this.closest('form'),
+          'Send payslips for {{ $lockLabel }}?',
+          'Emails every employee in this locked month their payslip PDF ({{ $snapshotCount }} employees).',
+          'question', 'Yes, send', '#166534')">
+        ✉️ Send Payslips
+      </button>
+    </form>
     <form method="POST" action="{{ route('salary.report.lock') }}" style="display:inline">
       @csrf
       <input type="hidden" name="month" value="{{ $month }}">
@@ -152,6 +174,7 @@
 @endif
 
 {{-- Preview Table --}}
+<div id="ajax-results">
 <div class="card" style="overflow-x:auto;will-change:transform;-webkit-overflow-scrolling:touch">
   <div class="ch">
     <div class="ct">Salary Sheet — {{ \Carbon\Carbon::createFromFormat('Y-m',$month)->format('F Y') }} · {{ $companyId == 0 ? 'All Firms' : ($companies->firstWhere('id', $companyId)?->short_name ?? $companies->firstWhere('id', $companyId)?->name ?? '') }}
@@ -289,6 +312,12 @@
             )">
             {{ $r['has_override'] ? '✏ Overridden' : 'Edit' }}
           </button>
+          @if($isLocked)
+          <a class="btn sm" style="font-size:10px" target="_blank"
+            href="{{ route('salary.report.payslip.download', ['month' => $month, 'employee' => $r['employee_db_id']]) }}">
+            Payslip
+          </a>
+          @endif
         </td>
       </tr>
       @endforeach
@@ -326,10 +355,11 @@
     <div class="empty" style="padding:24px">
       <div class="ico">🔍</div>
       <p>No employees matching "{{ e($search) }}".</p>
-      <a href="{{ route('salary.report', ['month' => $month, 'company_id' => $companyId]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+      <a href="{{ route('salary.report', ['month' => $month, 'company_id' => $companyId]) }}" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
     </div>
   @endif
 </div>
+</div> {{-- #ajax-results --}}
 
 @elseif($month)
 <div class="card">

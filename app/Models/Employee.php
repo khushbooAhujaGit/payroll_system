@@ -18,6 +18,7 @@ class Employee extends Model
     protected $fillable = [
         'company_id',
         'branch_id',
+        'location_id',
         'department_id',
         'designation_id',
         'grade_id',
@@ -124,6 +125,11 @@ class Employee extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
     }
 
     public function department(): BelongsTo
@@ -338,6 +344,36 @@ class Employee extends Model
      * Safe to call repeatedly: only updates employees still marked as 'active'
      * with no date_of_leaving set.
      */
+    /**
+     * Find an employee by employee_id, tolerant of an inconsistently-applied
+     * "EMP" prefix. The Add Employee form only ever *suggests* an ID
+     * (plain "202618063"), never enforces a format, while a separate
+     * server-side fallback used when that field is left blank always
+     * prepends "EMP" (see EmployeeService::generateEmployeeId()) — so the
+     * same numbering sequence ends up stored as both "EMP202618056" and
+     * "202618056" across different employees. Every importer that resolves
+     * a human-typed employee ID (Leave Tracker, Salary, Loans, Bio IDs, the
+     * Employee bulk-upload dedup/Reporting-Manager lookup itself) needs to
+     * match either form — use this instead of a bare where('employee_id', ...).
+     */
+    public static function findByEmployeeIdLoose(string $value, ?int $companyId = null): ?self
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        $numeric = preg_replace('/^EMP/i', '', $value);
+
+        return static::when($companyId !== null, fn($q) => $q->where('company_id', $companyId))
+            ->where(function ($q) use ($value, $numeric) {
+                $q->where('employee_id', $value)
+                    ->orWhere('employee_id', $numeric)
+                    ->orWhere('employee_id', 'EMP' . $numeric);
+            })
+            ->first();
+    }
+
     public static function syncLeaverStatuses(string $asOf = null): void
     {
         $asOf = $asOf ?? now()->toDateString();

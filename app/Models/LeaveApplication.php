@@ -16,7 +16,7 @@ use Carbon\Carbon;
 
 class LeaveApplication extends Model
 {
-    protected $fillable = ['application_number','employee_id','leave_type_id','from_date','to_date','days','is_half_day','half_day_type','reason','document_path','status','is_lop','applied_at'];
+    protected $fillable = ['application_number','employee_id','leave_type_id','from_date','to_date','days','comp_off_setoff_days','is_half_day','half_day_type','reason','document_path','status','is_lop','applied_at'];
     protected $casts = ['from_date' => 'date', 'to_date' => 'date', 'days' => 'decimal:2', 'is_half_day' => 'boolean', 'is_lop' => 'boolean', 'applied_at' => 'datetime'];
 
     public function employee(): BelongsTo   { return $this->belongsTo(Employee::class); }

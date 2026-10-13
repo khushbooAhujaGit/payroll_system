@@ -23,7 +23,8 @@
           'Department'        => $emp?->department?->name,
           'Designation'       => $emp?->designation?->name,
           'Reporting Manager' => $emp?->reportingManager?->full_name,
-          'Branch / Location' => $emp?->branch?->name,
+          'Branch'            => $emp?->branch?->name,
+          'Work Location'     => $emp?->location?->name,
           'Probation Period'  => $emp?->probation_period_months !== null ? $emp->probation_period_months . ' months' : null,
           'PF Applicable'     => $emp ? ($emp->is_pf_applicable ? 'Yes' : 'No') : null,
         ] as $label => $value)

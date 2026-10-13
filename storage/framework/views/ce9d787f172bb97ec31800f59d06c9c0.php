@@ -14,7 +14,7 @@
   <div class="sc"><div class="lbl">Outstanding</div><div class="val" style="font-size:14px">₹ <?php echo e(number_format($stats['outstanding'],0,'.',',')); ?></div></div>
 </div>
 
-<form method="GET" action="<?php echo e(route('loans')); ?>" class="card"
+<form method="GET" action="<?php echo e(route('loans')); ?>" class="card" data-ajax-filter
       style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end">
   <div class="fld" style="min-width:140px">
     <label>Status</label>
@@ -27,9 +27,10 @@
     </select>
   </div>
   <button type="submit" class="btn acc">Filter</button>
-  <a href="<?php echo e(route('loans')); ?>" class="btn">Reset</a>
+  <a href="<?php echo e(route('loans')); ?>" class="btn" data-ajax-reset>Reset</a>
 </form>
 
+<div id="ajax-results">
 <div class="card">
   <?php if($loans->isNotEmpty()): ?>
   <table>
@@ -193,6 +194,7 @@
   <?php else: ?>
   <div class="empty"><div class="ico">🏦</div><p>No loans found.</p></div>
   <?php endif; ?>
+</div>
 </div>
 
 

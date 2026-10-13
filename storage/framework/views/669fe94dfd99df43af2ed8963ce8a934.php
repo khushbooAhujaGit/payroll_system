@@ -6,8 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <title><?php echo $__env->yieldContent('title', 'HRMS'); ?> — HRMS Payroll</title>
-    <link rel="icon" href="<?php echo e(asset('favicontnbt.png')); ?>" type="image/x-icon">
-    <link rel="shortcut icon" href="<?php echo e(asset('favicontnbt.png')); ?>" type="image/x-icon">
+    
+    <link rel="icon" href="<?php echo e(asset('favicon-32.png')); ?>" sizes="32x32" type="image/png">
+    <link rel="icon" href="<?php echo e(asset('favicon-256.png')); ?>" sizes="256x256" type="image/png">
+    <link rel="apple-touch-icon" href="<?php echo e(asset('favicon-256.png')); ?>">
     <link rel="stylesheet" href="/css/hrms.css">
     <style>
         /* ── Searchable Select ─────────────────────────────── */
@@ -103,20 +105,27 @@
 
     <aside>
         <div class="sh">
-            <div class="ico">💼</div>
+            <div class="ico"><img src="<?php echo e(asset('favicon-256.png')); ?>" alt="" style="width:20px;height:20px;border-radius:3px"></div>
             <div>
                 <div style="font-size:13px;font-weight:700">HRMS</div>
                 <div style="font-size:10px;color:var(--t3)">Payroll Platform</div>
             </div>
         </div>
         <nav>
-            <?php if (! (auth()->user()?->isRestrictedToLeaveOnly())): ?>
+            <?php
+              // HR sees only modules where they can actually DO something
+              // (add/edit/delete/manage) — pure *_view-only pages (plus
+              // Payroll entirely, per explicit requirement) are hidden from
+              // HR's nav even though the permission itself is still held,
+              // to cut down on dead-end tabs. Admin is never affected, even
+              // for a hypothetical user holding both roles.
+              $isHrOnly = auth()->user()->hasRole('HR') && !auth()->user()->hasRole('Admin');
+            ?>
             <div class="nl">Overview</div>
             <a class="ni <?php echo e(request()->routeIs('dashboard') ? 'on' : ''); ?>"
                 href="<?php echo e(route('dashboard')); ?>">Dashboard</a>
-            <?php endif; ?>
 
-            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['employee_view', 'bioid_view', 'attendance_view', 'attendance_self_view', 'attendance_analytics_view', 'leave_management_view', 'reimbursment_self_view'])): ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['employee_view', 'bioid_view', 'attendance_view', 'attendance_self_view', 'attendance_analytics_view', 'leave_management_view', 'reimbursment_self_view', 'salary_self_view', 'my_team_view'])): ?>
             <div class="nl">HR</div>
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('employee_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('employees') ? 'on' : ''); ?>"
@@ -136,11 +145,11 @@
                 href="<?php echo e(route('my-attendance')); ?>">My Attendance</a>
             <?php endif; ?>
             <?php endif; ?>
-            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('attendance_edit')): ?>
+            <?php if(auth()->user()->can('attendance_edit')): ?>
             <a class="ni <?php echo e(request()->routeIs('attendance.change_requests*') ? 'on' : ''); ?>"
                 href="<?php echo e(route('attendance.change_requests')); ?>">Attendance Requests</a>
             <?php endif; ?>
-            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('attendance_analytics_view')): ?>
+            <?php if(auth()->user()->can('attendance_analytics_view') && !$isHrOnly): ?>
             <a class="ni <?php echo e(request()->routeIs('attendance.analytics') ? 'on' : ''); ?>"
                 href="<?php echo e(route('attendance.analytics')); ?>">Attendance Analytics</a>
             <?php endif; ?>
@@ -154,13 +163,29 @@
                 href="<?php echo e(route('my-reimbursements')); ?>">My Reimbursements</a>
             <?php endif; ?>
             <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('salary_self_view')): ?>
+            <?php if(auth()->user()->employee): ?>
+            <a class="ni <?php echo e(request()->routeIs('my-payslips*') ? 'on' : ''); ?>"
+                href="<?php echo e(route('my-payslips')); ?>">My Payslips</a>
+            <?php endif; ?>
+            <?php endif; ?>
+            
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('my_team_view')): ?>
+            <?php if(auth()->user()->employee): ?>
+            <a class="ni <?php echo e(request()->routeIs('my-team') ? 'on' : ''); ?>"
+                href="<?php echo e(route('my-team')); ?>">My Team</a>
+            <?php endif; ?>
+            <?php endif; ?>
             <?php endif; ?>
 
+            <?php if (! ($isHrOnly)): ?>
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['payroll_view', 'salary_details', 'incentive_view', 'monthly_tds_view'])): ?>
             <div class="nl">Payroll</div>
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('payroll_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('payroll', 'salary.report*') ? 'on' : ''); ?>"
                 href="<?php echo e(route('payroll')); ?>">Payroll & Reports</a>
+            <a class="ni <?php echo e(request()->routeIs('form16*') ? 'on' : ''); ?>"
+                href="<?php echo e(route('form16')); ?>">Form 16</a>
             <?php endif; ?>
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('salary_details')): ?>
             <a class="ni <?php echo e(request()->routeIs('salary') ? 'on' : ''); ?>" href="<?php echo e(route('salary')); ?>">
@@ -173,6 +198,7 @@
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('monthly_tds_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('tds.monthly') ? 'on' : ''); ?>"
                 href="<?php echo e(route('tds.monthly')); ?>">Monthly TDS</a>
+            <?php endif; ?>
             <?php endif; ?>
             <?php endif; ?>
 
@@ -215,6 +241,10 @@
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('branch_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('branches') ? 'on' : ''); ?>"
                 href="<?php echo e(route('branches')); ?>">Branches</a>
+            <?php endif; ?>
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('location_view')): ?>
+            <a class="ni <?php echo e(request()->routeIs('locations') ? 'on' : ''); ?>"
+                href="<?php echo e(route('locations')); ?>">Locations</a>
             <?php endif; ?>
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('leave_policies_view')): ?>
             <a class="ni <?php echo e(request()->routeIs('leave.policies') ? 'on' : ''); ?>"
@@ -260,6 +290,11 @@
 
     <main>
         <div class="hdr">
+            
+            <button type="button" class="hamburger" onclick="toggleSidebar()" title="Menu" aria-label="Menu"
+                style="display:none;align-items:center;justify-content:center;width:34px;height:34px;flex-shrink:0;background:var(--s2);border:1px solid var(--b1);border-radius:7px;font-size:16px;cursor:pointer;margin-right:2px">
+                ☰
+            </button>
             <h2><?php echo $__env->yieldContent('title', 'Dashboard'); ?></h2>
             <div style="display:flex;gap:6px" id="pacts"><?php echo $__env->yieldContent('page_actions'); ?></div>
             <div class="bell-wrap">
@@ -408,6 +443,24 @@
             }
         });
 
+        // ── Mobile sidebar drawer (≤768px — see hrms.css) ──────────────────
+        function toggleSidebar(e) {
+            if (e) e.stopPropagation();
+            document.querySelector('aside').classList.toggle('open');
+        }
+        document.addEventListener('click', e => {
+            const aside = document.querySelector('aside');
+            if (aside.classList.contains('open') && !e.target.closest('aside') && !e.target.closest('.hamburger')) {
+                aside.classList.remove('open');
+            }
+        });
+        // A full page load follows every nav click anyway (no SPA routing
+        // here), but closing immediately avoids a visible flash of the
+        // drawer still open while the next page loads.
+        document.querySelectorAll('aside .ni').forEach(a => a.addEventListener('click', () => {
+            document.querySelector('aside').classList.remove('open');
+        }));
+
         function toast(msg, t = 'ok') {
             const el = $('toast');
             el.textContent = (t === 'ok' ? '✓ ' : '✗ ') + msg;
@@ -432,6 +485,40 @@
             }).then(r => {
                 if (r.isConfirmed) form.submit();
             });
+        }
+
+        // ── Generic checkbox-select + bulk-delete helpers for simple master
+        // list pages (Departments, Designations, Branches). Each page passes
+        // its own checkbox class / count span id / button id so multiple
+        // independent selection sets can coexist if a page ever needs it.
+        function onRowCheck(chkClass, allId, countId, btnId) {
+            const boxes   = document.querySelectorAll('.' + chkClass);
+            const checked = document.querySelectorAll('.' + chkClass + ':checked');
+            document.getElementById(allId).checked = boxes.length > 0 && checked.length === boxes.length;
+            document.getElementById(countId).textContent = checked.length;
+            document.getElementById(btnId).style.display = checked.length > 0 ? '' : 'none';
+        }
+
+        function toggleAll(allCheckbox, chkClass, countId, btnId) {
+            document.querySelectorAll('.' + chkClass).forEach(c => c.checked = allCheckbox.checked);
+            const checked = document.querySelectorAll('.' + chkClass + ':checked');
+            document.getElementById(countId).textContent = checked.length;
+            document.getElementById(btnId).style.display = checked.length > 0 ? '' : 'none';
+        }
+
+        function bulkDelete(formId, chkClass, label) {
+            const checked = document.querySelectorAll('.' + chkClass + ':checked');
+            if (checked.length === 0) return;
+            const form = document.getElementById(formId);
+            form.querySelectorAll('input[name="ids[]"]').forEach(el => el.remove());
+            checked.forEach(c => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = c.value;
+                form.appendChild(input);
+            });
+            swConfirm(form, `Delete ${checked.length} ${label}?`, 'This cannot be undone.', 'warning', 'Yes, delete', '#dc2626');
         }
 
         function filterTbl(q, id) {
@@ -520,8 +607,8 @@
         (function() {
             var MIN_OPTS = 5;
 
-            function initSS(sel) {
-                if (sel._ssOk || sel.options.length < MIN_OPTS || sel.dataset.noSearch != null) return;
+            function initSS(sel, force) {
+                if (sel._ssOk || (!force && sel.options.length < MIN_OPTS) || sel.dataset.noSearch != null) return;
                 sel._ssOk = true;
                 sel.style.display = 'none';
 
@@ -702,6 +789,13 @@
             window._ssSync = function(el) {
                 if (el && el._ssSync) el._ssSync();
             };
+
+            /* Global helper to force-enhance a select that started under
+               MIN_OPTS (e.g. a filtered list that later grows via a "show
+               all" toggle) — a no-op if it's already enhanced. */
+            window._ssInit = function(el) {
+                if (el) initSS(el, true);
+            };
         }());
     </script>
 
@@ -724,32 +818,116 @@
             XLSX.writeFile(wb, (filename || 'export') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
         }
 
-        /* ── Debounced search: auto-submit the filter form 400 ms after
-           the user stops typing in any input[name=search] field.            */
+        /* ════════════════════════════════════════════════════════════════
+           AJAX filter/search/pagination — no full page reload.
+
+           Zero server-side changes: this fetches the exact same URL a real
+           GET submit/pagination-click would navigate to, parses the
+           returned HTML with DOMParser, and swaps in just the #ajax-results
+           element — so the AJAX response can never drift from what a real
+           page load would show; there's only one rendering path.
+
+           Per-page opt-in, three pieces:
+             - Wrap whatever should refresh on search/filter/paginate in
+               <div id="ajax-results">...</div> (table, pagination, result
+               counts — anything derived from the filtered query).
+             - Add data-ajax-filter to the <form method="GET"> that holds
+               the search box / dropdown filters.
+             - Add data-ajax-reset to the "Reset" link/button, if any.
+
+           After a swap, #ajax-results gets a bubbling 'ajax:loaded' CustomEvent
+           — listen for it on a page that has state outside #ajax-results
+           depending on the filtered result (e.g. a result count elsewhere,
+           an export link's querystring) and needs to re-sync it.
+        ════════════════════════════════════════════════════════════════ */
         (function() {
-            function attach(inp) {
-                if (inp._dbOk) return;
-                inp._dbOk = true;
-                var t;
-                inp.addEventListener('keyup', function(e) {
-                    if (e.key === 'Enter') {
+            function ajaxFetch(url) {
+                var region = document.getElementById('ajax-results');
+                if (!region) { window.location.href = url; return; }
+                region.style.opacity = '0.55';
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.text();
+                    })
+                    .then(function(html) {
+                        var doc = new DOMParser().parseFromString(html, 'text/html');
+                        var fresh = doc.getElementById('ajax-results');
+                        if (!fresh) { window.location.href = url; return; }
+                        region.innerHTML = fresh.innerHTML;
+                        history.pushState({}, '', url);
+                        region.dispatchEvent(new CustomEvent('ajax:loaded', { bubbles: true }));
+                    })
+                    .catch(function() { window.location.href = url; })
+                    .finally(function() { region.style.opacity = ''; });
+            }
+            window._ajaxFetchResults = ajaxFetch; // exposed for page-specific triggers (e.g. a Department dropdown's onchange)
+
+            function formUrl(form) {
+                var params = new URLSearchParams(new FormData(form));
+                Array.from(params.keys()).forEach(function(k) {
+                    if (params.get(k) === '') params.delete(k);
+                });
+                var qs = params.toString();
+                return form.getAttribute('action') + (qs ? '?' + qs : '');
+            }
+
+            function wireFilterForm(form) {
+                if (form._ajaxOk) return;
+                form._ajaxOk = true;
+
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    ajaxFetch(formUrl(form));
+                });
+
+                // Debounce every free-text filter field in the form (named
+                // "search" on most pages, but "emp_id" etc. on a couple) —
+                // anything a user types into, as opposed to a <select> they
+                // pick from.
+                var textInputs = form.querySelectorAll('input[type=text], input[type=search]');
+                textInputs.forEach(function(inp) {
+                    var t;
+                    inp.addEventListener('keyup', function(e) {
+                        if (e.key === 'Enter') { clearTimeout(t); ajaxFetch(formUrl(form)); return; }
+                        if (e.key === 'Escape') { clearTimeout(t); return; }
                         clearTimeout(t);
-                        if (inp.form) inp.form.submit();
-                        return;
+                        t = setTimeout(function() { ajaxFetch(formUrl(form)); }, 400);
+                    });
+                    if (inp.value) {
+                        inp.focus();
+                        var len = inp.value.length;
+                        inp.setSelectionRange(len, len);
                     }
-                    if (e.key === 'Escape') {
-                        clearTimeout(t);
-                        return;
-                    }
-                    clearTimeout(t);
-                    t = setTimeout(function() {
-                        if (inp.form) inp.form.submit();
-                    }, 400);
                 });
             }
+
+            function wireResetLink(el) {
+                if (el._ajaxOk) return;
+                el._ajaxOk = true;
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    ajaxFetch(el.getAttribute('href'));
+                });
+            }
+
+            // Pagination links render inside #ajax-results and point at the
+            // same path (just a different ?page=) — row-level links inside
+            // the same region point elsewhere, so "same pathname" is a safe
+            // way to tell the two apart without depending on paginator markup.
+            document.addEventListener('click', function(e) {
+                var a = e.target.closest('#ajax-results a[href]');
+                if (!a) return;
+                var dest;
+                try { dest = new URL(a.getAttribute('href'), location.href); } catch (_) { return; }
+                if (dest.pathname !== location.pathname) return;
+                e.preventDefault();
+                ajaxFetch(dest.pathname + dest.search);
+            });
+
             document.addEventListener('DOMContentLoaded', function() {
-                document.querySelectorAll('input[name=search], input[name=emp_id], input[name=tracker_emp]')
-                    .forEach(attach);
+                document.querySelectorAll('form[data-ajax-filter]').forEach(wireFilterForm);
+                document.querySelectorAll('[data-ajax-reset]').forEach(wireResetLink);
             });
         }());
     </script>

@@ -42,7 +42,7 @@
        class="btn sm <?php echo e($activeTab === 'team' ? 'acc' : ''); ?>">Team Application</a>
   </div>
   <?php endif; ?>
-  <form method="GET" action="<?php echo e(route('leave')); ?>"
+  <form method="GET" action="<?php echo e(route('leave')); ?>" data-ajax-filter
     style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     <?php if($isManager && !$isLeaveAdmin): ?>
       <input type="hidden" name="applications_tab" value="<?php echo e($activeTab); ?>">
@@ -65,10 +65,11 @@
       <input type="date" name="date_to" value="<?php echo e(request('date_to')); ?>" style="font-size:12px">
     </div>
     <button type="submit" class="btn sm acc">Filter</button>
-    <a href="<?php echo e(route('leave', ['applications_tab' => $activeTab])); ?>" class="btn sm">Reset</a>
+    <a href="<?php echo e(route('leave', ['applications_tab' => $activeTab])); ?>" class="btn sm" data-ajax-reset>Reset</a>
   </form>
 </div>
 
+<div id="ajax-results">
 <?php if($isManager && !$isLeaveAdmin): ?>
   <?php if($activeTab === 'team'): ?>
     
@@ -83,6 +84,7 @@
       'emptyText'    => 'No leave records found for your team.',
       'formId'       => 'team-applications-form',
       'tabValue'     => 'team',
+      'leaveSummaries' => $leaveSummaries,
     ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
   <?php else: ?>
     <?php echo $__env->make('leave._applications_table', [
@@ -96,6 +98,7 @@
       'emptyText'    => 'No leave records found.',
       'formId'       => 'self-applications-form',
       'tabValue'     => 'self',
+      'leaveSummaries' => [],
     ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
   <?php endif; ?>
 <?php else: ?>
@@ -110,8 +113,10 @@
     'viewerEmployeeId' => $viewerEmployeeId,
     'emptyText'    => 'No leave records found.',
     'formId'       => 'all-applications-form',
+    'leaveSummaries' => $leaveSummaries,
   ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 <?php endif; ?>
+</div> 
 
 
 <div class="modal" id="leave-modal">

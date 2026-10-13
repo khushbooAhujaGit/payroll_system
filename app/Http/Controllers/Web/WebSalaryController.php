@@ -85,13 +85,21 @@ class WebSalaryController extends Controller
             );
         }
 
+        // Full active-employee list for the "Add Salary" modal's employee
+        // picker — separate from $employees above, which is the paginated,
+        // already-has-a-salary list this page actually displays.
+        $allEmployeesForSalary = Employee::currentlyEmployed()
+            ->orderBy('first_name')
+            ->get(['id', 'employee_id', 'first_name', 'middle_name', 'last_name']);
+
         return view('salary.index', compact(
             'employees',
             'companyId',
             'isAdmin',
             'monthParam',
             'isHistoric',
-            'monthLabel'
+            'monthLabel',
+            'allEmployeesForSalary'
         ));
     }
 

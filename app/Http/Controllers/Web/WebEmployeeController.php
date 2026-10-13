@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\HR\StoreEmployeeRequest;
 use App\Imports\EmployeeImporter;
 use App\Models\Branch;
+use App\Models\Location;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Designation;
@@ -15,11 +16,13 @@ use App\Models\EmployeeDocument;
 use App\Models\Entity;
 use App\Models\HolidayCalendar;
 use App\Models\LeaveTrackerRecord;
+use App\Services\EmployeeDocumentDownloadService;
 use App\Services\EmployeeDocumentService;
 use App\Services\EmployeeService;
 use App\Services\ExcelImportService;
+use App\Services\LeaveEntitlementService;
+use App\Services\PublicFileStore;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class WebEmployeeController extends Controller
 {
@@ -27,7 +30,10 @@ class WebEmployeeController extends Controller
     public function __construct(
         protected EmployeeService $employeeService,
         protected ExcelImportService $excelImportService,
-        protected EmployeeDocumentService $employeeDocumentService
+        protected EmployeeDocumentService $employeeDocumentService,
+        protected PublicFileStore $publicFileStore,
+        protected EmployeeDocumentDownloadService $documentDownloadService,
+        protected LeaveEntitlementService $leaveEntitlementService
     ) {}
 
     public function index(Request $request)
@@ -55,34 +61,79 @@ class WebEmployeeController extends Controller
 
         // Companies only — entities are auto-resolved 1:1, never shown in UI
         $companies    = Company::where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        $departments  = Department::orderBy('name')->get();
-        $designations = Designation::orderBy('name')->get();
+        $departments  = Department::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
+        $designations = Designation::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
         $branches     = Branch::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
+        $locations    = Location::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
         $managers     = Employee::query()
                             ->where('employee_status', 'active')
                             ->orderBy('first_name')
                             ->get(['id', 'first_name', 'middle_name', 'last_name', 'employee_id']);
 
-        // Suggest next employee_id per company
+        // Reporting Manager defaults to only employees who already manage
+        // someone — the common case — with a "show all" toggle in the UI for
+        // picking someone new as a manager for the first time.
+        $currentManagerIds = Employee::whereNotNull('reporting_manager_id')
+            ->distinct()
+            ->pluck('reporting_manager_id');
+        $currentManagers = $managers->whereIn('id', $currentManagerIds)->values();
+
+        // Suggest next employee_id per company — the highest numeric
+        // sequence actually used, across EVERY employee_id ever assigned
+        // for that company (withTrashed(): a soft-deleted employee still
+        // occupies their old ID at the database level — see Employee's
+        // SoftDeletes — so excluding them here previously re-suggested an
+        // ID that was already taken and crashed on save). Also tolerates
+        // an optional "EMP" prefix, since both "202618055" and
+        // "EMP202618059"-style IDs exist side by side in real data; the
+        // suggestion reuses whichever style the highest match used.
         $suggestedEmpIdByCompany = [];
         foreach ($companies as $co) {
-            $lastId = Employee::where('company_id', $co->id)
+            $maxSeq = null;
+            $seqLen = 0;
+            $prefix = '';
+
+            Employee::withTrashed()
+                ->where('company_id', $co->id)
                 ->whereNotNull('employee_id')
-                ->orderByDesc('id')
-                ->value('employee_id');
-            $suggested = '';
-            if ($lastId && preg_match('/^\d{4}(\d+)$/', $lastId, $m)) {
-                $suggested = now()->year . ((int)$m[1] + 1);
-            } elseif ($lastId && preg_match('/(\d+)$/', $lastId, $m)) {
-                $suggested = now()->year . ((int)$m[1] + 1);
-            }
+                ->pluck('employee_id')
+                ->each(function ($empId) use (&$maxSeq, &$seqLen, &$prefix) {
+                    if (preg_match('/^(EMP)?(\d{4})(\d{1,6})$/i', $empId, $m)) {
+                        $seq = (int) $m[3];
+                        if ($maxSeq === null || $seq > $maxSeq) {
+                            $maxSeq = $seq;
+                            $seqLen = strlen($m[3]);
+                            $prefix = $m[1];
+                        }
+                    }
+                });
+
+            $suggested = $maxSeq !== null
+                ? $prefix . now()->year . str_pad((string) ($maxSeq + 1), $seqLen, '0', STR_PAD_LEFT)
+                : '';
             $suggestedEmpIdByCompany[$co->id] = $suggested;
         }
         $suggestedEmpId = $suggestedEmpIdByCompany[$companyId] ?? '';
 
+        // Per-employee CL/SL/CO + pending-count, for whoever's on this page
+        // of results only — same summary shown on the Leave Management
+        // page's reviewer tables, see WebLeaveController::buildLeaveSummaries().
+        $leaveSummaries = [];
+        foreach ($employees as $emp) {
+            $clsl = $this->leaveEntitlementService->currentCLSL($emp);
+            $leaveSummaries[$emp->id] = [
+                'cl'      => $clsl['Casual Leave'] ?? 0,
+                'sl'      => $clsl['Sick Leave'] ?? 0,
+                'co'      => $this->leaveEntitlementService->currentCompOff($emp),
+                'pending' => LeaveTrackerRecord::where('employee_id', $emp->id)
+                    ->where('is_active', true)->where('is_approved', false)->count(),
+            ];
+        }
+
         return view('employees.index', compact(
             'companies', 'employees', 'departments', 'designations',
-            'branches', 'managers', 'companyId', 'suggestedEmpId', 'suggestedEmpIdByCompany'
+            'branches', 'locations', 'managers', 'currentManagers', 'currentManagerIds',
+            'companyId', 'suggestedEmpId', 'suggestedEmpIdByCompany', 'leaveSummaries'
         ));
     }
 
@@ -107,15 +158,39 @@ class WebEmployeeController extends Controller
         return redirect()->route('employees')->with('success', 'Employee created successfully.');
     }
 
-    public function template()
+    public function template(Request $request)
     {
         $this->authorize('employee_export');
 
-        // Build dropdown lists from live DB data for the template
+        // Master-data columns are scoped to whichever company the Employees
+        // page currently has selected — same scoping the Department/
+        // Designation/Branch/Location master pages themselves use. Without
+        // this, these dropdowns previously showed every company's entries
+        // pooled together, which looked like "extra" unexplained options to
+        // whoever's only ever seen their own company's master lists.
+        $companyId = $this->resolveCompanyId($request);
+
+        // Build dropdown lists from live DB data for the template — matches
+        // the manual Add Employee form's fields exactly (see
+        // EmployeeImporter::getTemplateHeaders()). Fixed-choice columns
+        // (Gender, Employment Type, etc.) get the same option text shown on
+        // that form; master-data columns (Department/Designation/Branch)
+        // are dynamic. All dropdowns here are WARNING-style, not enforced —
+        // see ExcelImportService::applyDropdownValidation().
         $dropdowns = [
-            'Firm'              => Company::where('is_active', true)->orderBy('name')->pluck('name')->all(),
-            'Department'        => Department::orderBy('name')->distinct()->pluck('name')->all(),
-            'Designation Final' => Designation::orderBy('name')->distinct()->pluck('name')->all(),
+            'Company'            => Company::where('is_active', true)->orderBy('name')->pluck('name')->all(),
+            'Gender'             => ['Male', 'Female', 'Other'],
+            'Marital Status'     => ['Single', 'Married', 'Divorced', 'Widowed'],
+            'Employment Type'    => ['Full Time', 'Part Time', 'Contract', 'Intern', 'Consultant', 'Retainer'],
+            'Work Type'          => ['Work from Office', 'Work from Home', 'Hybrid', 'Client Location'],
+            'PF Applicable'      => ['Yes', 'No'],
+            'Department'         => Department::where('company_id', $companyId)->orderBy('name')->distinct()->pluck('name')->all(),
+            'Designation'        => Designation::where('company_id', $companyId)->orderBy('name')->distinct()->pluck('name')->all(),
+            'Branch'             => Branch::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->distinct()->pluck('name')->all(),
+            'Work Location'      => Location::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->distinct()->pluck('name')->all(),
+            // Plain Employee ID only (not "ID — Name") — matches how
+            // EmployeeImporter::resolveEmployee() actually looks these up.
+            'Reporting Manager'  => Employee::currentlyEmployed()->where('company_id', $companyId)->orderBy('employee_id')->pluck('employee_id')->filter()->all(),
         ];
 
         return $this->excelImportService->generateTemplate(EmployeeImporter::class, $dropdowns);
@@ -132,12 +207,29 @@ class WebEmployeeController extends Controller
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
         ]);
 
+        $importStartedAt = now();
+
         $result = $this->excelImportService->import(
             $request->file('file'),
             'employee',
             EmployeeImporter::class,
             ['company_id' => $companyId]
         );
+
+        // Try to fetch any OneDrive-linked documents this import just saved
+        // as pending, right away — the row-level DB transaction inside
+        // import() already committed by the time we get here, so a slow or
+        // failing Graph call can't roll back the employee data itself. Any
+        // document that fails here is left pending (source_url set,
+        // file_path null) exactly as before, retryable later via
+        // `php artisan documents:fetch-onedrive`.
+        if ($result['success'] ?? false) {
+            EmployeeDocument::whereNotNull('source_url')
+                ->whereNull('file_path')
+                ->where('updated_at', '>=', $importStartedAt)
+                ->get()
+                ->each(fn(EmployeeDocument $doc) => $this->documentDownloadService->download($doc));
+        }
 
         return $this->handleImportResult($result, 'employees', 'employee');
     }
@@ -204,6 +296,7 @@ class WebEmployeeController extends Controller
             'department_id'           => $employee->department_id,
             'designation_id'          => $employee->designation_id,
             'branch_id'               => $employee->branch_id,
+            'location_id'             => $employee->location_id,
             'reporting_manager_id'    => $employee->reporting_manager_id,
             'work_type'               => $employee->work_type,
             'client_name'             => $employee->client_name,
@@ -225,11 +318,16 @@ class WebEmployeeController extends Controller
             'account_holder_name'     => $employee->primaryBank?->account_holder_name,
             'emergency_contact_name'  => $employee->emergency_contact_name,
             'emergency_contact_phone' => $employee->emergency_contact_phone,
+            // A bulk-imported OneDrive link with no file downloaded yet has
+            // no file_path — surface it as pending rather than a broken
+            // download link (see EmployeeImporter's *Document Link columns).
             'documents'               => $employee->documents
                 ->whereIn('document_type', array_keys(EmployeeDocument::UPLOAD_TYPES))
-                ->mapWithKeys(fn($doc) => [$doc->document_type => [
+                ->mapWithKeys(fn($doc) => [$doc->document_type => $doc->file_path ? [
                     'file_name'     => $doc->file_name,
                     'download_url'  => route('employees.documents.download', $doc),
+                ] : [
+                    'pending_url'   => $doc->source_url,
                 ]]),
         ]);
     }
@@ -253,6 +351,7 @@ class WebEmployeeController extends Controller
             'department_id'           => 'nullable|exists:departments,id',
             'designation_id'          => 'nullable|exists:designations,id',
             'branch_id'               => 'nullable|exists:branches,id',
+            'location_id'             => 'nullable|exists:locations,id',
             'reporting_manager_id'    => 'nullable|exists:employees,id',
             'work_type'               => 'nullable|in:wfo,wfh,hybrid,client_location',
             'client_name'             => 'nullable|required_if:work_type,client_location|string|max:150',
@@ -307,6 +406,37 @@ class WebEmployeeController extends Controller
     }
 
     /**
+     * Marks an employee as having left and cuts off their portal access
+     * immediately — replaces the old bulk-import "Left Date" column, which
+     * risked accidentally deactivating people via routine re-imports.
+     * Reachable by HR (employee_edit) or that employee's own reporting
+     * manager — not gated by a single blanket permission, since a manager
+     * should only ever be able to do this for their own direct reports.
+     */
+    public function markAsLeft(Request $request, Employee $employee)
+    {
+        $user = auth()->user();
+        $isHr = $user->can('employee_edit');
+        $isTheirManager = $user->employee && $employee->reporting_manager_id === $user->employee->id;
+        abort_unless($isHr || $isTheirManager, 403, 'You can only mark your own direct reports as left.');
+
+        $validated = $request->validate([
+            'date_of_leaving' => 'required|date',
+        ]);
+
+        $employee->update([
+            'date_of_leaving' => $validated['date_of_leaving'],
+            'employee_status' => 'inactive',
+        ]);
+
+        // Cut off portal access immediately, regardless of the date entered —
+        // don't wait for the nightly sweep or their next login attempt.
+        $employee->user?->update(['is_active' => false]);
+
+        return redirect()->back()->with('success', $employee->full_name . ' marked as left. Portal access disabled.');
+    }
+
+    /**
      * Serves an employee's uploaded document — HR/Admin can view any
      * employee's, the employee themselves can only view their own.
      */
@@ -315,9 +445,9 @@ class WebEmployeeController extends Controller
         $isOwnDocument = auth()->user()->employee?->id === $document->employee_id;
         abort_unless($isOwnDocument || auth()->user()->can('employee_view'), 403);
 
-        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+        abort_unless($this->publicFileStore->exists($document->file_path), 404);
 
-        return Storage::disk('local')->download($document->file_path, $document->file_name);
+        return response()->download($this->publicFileStore->absolutePath($document->file_path), $document->file_name);
     }
 
     public function export(Request $request)

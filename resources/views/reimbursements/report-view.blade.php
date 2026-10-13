@@ -35,7 +35,7 @@
 </div>
 
 {{-- Search --}}
-<form method="GET" action="{{ route('reimbursements.report.view', $month) }}"
+<form method="GET" action="{{ route('reimbursements.report.view', $month) }}" data-ajax-filter
       class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <div class="fld" style="min-width:260px">
     <label>Search</label>
@@ -43,7 +43,7 @@
   </div>
   <button type="submit" class="btn acc">Search</button>
   @if($search !== '')
-    <a href="{{ route('reimbursements.report.view', $month) }}" class="btn">✕ Clear</a>
+    <a href="{{ route('reimbursements.report.view', $month) }}" class="btn" data-ajax-reset>✕ Clear</a>
     <span style="font-size:12px;color:var(--t2);padding-bottom:2px">
       {{ $rows->total() }} result(s) for "{{ e($search) }}"
     </span>
@@ -51,6 +51,7 @@
 </form>
 
 {{-- Report Table --}}
+<div id="ajax-results">
 <div class="card" style="overflow-x:auto">
   @if($rows->total() > 0)
   <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
@@ -72,6 +73,7 @@
         <th>Emp ID</th>
         <th>Employee Name</th>
         <th style="text-align:right">Amount (₹)</th>
+        <th>Category</th>
         <th>Remarks</th>
         <th style="text-align:center">Image</th>
       </tr>
@@ -84,6 +86,7 @@
         <td class="mono" style="font-size:11px">{{ $row['emp_id'] ?? '—' }}</td>
         <td style="font-weight:500">{{ $row['employee_name'] }}</td>
         <td style="text-align:right;font-weight:600">₹{{ number_format($row['amount'], 2) }}</td>
+        <td style="color:var(--t2);font-size:12px">{{ $row['category'] ?? '—' }}</td>
         <td style="color:var(--t2)">{{ $row['remarks'] ?? '—' }}</td>
         <td style="text-align:center">
           @if(!empty($row['image_filename']))
@@ -100,7 +103,7 @@
       <tr style="background:var(--s2);font-weight:700">
         <td colspan="4" style="text-align:right;padding:10px 12px">Total:</td>
         <td style="text-align:right;padding:10px 12px;color:var(--grn);font-size:14px">₹{{ number_format($totalAmount, 2) }}</td>
-        <td colspan="2"></td>
+        <td colspan="3"></td>
       </tr>
     </tfoot>
   </table>
@@ -111,7 +114,7 @@
   <div class="empty" style="padding:24px">
     <div class="ico">🔍</div>
     <p>No results for "{{ e($search) }}".</p>
-    <a href="{{ route('reimbursements.report.view', $month) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+    <a href="{{ route('reimbursements.report.view', $month) }}" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
   </div>
   @else
   <div class="empty">
@@ -120,5 +123,6 @@
   </div>
   @endif
 </div>
+</div> {{-- #ajax-results --}}
 
 @endsection

@@ -53,7 +53,25 @@ class WebBioIdController extends Controller
             ->orderBy('employee_id')
             ->get(['id', 'employee_id', 'first_name', 'middle_name', 'last_name']);
 
-        return view('bio-ids.index', compact('bioIds', 'machines', 'totalBioIds', 'employees'));
+        // Next expected Bio ID per machine — machine_name and bio_type are a
+        // fixed 1:1 pairing (see EmployeeBioId::MACHINE_MAP), so once the
+        // machine is picked on the Add form the correct type prefix and next
+        // sequence number are both already known.
+        $nextBioIdByMachine = [];
+        foreach (EmployeeBioId::MACHINE_MAP as $type => $machine) {
+            $maxNumber = EmployeeBioId::where('machine_name', $machine)->max('bio_number');
+            $nextBioIdByMachine[$machine] = $type . '-' . (((int) $maxNumber) + 1);
+        }
+
+        // Existing Bio ID(s) per employee, so the Add form can flag "already
+        // mapped" — an employee can legitimately have more than one (one per
+        // machine), so this is a heads-up, not a block.
+        $employeeBioIds = EmployeeBioId::orderBy('machine_name')
+            ->get(['employee_id', 'bio_id_full', 'machine_name'])
+            ->groupBy('employee_id')
+            ->map(fn($rows) => $rows->map(fn($r) => "{$r->bio_id_full} (Machine {$r->machine_name})")->values());
+
+        return view('bio-ids.index', compact('bioIds', 'machines', 'totalBioIds', 'employees', 'nextBioIdByMachine', 'employeeBioIds'));
     }
 
     public function template()
@@ -98,7 +116,7 @@ class WebBioIdController extends Controller
 
         $parsed = EmployeeBioId::parse($validated['bio_id_full']);
         if (!$parsed) {
-            return redirect()->back()->withErrors(['bio_id_full' => 'Invalid Bio ID format. Use I-20, II-5, K-3, etc.']);
+            return redirect()->back()->withErrors(['bio_id_full' => 'Invalid Bio ID format. Use I-20, II-5, III-3, or IV-3 (Other/WFH).']);
         }
 
         // Prevent duplicates
@@ -132,7 +150,7 @@ class WebBioIdController extends Controller
 
         $parsed = EmployeeBioId::parse($validated['bio_id_full']);
         if (!$parsed) {
-            return redirect()->back()->withErrors(['bio_id_full' => 'Invalid Bio ID format (expected I-20, II-5, etc.)']);
+            return redirect()->back()->withErrors(['bio_id_full' => 'Invalid Bio ID format (expected I-20, II-5, III-3, or IV-3).']);
         }
 
         $bioId->update(array_merge($parsed, [

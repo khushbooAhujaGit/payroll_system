@@ -40,6 +40,7 @@
 
           </td>
           <td>
+            <button type="button" class="btn sm" onclick="openEditCompany(<?php echo e($co->toJson()); ?>)">Edit</button>
             <form method="POST" action="<?php echo e(route('masters.company.destroy', $co)); ?>" style="display:inline">
               <?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?>
               <button type="button" class="btn sm" style="color:var(--red)"
@@ -152,6 +153,102 @@ unset($__errorArgs, $__bag); ?>
     </form>
   </div>
 </div>
+
+
+<div class="modal" id="company-edit-modal">
+  <div class="mb wide">
+    <div class="mh">
+      <span class="mt">Edit Company</span>
+      <button class="mc" onclick="cm('company-edit-modal')">✕</button>
+    </div>
+    <form method="POST" id="company-edit-form" action="">
+      <?php echo csrf_field(); ?>
+      <?php echo method_field('PUT'); ?>
+      <div style="margin:14px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
+        Basic Info
+      </div>
+      <div class="fg2">
+        <div class="fld">
+          <label class="req">Company Name</label>
+          <input type="text" name="name" id="edit-co-name" required>
+        </div>
+        <div class="fld">
+          <label>Short Name</label>
+          <input type="text" name="short_name" id="edit-co-short_name" maxlength="50">
+        </div>
+        <div class="fld">
+          <label>PAN</label>
+          <input type="text" name="pan" id="edit-co-pan" maxlength="10"
+            placeholder="ABCDE1234F" style="text-transform:uppercase"
+            oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="fld">
+          <label>TAN</label>
+          <input type="text" name="tan" id="edit-co-tan" maxlength="10"
+            style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="fld">
+          <label>GSTIN</label>
+          <input type="text" name="gstin" id="edit-co-gstin" maxlength="15"
+            style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="fld">
+          <label>CIN</label>
+          <input type="text" name="cin" id="edit-co-cin" maxlength="21">
+        </div>
+      </div>
+
+      <div style="margin:14px 0 8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">
+        Contact & Address
+      </div>
+      <div class="fg2">
+        <div class="fld">
+          <label>Email</label>
+          <input type="email" name="email" id="edit-co-email">
+        </div>
+        <div class="fld">
+          <label>Phone</label>
+          <input type="text" name="phone" id="edit-co-phone" maxlength="20">
+        </div>
+        <div class="fld">
+          <label>State</label>
+          <input type="text" name="state" id="edit-co-state" maxlength="100">
+        </div>
+        <div class="fld">
+          <label>City</label>
+          <input type="text" name="city" id="edit-co-city" maxlength="100">
+        </div>
+        <div class="fld full">
+          <label>Address</label>
+          <textarea name="address" id="edit-co-address" rows="2" style="width:100%"></textarea>
+        </div>
+      </div>
+
+      <div class="mf">
+        <button type="button" class="btn" onclick="cm('company-edit-modal')">Cancel</button>
+        <button type="submit" class="btn acc">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditCompany(co) {
+  document.getElementById('company-edit-form').action = '/masters/company/' + co.id;
+  document.getElementById('edit-co-name').value       = co.name       ?? '';
+  document.getElementById('edit-co-short_name').value = co.short_name ?? '';
+  document.getElementById('edit-co-pan').value        = co.pan        ?? '';
+  document.getElementById('edit-co-tan').value        = co.tan        ?? '';
+  document.getElementById('edit-co-gstin').value      = co.gstin      ?? '';
+  document.getElementById('edit-co-cin').value        = co.cin        ?? '';
+  document.getElementById('edit-co-email').value      = co.email      ?? '';
+  document.getElementById('edit-co-phone').value      = co.phone      ?? '';
+  document.getElementById('edit-co-state').value      = co.state      ?? '';
+  document.getElementById('edit-co-city').value       = co.city       ?? '';
+  document.getElementById('edit-co-address').value    = co.address    ?? '';
+  om('company-edit-modal');
+}
+</script>
 
 <?php if($errors->any()): ?>
   <script>document.addEventListener('DOMContentLoaded', () => om('company-modal'))</script>

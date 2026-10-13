@@ -114,7 +114,7 @@ class WebLoanController extends Controller
 
         $loanNumber = 'LN-' . now()->year . '-' . str_pad(EmployeeLoan::count() + 1, 4, '0', STR_PAD_LEFT);
 
-        EmployeeLoan::create([
+        $loan = EmployeeLoan::create([
             'loan_number'        => $loanNumber,
             'employee_id'        => $validated['employee_id'],
             'loan_type_id'       => $loanType->id,
@@ -129,6 +129,16 @@ class WebLoanController extends Controller
             'purpose'            => $validated['purpose'] ?? null,
             'created_by'         => auth()->id(),
         ]);
+
+        // Admin bypasses every other permission check in this app (see
+        // User::isSuperAdmin()) — requiring them to separately approve
+        // something they just created themselves was a redundant extra
+        // click, so it's auto-approved here. HR and anyone else with
+        // loan_tab_add still goes through the normal approval queue.
+        if (auth()->user()->isSuperAdmin()) {
+            $this->approveLoan($loan, now()->toDateString());
+            return redirect()->route('loans')->with('success', 'Advance created and approved.');
+        }
 
         return redirect()->route('loans')->with('success', 'Advance application submitted.');
     }
@@ -147,11 +157,23 @@ class WebLoanController extends Controller
             return redirect()->route('loans')->with('success', 'Loan rejected.');
         }
 
+        $this->approveLoan($loan, $request->disbursement_date);
+
+        return redirect()->route('loans')->with('success', 'Loan approved.');
+    }
+
+    /**
+     * Shared by the manual approval action and store()'s Admin
+     * auto-approval path — activates the loan, recalculates the EMI
+     * schedule for percent-based deductions, and generates installments.
+     */
+    protected function approveLoan(EmployeeLoan $loan, string $disbursementDate): void
+    {
         DB::beginTransaction();
         try {
             $updateData = [
                 'status'            => 'active',
-                'disbursement_date' => $request->disbursement_date,
+                'disbursement_date' => $disbursementDate,
                 'approved_by'       => auth()->id(),
                 'approved_at'       => now(),
             ];
@@ -177,8 +199,6 @@ class WebLoanController extends Controller
             DB::rollBack();
             throw $e;
         }
-
-        return redirect()->route('loans')->with('success', 'Loan approved.');
     }
 
     protected function calcEmi(float $principal, float $annualRate, int $months): float

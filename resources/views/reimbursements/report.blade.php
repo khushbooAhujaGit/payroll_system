@@ -41,21 +41,15 @@
 
 @section('content')
 
-{{-- Month + Search --}}
+{{-- Month — a real navigation, since it changes the Save/Re-save/Unlock
+     header actions and the locked-status banner too. --}}
 <form method="GET" action="{{ route('reimbursements.report') }}"
       class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <div class="fld" style="min-width:160px">
     <label>Month</label>
     <input type="month" name="month" value="{{ $month }}" required>
   </div>
-  <div class="fld" style="min-width:220px">
-    <label>Search</label>
-    <input type="text" name="search" value="{{ $search }}" placeholder="Emp ID or Employee Name…">
-  </div>
   <button type="submit" class="btn acc">View</button>
-  @if($search !== '')
-    <a href="{{ route('reimbursements.report', ['month' => $month]) }}" class="btn">✕ Clear</a>
-  @endif
   @if($isLocked)
     <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);padding-bottom:2px">
       🔒 <strong>Saved</strong>
@@ -70,6 +64,21 @@
   @endif
 </form>
 
+{{-- Search — narrows the already-loaded month, so this one is AJAX --}}
+<form method="GET" action="{{ route('reimbursements.report') }}" data-ajax-filter
+      class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+  <input type="hidden" name="month" value="{{ $month }}">
+  <div class="fld" style="min-width:220px">
+    <label>Search</label>
+    <input type="text" name="search" value="{{ $search }}" placeholder="Emp ID or Employee Name…">
+  </div>
+  <button type="submit" class="btn acc">Search</button>
+  @if($search !== '')
+    <a href="{{ route('reimbursements.report', ['month' => $month]) }}" class="btn" data-ajax-reset>✕ Clear</a>
+  @endif
+</form>
+
+<div id="ajax-results">
 {{-- Summary --}}
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px">
   <div class="card" style="padding:14px 18px">
@@ -101,7 +110,7 @@
     <a href="{{ route('reimbursements.tracker', ['month' => $month]) }}" class="btn acc" style="margin-top:10px">Go to Tracker →</a>
   </div>
 </div>
-@else
+@else {{-- #ajax-results: no-rows branch --}}
 
 {{-- Info Banner --}}
 <div class="card" style="margin-bottom:14px;padding:12px 16px;font-size:12px;color:var(--t2);line-height:1.6">
@@ -172,10 +181,11 @@
     <div class="empty" style="padding:24px">
       <div class="ico">🔍</div>
       <p>No results for "{{ e($search) }}".</p>
-      <a href="{{ route('reimbursements.report', ['month' => $month]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+      <a href="{{ route('reimbursements.report', ['month' => $month]) }}" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
     </div>
   @endif
 </div>
 @endif
+</div> {{-- #ajax-results --}}
 
 @endsection

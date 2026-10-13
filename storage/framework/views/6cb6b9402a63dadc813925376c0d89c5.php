@@ -11,7 +11,7 @@
 <?php $__env->startSection('content'); ?>
 
   
-  <form method="GET" action="<?php echo e(route('employees')); ?>" class="card"
+  <form method="GET" action="<?php echo e(route('employees')); ?>" class="card" data-ajax-filter
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div class="fld" style="flex:1;min-width:160px">
       <label>Search</label>
@@ -39,9 +39,10 @@
       </select>
     </div>
     <button type="submit" class="btn acc">Filter</button>
-    <a href="<?php echo e(route('employees')); ?>" class="btn">Reset</a>
+    <a href="<?php echo e(route('employees')); ?>" class="btn" data-ajax-reset>Reset</a>
   </form>
 
+  <div id="ajax-results">
   
   <form id="bulk-form" method="POST" action="<?php echo e(route('employees.bulk_destroy')); ?>" style="display:none">
     <?php echo csrf_field(); ?>
@@ -98,11 +99,16 @@
             <th>Designation</th>
             <th>Status</th>
             <th>Joined</th>
+            <th>CL</th>
+            <th>SL</th>
+            <th>CO</th>
+            <th>Pending</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <?php $leaveSummary = $leaveSummaries[$emp->id] ?? null; ?>
             <tr>
               <td style="text-align:center">
                 <input type="checkbox" class="emp-chk" value="<?php echo e($emp->id); ?>"
@@ -120,8 +126,16 @@
                 default      => 'gr'
               }); ?>"><?php echo e(str_replace('_', ' ', $emp->employee_status)); ?></span></td>
               <td><?php echo e($emp->date_of_joining?->format('d M Y') ?? '—'); ?></td>
+              <td class="mono"><?php echo e($leaveSummary['cl'] ?? '—'); ?></td>
+              <td class="mono"><?php echo e($leaveSummary['sl'] ?? '—'); ?></td>
+              <td class="mono"><?php echo e($leaveSummary['co'] ?? '—'); ?></td>
+              <td class="mono"><?php echo e($leaveSummary['pending'] ?? '—'); ?></td>
               <td>
                 <button class="btn sm" onclick="openEditEmp(<?php echo e($emp->id); ?>)">Edit</button>
+                <?php if($emp->employee_status !== 'inactive'): ?>
+                <button class="btn sm" style="color:var(--yel)"
+                  onclick="openMarkAsLeft(<?php echo e($emp->id); ?>, '<?php echo e(addslashes($emp->full_name)); ?>')">Mark as Left</button>
+                <?php endif; ?>
                 <form method="POST" action="<?php echo e(route('employees.destroy', $emp)); ?>" style="display:inline">
                   <?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?>
                   <button type="button" class="btn sm" style="color:var(--red)"
@@ -140,6 +154,7 @@
       </div>
     <?php endif; ?>
   </div>
+  </div> 
 
   
   <div class="modal" id="emp-modal">
@@ -169,7 +184,7 @@ endif;
 unset($__errorArgs, $__bag); ?>>
               <option value="">Select Company</option>
               <?php $__currentLoopData = $companies; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $co): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                <option value="<?php echo e($co->id); ?>"><?php echo e($co->name); ?></option>
+                <option value="<?php echo e($co->id); ?>" <?php echo e(old('company_id') == $co->id ? 'selected' : ''); ?>><?php echo e($co->name); ?></option>
               <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
             </select>
             <?php $__errorArgs = ['company_id'];
@@ -330,6 +345,26 @@ unset($__errorArgs, $__bag); ?>
             <input type="text" name="alternate_phone" pattern="\d{10}" maxlength="10"
               value="<?php echo e(old('alternate_phone')); ?>" placeholder="10 digits">
           </div>
+          <div class="fld full">
+            <label>Current Address</label>
+            <textarea name="current_address" rows="2" maxlength="500"
+              <?php $__errorArgs = ['current_address'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>><?php echo e(old('current_address')); ?></textarea>
+            <?php $__errorArgs = ['current_address'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
+          </div>
         </div>
 
         
@@ -377,7 +412,7 @@ unset($__errorArgs, $__bag); ?>>
           </div>
           <div class="fld">
             <label class="req">Work Type</label>
-            <select name="work_type" id="add-work-type" required onchange="toggleClientName('add', this.value)"
+            <select name="work_type" id="add-work-type" required onchange="toggleClientName('add', this.value); toggleBranchLocation('add', this.value)"
               <?php $__errorArgs = ['work_type'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -422,7 +457,7 @@ unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
             <label class="req">Department</label>
-            <select name="department_id" required <?php $__errorArgs = ['department_id'];
+            <select name="department_id" id="add-department" data-old-value="<?php echo e(old('department_id')); ?>" required <?php $__errorArgs = ['department_id'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
@@ -446,7 +481,7 @@ unset($__errorArgs, $__bag); ?>
           </div>
           <div class="fld">
             <label class="req">Designation</label>
-            <select name="designation_id" required <?php $__errorArgs = ['designation_id'];
+            <select name="designation_id" id="add-designation" data-old-value="<?php echo e(old('designation_id')); ?>" required <?php $__errorArgs = ['designation_id'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
@@ -468,9 +503,9 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?>
           </div>
-          <div class="fld">
-            <label class="req">Branch / Location</label>
-            <select name="branch_id" id="add-branch" required <?php $__errorArgs = ['branch_id'];
+          <div class="fld" id="add-branch-wrap" style="display:<?php echo e(old('work_type', 'wfo') !== 'wfh' ? 'flex' : 'none'); ?>">
+            <label class="req" id="add-branch-label">Branch</label>
+            <select name="branch_id" id="add-branch" data-old-value="<?php echo e(old('branch_id')); ?>" <?php $__errorArgs = ['branch_id'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
@@ -492,9 +527,33 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?>
           </div>
+          <div class="fld" id="add-location-wrap" style="display:<?php echo e(in_array(old('work_type'), ['wfh', 'hybrid', 'client_location'], true) ? 'flex' : 'none'); ?>">
+            <label class="req" id="add-location-label">Location</label>
+            <select name="location_id" id="add-location" data-old-value="<?php echo e(old('location_id')); ?>" <?php $__errorArgs = ['location_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+              <option value="">Select Location</option>
+              <?php $__currentLoopData = $locations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $l): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                <option value="<?php echo e($l->id); ?>" <?php echo e(old('location_id') == $l->id ? 'selected' : ''); ?>><?php echo e($l->name); ?></option>
+              <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+            </select>
+            <?php $__errorArgs = ['location_id'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
+          </div>
           <div class="fld">
             <label class="req">Reporting Manager</label>
-            <select name="reporting_manager_id" required <?php $__errorArgs = ['reporting_manager_id'];
+            <select name="reporting_manager_id" id="add-manager" required <?php $__errorArgs = ['reporting_manager_id'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
@@ -503,7 +562,7 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?>>
               <option value="">Select Manager</option>
-              <?php $__currentLoopData = $managers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mgr): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+              <?php $__currentLoopData = $currentManagers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mgr): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <option value="<?php echo e($mgr->id); ?>" <?php echo e(old('reporting_manager_id') == $mgr->id ? 'selected' : ''); ?>>
                   <?php echo e($mgr->employee_id); ?> — <?php echo e($mgr->full_name); ?>
 
@@ -518,6 +577,12 @@ $message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($me
 if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t3);font-weight:400;margin-top:5px;cursor:pointer">
+              <input type="checkbox" id="add-manager-show-all" style="width:14px;height:14px"
+                onchange="toggleAllManagers('add', this.checked)"
+                <?php echo e(old('reporting_manager_id') && !in_array(old('reporting_manager_id'), $currentManagerIds->all()) ? 'checked' : ''); ?>>
+              Not listed? Show all employees
+            </label>
           </div>
           <div class="fld">
             <label class="req">Probation Period (months)</label>
@@ -779,10 +844,13 @@ unset($__errorArgs, $__bag); ?>
           Documents
         </div>
         <div class="fg2">
+          <?php $requiredDocTypes = ['pan', 'aadhaar', 'marksheet', 'cancelled_cheque']; ?>
           <?php $__currentLoopData = \App\Models\EmployeeDocument::UPLOAD_TYPES; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $docType => $docLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
           <div class="fld">
-            <label><?php echo e($docLabel); ?></label>
+            <label class="<?php echo e(in_array($docType, $requiredDocTypes) ? 'req' : ''); ?>"><?php echo e($docLabel); ?></label>
             <input type="file" name="documents[<?php echo e($docType); ?>]" accept=".pdf,.jpg,.jpeg,.png"
+              <?php echo e(in_array($docType, $requiredDocTypes) ? 'required' : ''); ?>
+
               <?php $__errorArgs = ["documents.$docType"];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -916,7 +984,7 @@ unset($__errorArgs, $__bag); ?>
             </div>
             <div class="fld">
               <label>Work Type</label>
-              <select name="work_type" id="e-work-type" onchange="toggleClientName('e', this.value)">
+              <select name="work_type" id="e-work-type" onchange="toggleClientName('e', this.value); toggleBranchLocation('e', this.value)">
                 <option value="wfo">Work from Office</option>
                 <option value="wfh">Work from Home</option>
                 <option value="hybrid">Hybrid</option>
@@ -945,8 +1013,8 @@ unset($__errorArgs, $__bag); ?>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
               </select>
             </div>
-            <div class="fld">
-              <label>Branch / Location</label>
+            <div class="fld" id="e-branch-wrap">
+              <label id="e-branch-label">Branch</label>
               <select name="branch_id" id="e-branch">
                 <option value="">Select Branch</option>
                 <?php $__currentLoopData = $branches; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $b): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
@@ -954,14 +1022,28 @@ unset($__errorArgs, $__bag); ?>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
               </select>
             </div>
+            <div class="fld" id="e-location-wrap" style="display:none">
+              <label id="e-location-label">Location</label>
+              <select name="location_id" id="e-location">
+                <option value="">Select Location</option>
+                <?php $__currentLoopData = $locations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $l): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                  <option value="<?php echo e($l->id); ?>"><?php echo e($l->name); ?></option>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+              </select>
+            </div>
             <div class="fld">
               <label>Reporting Manager</label>
               <select name="reporting_manager_id" id="e-manager">
                 <option value="">Select Manager</option>
-                <?php $__currentLoopData = $managers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mgr): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                <?php $__currentLoopData = $currentManagers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mgr): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                   <option value="<?php echo e($mgr->id); ?>"><?php echo e($mgr->employee_id); ?> — <?php echo e($mgr->full_name); ?></option>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
               </select>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t3);font-weight:400;margin-top:5px;cursor:pointer">
+                <input type="checkbox" id="e-manager-show-all" style="width:14px;height:14px"
+                  onchange="toggleAllManagers('e', this.checked)">
+                Not listed? Show all employees
+              </label>
             </div>
             <div class="fld">
               <label>Date of Joining</label>
@@ -1097,13 +1179,39 @@ unset($__errorArgs, $__bag); ?>
     </div>
   </div>
 
+  
+  <div class="modal" id="mark-left-modal">
+    <div class="mb">
+      <div class="mh">
+        <span class="mt" id="mark-left-title">Mark as Left</span>
+        <button class="mc" onclick="cm('mark-left-modal')">✕</button>
+      </div>
+      <form method="POST" id="mark-left-form">
+        <?php echo csrf_field(); ?>
+        <div class="fg2">
+          <div class="fld full">
+            <label class="req">Date of Leaving</label>
+            <input type="date" name="date_of_leaving" id="mark-left-date" required value="<?php echo e(now()->toDateString()); ?>">
+            <div style="font-size:11px;color:var(--t3);margin-top:4px">
+              Their portal login is deactivated immediately, regardless of the date entered here.
+            </div>
+          </div>
+        </div>
+        <div class="mf">
+          <button type="button" class="btn" onclick="cm('mark-left-modal')">Cancel</button>
+          <button type="submit" class="btn" style="background:var(--yel);border-color:var(--yel);color:#fff">Confirm — Mark as Left</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <?php echo $__env->make('partials.upload-modal', [
     'uploadId'      => 'upload-modal',
     'uploadTitle'   => 'Bulk Upload Employees',
     'uploadRoute'   => 'employees.import',
     'templateRoute' => 'employees.template',
     'uploadFields'  => [],
-    'uploadHint'    => 'Download the template, fill employee data (one row per employee), then upload. Existing records matched by mobile number will be updated.',
+    'uploadHint'    => 'Download the template, fill employee data (one row per employee), then upload. Existing records matched by Employee ID will be updated — everything else is created new.',
   ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
   <?php echo $__env->make('partials.upload-modal', [
@@ -1116,7 +1224,24 @@ unset($__errorArgs, $__bag); ?>
   ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
   <?php if($errors->any()): ?>
-    <script>document.addEventListener('DOMContentLoaded',()=>om('emp-modal'))</script>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      om('emp-modal');
+      <?php if(old('company_id')): ?>
+        // Branch options only ever get populated by onCompanyChange()'s fetch —
+        // re-fire it so the Branch dropdown isn't stuck empty after the reload.
+        onCompanyChange('<?php echo e(old('company_id')); ?>', true);
+      <?php endif; ?>
+      <?php if(old('reporting_manager_id') && !in_array(old('reporting_manager_id'), $currentManagerIds->all())): ?>
+        // The previously chosen manager isn't in the default "current
+        // managers only" list — switch to "show all" so old() can find them.
+        document.getElementById('add-manager-show-all').checked = true;
+        toggleAllManagers('add', true);
+        document.getElementById('add-manager').value = '<?php echo e(old('reporting_manager_id')); ?>';
+        if (window._ssSync) window._ssSync(document.getElementById('add-manager'));
+      <?php endif; ?>
+    });
+    </script>
   <?php endif; ?>
 
   <?php $__env->startPush('scripts'); ?>
@@ -1152,9 +1277,11 @@ unset($__errorArgs, $__bag); ?>
       setVal('e-work-type',     d.work_type);
       setVal('e-client-name',   d.client_name);
       toggleClientName('e', d.work_type);
+      toggleBranchLocation('e', d.work_type);
       setVal('e-dept',          d.department_id);
       setVal('e-desig',         d.designation_id);
       setVal('e-branch',        d.branch_id);
+      setVal('e-location',      d.location_id);
       setVal('e-manager',       d.reporting_manager_id);
       setVal('e-doj', d.date_of_joining);
       // Auto-fill date_of_leaving from tracker when not set on the employee record
@@ -1183,13 +1310,23 @@ unset($__errorArgs, $__bag); ?>
       setVal('e-emg-name',      d.emergency_contact_name);
       setVal('e-emg-phone',     d.emergency_contact_phone);
 
-      // Documents — show a "view current" link for any type already uploaded
+      // Documents — show a "view current" link for any type already uploaded,
+      // or a "link pending" note for a bulk-imported OneDrive link that
+      // hasn't been downloaded into a real file yet (see EmployeeImporter's
+      // *Document Link columns — no file_path means nothing to view yet).
       document.querySelectorAll('[id^="e-doc-"][id$="-link"]').forEach(a => a.style.display = 'none');
       Object.entries(d.documents || {}).forEach(([type, doc]) => {
         const link = document.getElementById('e-doc-' + type + '-link');
         if (!link) return;
-        link.href = doc.download_url;
-        link.textContent = '(view: ' + doc.file_name + ')';
+        if (doc.download_url) {
+          link.href = doc.download_url;
+          link.textContent = '(view: ' + doc.file_name + ')';
+          link.removeAttribute('data-pending');
+        } else if (doc.pending_url) {
+          link.removeAttribute('href');
+          link.textContent = '(🔗 link saved, not yet downloaded)';
+          link.setAttribute('data-pending', '1');
+        }
         link.style.display = 'inline';
       });
 
@@ -1215,35 +1352,99 @@ unset($__errorArgs, $__bag); ?>
   // Company-based employee ID suggestion map (company_id → suggested emp ID string)
   const _empIdByCompany = <?php echo json_encode($suggestedEmpIdByCompany, 15, 512) ?>;
 
-  function onCompanyChange(companyId) {
-    const empIdInput = document.querySelector('#emp-modal input[name="employee_id"]');
-    if (empIdInput) {
-      const suggested = _empIdByCompany[companyId] || '';
-      empIdInput.value       = suggested;
-      empIdInput.placeholder = suggested || 'e.g. 202618053';
+  // Reporting Manager option sets — default is "current managers only",
+  // toggle swaps in the full employee list for picking someone new.
+  const _allManagerOptions = <?php echo json_encode($managers->map(fn($m) => ['id' => $m->id, 'label' => $m->employee_id . ' — ' . $m->full_name])->values(), 512) ?>;
+  const _currentManagerOptions = <?php echo json_encode($currentManagers->map(fn($m) => ['id' => $m->id, 'label' => $m->employee_id . ' — ' . $m->full_name])->values(), 512) ?>;
+
+  function openMarkAsLeft(empId, name) {
+    document.getElementById('mark-left-title').textContent = 'Mark as Left — ' + name;
+    document.getElementById('mark-left-form').action = '/employees/' + empId + '/mark-as-left';
+    document.getElementById('mark-left-date').value = new Date().toISOString().slice(0, 10);
+    om('mark-left-modal');
+  }
+
+  function toggleAllManagers(prefix, showAll) {
+    const select = document.getElementById(prefix + '-manager');
+    if (!select) return;
+    const keepValue = select.value;
+    const options = showAll ? _allManagerOptions : _currentManagerOptions;
+    select.innerHTML = '<option value="">Select Manager</option>';
+    options.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.id;
+      opt.textContent = o.label;
+      select.appendChild(opt);
+    });
+    select.value = keepValue; // preserved if still present in the new option set
+    // Force-enhance in case this select started under MIN_OPTS (the
+    // "current managers" default list is often just 2-3 people) and never
+    // got the search box in the first place — a no-op if already enhanced.
+    if (window._ssInit) window._ssInit(select);
+    if (window._ssSync) window._ssSync(select);
+  }
+
+  // Force-enhance both manager selects immediately, regardless of how many
+  // options the default "current managers" list has — without this, a
+  // company with under 5 current managers never gets the search box at
+  // all, even after switching to "show all employees".
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window._ssInit) {
+      window._ssInit(document.getElementById('add-manager'));
+      window._ssInit(document.getElementById('e-manager'));
+    }
+    // Branch/Location visibility+required needs to match the Add form's
+    // default Work Type on load — otherwise Branch stays optional client-side
+    // until the user actually touches the Work Type dropdown.
+    toggleBranchLocation('add', document.getElementById('add-work-type')?.value || 'wfo');
+  });
+
+  function onCompanyChange(companyId, isRestoring = false) {
+    // isRestoring=true means this is re-firing after a validation error to
+    // rebuild the Branch list (which is only ever populated by this fetch,
+    // never by the initial page load) — don't clobber whatever the user
+    // already typed into Employee ID in that case.
+    if (!isRestoring) {
+      const empIdInput = document.querySelector('#emp-modal input[name="employee_id"]');
+      if (empIdInput) {
+        const suggested = _empIdByCompany[companyId] || '';
+        empIdInput.value       = suggested;
+        empIdInput.placeholder = suggested || 'e.g. 202618053';
+      }
     }
 
-    // Branches belong to a company — refresh the list instead of showing
-    // whatever company the Employees page happens to be filtered to.
-    const branchSelect = document.getElementById('add-branch');
-    if (!branchSelect) return;
-    branchSelect.innerHTML = '<option value="">Loading…</option>';
+    // Branches/Locations/Departments/Designations all belong to a company —
+    // refresh the lists instead of showing whatever company the Employees
+    // page happens to be filtered to.
+    _fetchOptionsByCompany('add-branch',      '<?php echo e(route("masters.branches.by-company")); ?>',      companyId, 'Select Branch',      isRestoring);
+    _fetchOptionsByCompany('add-location',    '<?php echo e(route("masters.locations.by-company")); ?>',     companyId, 'Select Location',    isRestoring);
+    _fetchOptionsByCompany('add-department',  '<?php echo e(route("masters.departments.by-company")); ?>',   companyId, 'Select Department',  isRestoring);
+    _fetchOptionsByCompany('add-designation', '<?php echo e(route("masters.designations.by-company")); ?>',  companyId, 'Select Designation', isRestoring);
+  }
+
+  function _fetchOptionsByCompany(selectId, url, companyId, placeholder, isRestoring) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">Loading…</option>';
     if (!companyId) {
-      branchSelect.innerHTML = '<option value="">Select Branch</option>';
+      select.innerHTML = `<option value="">${placeholder}</option>`;
       return;
     }
-    fetch('<?php echo e(route("masters.branches.by-company")); ?>?company_id=' + encodeURIComponent(companyId))
+    fetch(url + '?company_id=' + encodeURIComponent(companyId))
       .then(r => r.json())
-      .then(branches => {
-        branchSelect.innerHTML = '<option value="">Select Branch</option>';
-        branches.forEach(b => {
+      .then(rows => {
+        select.innerHTML = `<option value="">${placeholder}</option>`;
+        rows.forEach(row => {
           const opt = document.createElement('option');
-          opt.value = b.id;
-          opt.textContent = b.name;
-          branchSelect.appendChild(opt);
+          opt.value = row.id;
+          opt.textContent = row.name;
+          select.appendChild(opt);
         });
+        if (isRestoring && select.dataset.oldValue) {
+          select.value = select.dataset.oldValue;
+        }
       })
-      .catch(() => { branchSelect.innerHTML = '<option value="">Select Branch</option>'; });
+      .catch(() => { select.innerHTML = `<option value="">${placeholder}</option>`; });
   }
 
   // Work Type = Client Location -> show/require the Client Name field.
@@ -1255,6 +1456,33 @@ unset($__errorArgs, $__bag); ?>
     wrap.style.display = show ? 'flex' : 'none';
     input.required = show;
     if (!show) input.value = '';
+  }
+
+  // Work Type drives which of Branch / Location apply — Work from Office
+  // needs Branch, Work from Home needs Location, Hybrid needs both, Client
+  // Location needs Location too (client_name additionally identifies the
+  // client — see toggleClientName).
+  function toggleBranchLocation(prefix, workType) {
+    const branchWrap    = document.getElementById(prefix + '-branch-wrap');
+    const locationWrap  = document.getElementById(prefix + '-location-wrap');
+    const branchSelect  = branchWrap?.querySelector('select[name="branch_id"]');
+    const locationSelect= locationWrap?.querySelector('select[name="location_id"]');
+    if (!branchWrap || !locationWrap || !branchSelect || !locationSelect) return;
+
+    // Unset/unrecognized work type (legacy employees created before this
+    // split existed) falls back to showing Branch only, matching the old
+    // combined "Branch / Location" field's behavior — never hide a value
+    // that's already saved just because work_type wasn't set.
+    const known = ['wfo', 'wfh', 'hybrid', 'client_location'].includes(workType);
+    const showBranch   = !known || workType === 'wfo' || workType === 'hybrid';
+    const showLocation = known && (workType === 'wfh' || workType === 'hybrid' || workType === 'client_location');
+
+    branchWrap.style.display   = showBranch ? 'flex' : 'none';
+    locationWrap.style.display = showLocation ? 'flex' : 'none';
+    branchSelect.required   = showBranch;
+    locationSelect.required = showLocation;
+    if (!showBranch)   branchSelect.value = '';
+    if (!showLocation) locationSelect.value = '';
   }
 
   // PF Applicable checked -> UAN Number becomes required.
@@ -1362,6 +1590,13 @@ unset($__errorArgs, $__bag); ?>
   <?php endif; ?>
 
   document.addEventListener('DOMContentLoaded', restoreEmpSelections);
+
+  // Searching/filtering now swaps #ajax-results in place instead of a full
+  // reload — _empStoreKey (and _totalCount/_pageCount) are baked in from
+  // PHP at page load and can't follow a filter change made via AJAX, so
+  // treat a refreshed region the same way the per-filter storage key
+  // already implies: a changed filter starts a fresh selection.
+  document.getElementById('ajax-results')?.addEventListener('ajax:loaded', clearAllPages);
 
   function submitBulk(action) {
     const stored = _empGetStored();

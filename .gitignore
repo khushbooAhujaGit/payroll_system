@@ -3,6 +3,17 @@
 .env
 /public/storage
 /public/salary-archives
+/public/payslips
+/public/form16
+/public/employee_documents
+/public/reimbursement_docs
+/public/reimbursements
+/public/leave_docs
+/public/challans
+/public/helpdesk
+/public/contractor_invoices
+/public/poi
 /storage/*.key
 .claude
 /{public,app
+setup.zip

@@ -201,6 +201,15 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .mc:hover { color: var(--txt); }
 .mf { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--b1); }
 
+/* ── DASHBOARD ─────────────────────────────── */
+.stat-ico { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; margin-bottom: 10px; }
+.qa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.qa-item { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid var(--b1); border-radius: 8px; text-decoration: none; color: var(--txt); font-size: 12px; font-weight: 600; transition: all .12s; }
+.qa-item:hover { border-color: var(--acc); background: var(--acc2); color: var(--acc); }
+.qa-item .ico { font-size: 15px; }
+.avatar-sm { width: 24px; height: 24px; border-radius: 50%; background: var(--acc); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.name-cell { display: flex; align-items: center; gap: 8px; }
+
 /* ── MISC ─────────────────────────────────── */
 .loader { color: var(--t3); padding: 50px; text-align: center; }
 .sp { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--b2); border-top-color: var(--acc); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 7px; vertical-align: middle; }
@@ -224,3 +233,50 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .search-box { background: var(--bg); border: 1px solid var(--b1); border-radius: 6px; padding: 5px 10px; color: var(--txt); font-size: 12px; width: 200px; font-family: inherit; outline: none; }
 .search-box:focus { border-color: var(--acc); }
 @media print { aside,.hdr,.btn,button { display: none !important } .pg { overflow: visible !important; padding: 0 !important } }
+
+/* ── MOBILE (≤768px) ──────────────────────────
+   Nothing below this point existed before — the whole layout was a fixed
+   228px-sidebar flex row with fixed-width modals and fixed-column grids,
+   unusable under ~900px. Sidebar becomes an off-canvas drawer (toggled by
+   a hamburger button injected into .hdr, see layouts/app.blade.php), all
+   multi-column grids/forms collapse to one column, and modals/tables are
+   capped to the viewport instead of forcing horizontal page scroll. */
+@media (max-width: 768px) {
+  aside {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+    box-shadow: 0 0 0 9999px rgba(17,24,39,0);
+    transition-property: transform, box-shadow;
+  }
+  aside.open {
+    transform: translateX(0);
+    box-shadow: 0 0 0 9999px rgba(17,24,39,.4);
+  }
+  .hamburger {
+    display: flex !important;
+  }
+  .hdr { padding: 0 12px; gap: 8px; }
+  .hdr h2 { font-size: 13px; }
+  .pg { padding: 14px; }
+
+  .g4, .g3, .g2, .fg2 { grid-template-columns: 1fr; }
+  .qa-grid { grid-template-columns: 1fr; }
+
+  .mo, .mb { width: 94vw !important; max-width: 94vw; padding: 18px; max-height: 92vh; }
+
+  /* Filter/form rows built as flex+gap+wrap with per-field min-width (the
+     dominant pattern across the app) already wrap onto new lines at narrow
+     widths, but a min-width pinned at e.g. 200-220px can still force the
+     row wider than a small phone's 100vw — relax it so fields go full
+     width on their own line instead of causing side-scroll. */
+  .fld { min-width: 0 !important; flex: 1 1 100%; }
+
+  .cal-grid { gap: 3px; }
+  .cal-day { min-height: 54px; padding: 4px; }
+
+  table { font-size: 11.5px; }
+  th, td { padding: 7px 8px; }
+}

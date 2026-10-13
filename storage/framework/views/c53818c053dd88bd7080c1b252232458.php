@@ -1,0 +1,2 @@
+<?php $__env->startSection('content'); ?> <?php $__env->stopSection(); ?>
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH D:\hrms-payroll\storage\framework\views/c6eb18e8022760db6ef3a2e7aa25070e.blade.php ENDPATH**/ ?>

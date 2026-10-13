@@ -5,10 +5,13 @@ namespace App\Services;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 
 class EmployeeDocumentService
 {
+    public function __construct(protected PublicFileStore $files)
+    {
+    }
+
     /**
      * Stores one uploaded file per document type — replacing whatever was
      * previously uploaded for that type/employee, so there's always at most
@@ -23,14 +26,14 @@ class EmployeeDocumentService
                 continue;
             }
 
-            $path = $file->store("employee_documents/{$employee->id}", 'local');
+            $path = $this->files->store($file, 'employee_documents');
 
             $existing = EmployeeDocument::where('employee_id', $employee->id)
                 ->where('document_type', $type)
                 ->first();
 
             if ($existing) {
-                Storage::disk('local')->delete($existing->file_path);
+                $this->files->delete($existing->file_path);
                 $existing->delete();
             }
 

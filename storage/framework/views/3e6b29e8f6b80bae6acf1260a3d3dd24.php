@@ -5,7 +5,7 @@
   <button class="btn" onclick="om('img-upload-modal')">📸 Upload Images</button>
   <a href="<?php echo e(route('reimbursements.tracker.template')); ?>" class="btn">📄 Template</a>
   <button class="btn" onclick="om('import-modal')">📤 Import</button>
-  <button class="btn acc" onclick="om('add-modal')">+ Add Row</button>
+  <button class="btn acc" onclick="om('add-modal')">+ Add Reimbursement</button>
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('content'); ?>
@@ -17,19 +17,9 @@
     <label>Month</label>
     <input type="month" name="month" value="<?php echo e($month); ?>" required>
   </div>
-  <div class="fld" style="min-width:240px">
-    <label>Search by Emp ID / Name</label>
-    <input type="text" name="search" value="<?php echo e($search); ?>" placeholder="e.g. EMP001 or John Doe">
-  </div>
   <button type="submit" class="btn acc">View</button>
-  <?php if($search !== ''): ?>
-    <a href="<?php echo e(route('reimbursements.tracker', ['month' => $month])); ?>" class="btn">✕ Clear</a>
-  <?php endif; ?>
   <?php if($totalRows > 0): ?>
-    <form method="GET" action="<?php echo e(route('reimbursements.tracker.export')); ?>" style="margin:0">
-      <input type="hidden" name="month" value="<?php echo e($month); ?>">
-      <button type="submit" class="btn">📥 Export</button>
-    </form>
+    <a href="<?php echo e(route('reimbursements.tracker.export', ['month' => $month])); ?>" class="btn">📥 Export</a>
   <?php endif; ?>
   <?php if($isLocked): ?>
     <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2)">
@@ -41,6 +31,21 @@
   <?php endif; ?>
 </form>
 
+
+<form method="GET" action="<?php echo e(route('reimbursements.tracker')); ?>" data-ajax-filter
+      class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+  <input type="hidden" name="month" value="<?php echo e($month); ?>">
+  <div class="fld" style="min-width:240px">
+    <label>Search by Emp ID / Name</label>
+    <input type="text" name="search" value="<?php echo e($search); ?>" placeholder="e.g. EMP001 or John Doe">
+  </div>
+  <button type="submit" class="btn acc">Search</button>
+  <?php if($search !== ''): ?>
+    <a href="<?php echo e(route('reimbursements.tracker', ['month' => $month])); ?>" class="btn" data-ajax-reset>✕ Clear</a>
+  <?php endif; ?>
+</form>
+
+<div id="ajax-results">
 
 <?php if($totalRows > 0): ?>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px">
@@ -91,6 +96,7 @@
         <th>Emp ID</th>
         <th>Employee Name</th>
         <th style="text-align:right">Amount (₹)</th>
+        <th>Category</th>
         <th>Remarks</th>
         <th style="text-align:center">Image</th>
         <th style="text-align:center">Status</th>
@@ -110,6 +116,10 @@
         <td class="mono" style="font-size:11px"><?php echo e($row->emp_id ?? '—'); ?></td>
         <td style="font-weight:500"><?php echo e($row->employee_name); ?></td>
         <td style="text-align:right;font-weight:600">₹<?php echo e(number_format($row->amount, 2)); ?></td>
+        <td style="color:var(--t2);font-size:11px" title="<?php echo e($row->category === 'Other' ? $row->other_category_text : ''); ?>">
+          <?php echo e($row->category ?? '—'); ?><?php echo e($row->category === 'Other' && $row->other_category_text ? ' — ' . $row->other_category_text : ''); ?>
+
+        </td>
         <td style="color:var(--t2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?php echo e($row->remarks); ?>">
           <?php echo e($row->remarks ?? '—'); ?>
 
@@ -135,9 +145,22 @@
         </td>
         <td style="text-align:center">
           <?php if($row->status === 'approved'): ?>
+            <?php $pc = ['paid' => 'g', 'partial' => 'y', 'unpaid' => 'gr']; ?>
             <button class="btn sm" style="font-size:10px" onclick="om('payment-<?php echo e($row->id); ?>')">
-              <span class="bx <?php echo e($row->payment_status === 'paid' ? 'g' : 'gr'); ?>"><?php echo e(ucfirst($row->payment_status)); ?></span>
+              <span class="bx <?php echo e($pc[$row->payment_status] ?? 'gr'); ?>">
+                <?php echo e($row->payment_status === 'partial' ? 'Partially Paid' : ucfirst($row->payment_status)); ?>
+
+              </span>
             </button>
+            <?php if($row->payment_status === 'partial'): ?>
+              <div style="font-size:10px;color:var(--t3);margin-top:2px">
+                ₹<?php echo e(number_format($row->paid_amount, 2)); ?> of ₹<?php echo e(number_format($row->amount, 2)); ?>
+
+              </div>
+            <?php endif; ?>
+            <?php if($row->carried_forward_from_row_id): ?>
+              <div style="font-size:10px;color:var(--t3);margin-top:2px">↳ carried from <?php echo e(\Carbon\Carbon::createFromFormat('Y-m', $row->carriedForwardFrom?->year_month ?? $row->year_month)->format('M Y')); ?></div>
+            <?php endif; ?>
           <?php else: ?>
             <span style="color:var(--t3);font-size:11px">—</span>
           <?php endif; ?>
@@ -178,7 +201,7 @@
       <tr style="background:var(--s2);font-weight:700">
         <td colspan="4" style="text-align:right;padding:8px 12px">Total Approved:</td>
         <td style="text-align:right;padding:8px 12px;color:var(--grn)">₹<?php echo e(number_format($totalApproved, 2)); ?></td>
-        <td colspan="5"></td>
+        <td colspan="6"></td>
       </tr>
     </tfoot>
   </table>
@@ -195,7 +218,7 @@
   <div class="empty">
     <div class="ico">🔍</div>
     <p>No results for "<?php echo e(e($search)); ?>" in <?php echo e(\Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y')); ?>.</p>
-    <a href="<?php echo e(route('reimbursements.tracker', ['month' => $month])); ?>" class="btn acc" style="margin-top:10px">Clear Search</a>
+    <a href="<?php echo e(route('reimbursements.tracker', ['month' => $month])); ?>" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
   </div>
 
   <?php else: ?>
@@ -203,10 +226,11 @@
     <div class="ico">💳</div>
     <p>No reimbursement data for <?php echo e(\Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y')); ?>.</p>
     <p style="font-size:12px;color:var(--t3);margin-top:4px">Add rows manually or import from Excel.</p>
-    <button class="btn acc" style="margin-top:10px" onclick="om('add-modal')">+ Add Row</button>
+    <button class="btn acc" style="margin-top:10px" onclick="om('add-modal')">+ Add Reimbursement</button>
   </div>
   <?php endif; ?>
 </div>
+</div> 
 
 
 <div class="modal" id="add-modal">
@@ -268,6 +292,50 @@ endif;
 unset($__errorArgs, $__bag); ?>
         </div>
         <div class="fld full">
+          <label>Category</label>
+          <select name="category" onchange="toggleOtherCategory(this)" <?php $__errorArgs = ['category'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+            <option value="">— None —</option>
+            <?php $__currentLoopData = \App\Models\ReimbursementTrackerRow::CATEGORIES; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cat): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <option value="<?php echo e($cat); ?>" <?php echo e(old('category') === $cat ? 'selected' : ''); ?>><?php echo e($cat); ?></option>
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+          </select>
+          <?php $__errorArgs = ['category'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
+        </div>
+        <div class="fld full" id="other-category-wrap" style="<?php echo e(old('category') === 'Other' ? '' : 'display:none'); ?>">
+          <label class="req">Please specify</label>
+          <input type="text" name="other_category_text" maxlength="150" placeholder="What is this expense for?"
+            value="<?php echo e(old('other_category_text')); ?>" <?php $__errorArgs = ['other_category_text'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> class="inp-err" <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>>
+          <?php $__errorArgs = ['other_category_text'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <div class="ferr"><?php echo e($message); ?></div> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?>
+        </div>
+        <div class="fld full">
           <label>Remarks</label>
           <input type="text" name="remarks" placeholder="e.g. Petrol & Recharge" value="<?php echo e(old('remarks')); ?>">
         </div>
@@ -298,8 +366,12 @@ unset($__errorArgs, $__bag); ?>
           <label class="req">Excel File</label>
           <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
           <div style="font-size:11px;color:var(--t3);margin-top:4px">
-            Columns: <strong>Date, Emp ID, Employee Name, Amount, Remarks, Image</strong>
-            — <a href="<?php echo e(route('reimbursements.tracker.template')); ?>" style="color:var(--acc)">Download Template</a><br>
+            <strong>Adding new rows?</strong> Columns: <strong>Date, Emp ID, Employee Name, Amount, Category, Other Category, Remarks, Image</strong>
+            (fill "Other Category" only when Category is "Other") —
+            <a href="<?php echo e(route('reimbursements.tracker.template')); ?>" style="color:var(--acc)">Download blank Template</a><br>
+            <strong>Editing existing rows in bulk?</strong> Use <a href="<?php echo e(route('reimbursements.tracker.export', ['month' => $month])); ?>" style="color:var(--acc)">Export</a> instead, edit the cells you need
+            (Category, Remarks, Approval Status, Payment Status, Paid Amount, etc.) in Excel, then upload that same file here —
+            rows with an <strong>ID</strong> are updated in place instead of added as new.<br>
             <strong>Image naming rules:</strong> No spaces · Must contain employee name · Must include date &amp; time · Any extension (.jpg .png .pdf etc.)<br>
             Example: <code style="background:var(--s2);padding:1px 5px;border-radius:3px">VADHER_NEHA_DIPAKBHAI_03-06-2026_10-30.png</code>
             <span style="color:var(--t3)">— underscore (_) as separator, any valid extension</span>
@@ -359,13 +431,22 @@ unset($__errorArgs, $__bag); ?>
               <select name="payment_status" onchange="togglePaymentFields(this, '<?php echo e($row->id); ?>')" required>
                 <option value="unpaid" <?php echo e($row->payment_status === 'unpaid' ? 'selected' : ''); ?>>Unpaid</option>
                 <option value="paid" <?php echo e($row->payment_status === 'paid' ? 'selected' : ''); ?>>Paid</option>
+                <option value="partial" <?php echo e($row->payment_status === 'partial' ? 'selected' : ''); ?>>Partially Paid</option>
               </select>
             </div>
-            <div class="fld" id="payment-date-wrap-<?php echo e($row->id); ?>" style="<?php echo e($row->payment_status === 'paid' ? '' : 'display:none'); ?>">
+            <div class="fld full" id="payment-partial-note-<?php echo e($row->id); ?>" style="display:none;font-size:11px;color:var(--t3)">
+              The unpaid remainder will automatically be added as a new row in next month's tracker.
+            </div>
+            <div class="fld" id="payment-amount-wrap-<?php echo e($row->id); ?>" style="<?php echo e($row->payment_status === 'partial' ? '' : 'display:none'); ?>">
+              <label class="req">Paid Amount (₹)</label>
+              <input type="number" name="paid_amount" min="0.01" step="0.01" max="<?php echo e(max(0, $row->amount - 0.01)); ?>"
+                value="<?php echo e($row->paid_amount); ?>" placeholder="Amount actually paid so far">
+            </div>
+            <div class="fld" id="payment-date-wrap-<?php echo e($row->id); ?>" style="<?php echo e(in_array($row->payment_status, ['paid', 'partial']) ? '' : 'display:none'); ?>">
               <label class="req">Payment Date</label>
               <input type="date" name="payment_date" value="<?php echo e($row->payment_date?->toDateString() ?? now()->toDateString()); ?>">
             </div>
-            <div class="fld" id="payment-ref-wrap-<?php echo e($row->id); ?>" style="<?php echo e($row->payment_status === 'paid' ? '' : 'display:none'); ?>">
+            <div class="fld" id="payment-ref-wrap-<?php echo e($row->id); ?>" style="<?php echo e(in_array($row->payment_status, ['paid', 'partial']) ? '' : 'display:none'); ?>">
               <label>Reference / UTR</label>
               <input type="text" name="payment_reference" value="<?php echo e($row->payment_reference); ?>" placeholder="e.g. UTR12345">
             </div>
@@ -389,9 +470,20 @@ unset($__errorArgs, $__bag); ?>
 <?php $__env->startPush('scripts'); ?>
 <script>
 function togglePaymentFields(select, rowId) {
-  const show = select.value === 'paid';
-  document.getElementById('payment-date-wrap-' + rowId).style.display = show ? '' : 'none';
-  document.getElementById('payment-ref-wrap-' + rowId).style.display = show ? '' : 'none';
+  const isPaid    = select.value === 'paid';
+  const isPartial = select.value === 'partial';
+  document.getElementById('payment-date-wrap-' + rowId).style.display = (isPaid || isPartial) ? '' : 'none';
+  document.getElementById('payment-ref-wrap-' + rowId).style.display = (isPaid || isPartial) ? '' : 'none';
+  document.getElementById('payment-amount-wrap-' + rowId).style.display = isPartial ? '' : 'none';
+  document.getElementById('payment-partial-note-' + rowId).style.display = isPartial ? '' : 'none';
+}
+
+function toggleOtherCategory(select) {
+  const wrap  = document.getElementById('other-category-wrap');
+  const input = wrap.querySelector('input[name="other_category_text"]');
+  const show  = select.value === 'Other';
+  wrap.style.display = show ? '' : 'none';
+  if (!show) input.value = '';
 }
 
 function confirmStatusChange(form) {

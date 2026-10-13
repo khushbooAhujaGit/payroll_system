@@ -7,8 +7,8 @@ use App\Models\ReimbursementTrackerRow;
 use App\Models\User;
 use App\Notifications\ReimbursementClaimResolved;
 use App\Notifications\ReimbursementClaimSubmitted;
+use App\Services\PublicFileStore;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Items #26-29 of the Master Details spec:
@@ -23,6 +23,10 @@ use Illuminate\Support\Facades\Storage;
  */
 class WebMyReimbursementController extends Controller
 {
+    public function __construct(protected PublicFileStore $publicFileStore)
+    {
+    }
+
     /** Fixed vocabulary for the approval/rejection remark dropdown — "Other" reveals a free-text box in the UI. */
     public const STANDARD_REMARKS = [
         'Approved as per company policy',
@@ -62,13 +66,15 @@ class WebMyReimbursementController extends Controller
         abort_unless($employee, 404, 'No employee profile linked to your account.');
 
         $validated = $request->validate([
-            'expense_date' => 'required|date',
-            'amount'       => 'required|numeric|min:0.01',
-            'remarks'      => 'nullable|string|max:500',
-            'document'     => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'expense_date'         => 'required|date',
+            'amount'               => 'required|numeric|min:0.01',
+            'category'             => 'required|string|in:' . implode(',', ReimbursementTrackerRow::CATEGORIES),
+            'other_category_text'  => 'required_if:category,Other|nullable|string|max:150',
+            'remarks'              => 'nullable|string|max:500',
+            'document'             => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
         ]);
 
-        $documentPath = $request->file('document')->store("reimbursement_docs/{$employee->id}", 'local');
+        $documentPath = $this->publicFileStore->store($request->file('document'), 'reimbursement_docs');
 
         $row = ReimbursementTrackerRow::create([
             'year_month'    => \Carbon\Carbon::parse($validated['expense_date'])->format('Y-m'),
@@ -77,6 +83,8 @@ class WebMyReimbursementController extends Controller
             'employee_id'   => $employee->id,
             'employee_name' => $employee->full_name,
             'amount'        => $validated['amount'],
+            'category'              => $validated['category'],
+            'other_category_text'   => $validated['category'] === 'Other' ? ($validated['other_category_text'] ?? null) : null,
             'remarks'       => $validated['remarks'] ?? null,
             'document_path' => $documentPath,
             'document_name' => $request->file('document')->getClientOriginalName(),
@@ -105,10 +113,9 @@ class WebMyReimbursementController extends Controller
         $isOwner  = $employee && $row->employee_id === $employee->id;
         abort_unless($isOwner || auth()->user()->can('reimbursment_approve') || auth()->user()->can('reimbursment_tab'), 403);
 
-        abort_unless($row->document_path && Storage::disk('local')->exists($row->document_path), 404);
+        abort_unless($this->publicFileStore->exists($row->document_path), 404);
 
-        $mime = Storage::disk('local')->mimeType($row->document_path);
-        return response()->file(Storage::disk('local')->path($row->document_path), ['Content-Type' => $mime]);
+        return response()->file($this->publicFileStore->absolutePath($row->document_path));
     }
 
     /**
@@ -169,18 +176,27 @@ class WebMyReimbursementController extends Controller
         abort_unless($row->status === 'approved', 422, 'Only approved claims can have a payment status.');
 
         $validated = $request->validate([
-            'payment_status'    => 'required|in:unpaid,paid',
-            'payment_date'      => 'nullable|date|required_if:payment_status,paid',
+            'payment_status'    => 'required|in:unpaid,paid,partial',
+            'payment_date'      => 'nullable|date|required_if:payment_status,paid,partial',
             'payment_reference' => 'nullable|string|max:100',
+            'paid_amount'       => 'nullable|numeric|min:0.01|required_if:payment_status,partial|lt:' . $row->amount,
+        ], [
+            'paid_amount.lt' => 'Paid amount must be less than the claim amount (₹' . number_format($row->amount, 2) . ') — use "Paid" instead if the full amount was paid.',
         ]);
 
-        $row->update([
-            'payment_status'    => $validated['payment_status'],
-            'payment_date'      => $validated['payment_status'] === 'paid' ? ($validated['payment_date'] ?? now()->toDateString()) : null,
-            'payment_reference' => $validated['payment_status'] === 'paid' ? ($validated['payment_reference'] ?? null) : null,
-        ]);
+        $row->applyPayment(
+            $validated['payment_status'],
+            $validated['payment_date'] ?? null,
+            $validated['payment_reference'] ?? null,
+            $validated['payment_status'] === 'partial' ? (float) $validated['paid_amount'] : null,
+            auth()->id()
+        );
+
+        $msg = $validated['payment_status'] === 'partial'
+            ? 'Payment recorded as partial — the remaining balance has been added to next month\'s tracker.'
+            : 'Payment status updated.';
 
         return redirect()->route('reimbursements.tracker', ['month' => $row->year_month])
-            ->with('success', 'Payment status updated.');
+            ->with('success', $msg);
     }
 }

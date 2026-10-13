@@ -7,7 +7,7 @@
 
 @section('content')
 
-  <form method="GET" action="{{ route('users.index') }}" class="card"
+  <form method="GET" action="{{ route('users.index') }}" class="card" data-ajax-filter
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div class="fld" style="flex:1;min-width:220px">
       <label>Search</label>
@@ -22,9 +22,10 @@
       </select>
     </div>
     <button type="submit" class="btn acc">Filter</button>
-    <a href="{{ route('users.index') }}" class="btn">Reset</a>
+    <a href="{{ route('users.index') }}" class="btn" data-ajax-reset>Reset</a>
   </form>
 
+  <div id="ajax-results">
     <div class="card" style="margin-bottom:14px">
       <div class="ch"><div class="ct">Users</div></div>
       @if($users->isEmpty())
@@ -242,6 +243,7 @@
     </div>
   </div>
 @endforeach
+  </div> {{-- #ajax-results --}}
 
 @if($errors->any())
   <script>

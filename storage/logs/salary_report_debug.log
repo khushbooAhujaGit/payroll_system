@@ -89,3 +89,21 @@
 [2026-08-05 12:33:53] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EL","AP","POM","PIM","PM","BDY"], SL=["SL","HSL"]
 [2026-08-05 12:33:53] EMPLOYEE 73 FOUND - FY Leaves: {"cl":7,"sl":3,"co":0}, Prev: {"cl":7,"sl":3,"co":0}
 [2026-08-05 12:33:54] CASCADE CALC - EmpID: 202421013, CL: 7/18, SL: 3/7, Excess: SL=0, EffCL=7, CLExcess=0, LOP=0
+[2026-08-17 14:44:54] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EXL","AP","POM","PIM","PM","BDY","ANV"], SL=["SL","HSL"]
+[2026-08-17 14:44:54] EMPLOYEE 73 FOUND - FY Leaves: {"cl":0,"sl":1,"co":0}, Prev: {"cl":0,"sl":1,"co":0}
+[2026-08-17 14:44:54] CASCADE CALC - EmpID: 202421013, CL: 0/18, SL: 1/7, Excess: SL=0, EffCL=0, CLExcess=0, LOP=0
+[2026-09-02 15:55:09] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EXL","AP","POM","PIM","PM","BDY","ANV"], SL=["SL","HSL"]
+[2026-09-02 15:55:09] EMPLOYEE 73 FOUND - FY Leaves: {"cl":7,"sl":3,"co":0}, Prev: {"cl":7,"sl":3,"co":0}
+[2026-09-02 15:55:09] CASCADE CALC - EmpID: 202421013, CL: 7/18, SL: 3/7, Excess: SL=0, EffCL=7, CLExcess=0, LOP=0
+[2026-09-02 16:54:11] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EXL","AP","POM","PIM","PM","BDY","ANV"], SL=["SL","HSL"]
+[2026-09-02 16:54:11] EMPLOYEE 73 NOT FOUND in fyLeaveAvailed. Available keys: [26,9,49,53,10,48,2,74,93,104,37,98,38,57,41,85,31,58,21,24,27,29,32,109,15,51,52,102,111,90]
+[2026-09-02 16:54:30] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EXL","AP","POM","PIM","PM","BDY","ANV"], SL=["SL","HSL"]
+[2026-09-02 16:54:30] EMPLOYEE 73 NOT FOUND in fyLeaveAvailed. Available keys: [26,9,49,53,10,48,2,74,93,104,37,98,38,57,41,85,31,58,21,24,27,29,32,109,15,51,52,102,111,90]
+[2026-09-02 16:57:48] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EXL","AP","POM","PIM","PM","BDY","ANV"], SL=["SL","HSL"]
+[2026-09-02 16:57:49] EMPLOYEE 73 NOT FOUND in fyLeaveAvailed. Available keys: [26,9,49,53,10,48,2,74,93,104,37,98,38,57,41,85,31,58,21,24,27,29,32,109,15,51,52,102,111,90]
+[2026-10-08 17:15:28] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EXL","AP","POM","PIM","PM","BDY","ANV"], SL=["SL","HSL"]
+[2026-10-08 17:15:28] EMPLOYEE 73 FOUND - FY Leaves: {"cl":7,"sl":3,"co":0}, Prev: {"cl":7,"sl":3,"co":0}
+[2026-10-08 17:15:29] CASCADE CALC - EmpID: 202421013, CL: 7/18, SL: 3/7, Excess: SL=0, EffCL=7, CLExcess=0, LOP=0
+[2026-10-08 17:15:41] COMPUTE STARTED - Leave codes: CL=["CL","HCL","CP","LFT","EXL","AP","POM","PIM","PM","BDY","ANV"], SL=["SL","HSL"]
+[2026-10-08 17:15:41] EMPLOYEE 73 FOUND - FY Leaves: {"cl":7,"sl":3,"co":0}, Prev: {"cl":7,"sl":3,"co":0}
+[2026-10-08 17:15:41] CASCADE CALC - EmpID: 202421013, CL: 7/18, SL: 3/7, Excess: SL=0, EffCL=7, CLExcess=0, LOP=0

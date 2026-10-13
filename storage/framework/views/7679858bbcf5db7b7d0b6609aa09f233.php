@@ -21,7 +21,7 @@
 </div>
 
 
-<form method="GET" action="<?php echo e(route('bio_ids')); ?>" class="card"
+<form method="GET" action="<?php echo e(route('bio_ids')); ?>" class="card" data-ajax-filter
       style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <div class="fld" style="min-width:220px">
     <label>Search (name / emp ID / bio ID)</label>
@@ -37,9 +37,10 @@
     </select>
   </div>
   <button type="submit" class="btn acc">Filter</button>
-  <a href="<?php echo e(route('bio_ids')); ?>" class="btn">Reset</a>
+  <a href="<?php echo e(route('bio_ids')); ?>" class="btn" data-ajax-reset>Reset</a>
 </form>
 
+<div id="ajax-results">
 <div class="card">
   <?php if($bioIds->isNotEmpty()): ?>
   <table>
@@ -114,6 +115,7 @@
   </div>
   <?php endif; ?>
 </div>
+</div> 
 
 
 <div class="modal" id="bioid-add-modal">
@@ -127,20 +129,27 @@
       <div class="fg2">
         <div class="fld full">
           <label>Employee *</label>
-          <select name="employee_id" required>
+          <select name="employee_id" id="bioid-add-employee" required onchange="onBioEmployeeChange(this.value)">
             <option value="">Select employee</option>
             <?php $__currentLoopData = $employees; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
             <option value="<?php echo e($emp->id); ?>"><?php echo e($emp->employee_id); ?> — <?php echo e($emp->full_name); ?></option>
             <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
           </select>
-        </div>
-        <div class="fld">
-          <label>Bio ID (format: I-20, II-5, K-3) *</label>
-          <input type="text" name="bio_id_full" required placeholder="e.g. I-20">
+          <div id="bioid-add-employee-warning" class="wbox" style="display:none;margin-top:8px;margin-bottom:0"></div>
         </div>
         <div class="fld">
           <label>Machine Name *</label>
-          <input type="text" name="machine_name" required placeholder="e.g. 10, 12, K">
+          <select name="machine_name" id="bioid-add-machine" required onchange="onBioMachineChange(this.value)">
+            <option value="">Select machine</option>
+            <?php $__currentLoopData = \App\Models\EmployeeBioId::MACHINE_MAP; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $type => $machine): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+              <option value="<?php echo e($machine); ?>"><?php echo e($machine); ?></option>
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+          </select>
+        </div>
+        <div class="fld">
+          <label>Bio ID (format: I-20, II-5, III-3, IV-3) *</label>
+          <input type="text" name="bio_id_full" id="bioid-add-value" required placeholder="Select a machine first">
+          <span style="font-size:10px;color:var(--t3)">Machine "OTHER" (type IV) is for employees with no physical device — Work From Home / Client Location.</span>
         </div>
         <div class="fld full">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -168,7 +177,7 @@
       <?php echo csrf_field(); ?>
       <div class="fg2">
         <div class="fld full">
-          <label>Bio ID (format: I-20, II-5, III-3) *</label>
+          <label>Bio ID (format: I-20, II-5, III-3, IV-3) *</label>
           <input type="text" name="bio_id_full" id="bioid-edit-val" required placeholder="e.g. I-20">
         </div>
         <div class="fld full">
@@ -197,7 +206,8 @@
                 padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.6;color:var(--t2)">
       <strong>Template columns:</strong>
       <span class="mono" style="font-size:11px">Employee Name · New Emp ID · BioID</span><br>
-      BioID can contain multiple comma-separated values: <span class="mono">I-20,II-6,III-8</span>
+      BioID can contain multiple comma-separated values: <span class="mono">I-20,II-6,III-8</span>.
+      Use <span class="mono">IV-N</span> for WFH / Client Location employees (Machine "OTHER").
     </div>
     <form method="POST" action="<?php echo e(route('bio_ids.import')); ?>" enctype="multipart/form-data">
       <?php echo csrf_field(); ?>
@@ -221,6 +231,33 @@ function openBioEdit(id, bioId, isActive) {
   document.getElementById('bioid-edit-active').checked  = isActive;
   document.getElementById('bioid-edit-form').action      = '/bio-ids/' + id;
   om('bioid-edit-modal');
+}
+
+// Machine → next expected Bio ID (machine_name and bio_type are a fixed
+// 1:1 pairing, so the type prefix + next sequence number are both known
+// as soon as a machine is picked).
+const _nextBioIdByMachine = <?php echo json_encode($nextBioIdByMachine, 15, 512) ?>;
+
+function onBioMachineChange(machine) {
+  const input = document.getElementById('bioid-add-value');
+  if (!input) return;
+  input.value = _nextBioIdByMachine[machine] || '';
+}
+
+// Employee → their existing Bio ID(s), if any — a heads-up only, since an
+// employee can legitimately have one Bio ID per machine.
+const _employeeBioIds = <?php echo json_encode($employeeBioIds, 15, 512) ?>;
+
+function onBioEmployeeChange(employeeId) {
+  const warning = document.getElementById('bioid-add-employee-warning');
+  if (!warning) return;
+  const existing = _employeeBioIds[employeeId];
+  if (existing && existing.length) {
+    warning.textContent = '⚠ This employee is already mapped to: ' + existing.join(', ');
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
 }
 </script>
 <?php $__env->stopPush(); ?>

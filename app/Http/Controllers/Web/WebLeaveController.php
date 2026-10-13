@@ -29,6 +29,7 @@ class WebLeaveController extends Controller
     public function __construct(
         protected ExcelImportService $excelImportService,
         protected LeaveApplicationTrackerSyncService $trackerSync,
+        protected \App\Services\LeaveEntitlementService $leaveEntitlementService,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -77,26 +78,39 @@ class WebLeaveController extends Controller
                 $visibleIds, $request->status, $request->search, 'page', 10, dateFrom: $dateFrom, dateTo: $dateTo
             );
         } else {
-            // HR/Admin: unified, entity-wide. Combined like the buckets
-            // above, but scoped to leave-request rows only (source_file =
+            // HR/Admin: unified, entity-wide. On the default, unfiltered
+            // view this is scoped to leave-request rows only (source_file =
             // 'leave_application') — not every bulk-import/manual tracker
             // row company-wide, which would bury real pending requests in
             // hundreds of historical rows. HR/Admin already have the
             // dedicated, unrestricted /leave/tracker page for browsing all
             // of that.
+            //
+            // But once the viewer actively filters (date range or search),
+            // that restriction would silently hide real, matching data —
+            // e.g. a date range full of bulk-imported leave would come back
+            // "No leave records found" even though /leave/tracker shows it
+            // for the same range. So a filter lifts the restriction: results
+            // are unrestricted, but still exactly what was asked for.
+            $hasActiveFilter = filled($dateFrom) || filled($dateTo) || filled($request->search);
+
             $applications = $this->combinedApplicationsAndTracker(
-                null, $request->status, $request->search, 'page', 25, applicationsOnly: true, dateFrom: $dateFrom, dateTo: $dateTo
+                null, $request->status, $request->search, 'page', 25, applicationsOnly: !$hasActiveFilter, dateFrom: $dateFrom, dateTo: $dateTo
             );
         }
 
         // Apply-Leave modal only offers this curated set of types, not every
         // code in leave_types (which also holds internal/system markers like
-        // "Approval Pending", "Punch Missing", etc.)
+        // "Approval Pending", "Punch Missing", etc.). Early Leave / Late
+        // Arrival / Punch Miss Request are deliberately excluded — they're
+        // attendance exceptions, raised instead via My Attendance's Change
+        // Request flow, not the Apply Leave modal. Their LeaveType rows stay
+        // active and their approval special-casing (see resolveLeaveApplication())
+        // is untouched — only this dropdown's offering changes.
         $applyLeaveTypeNames = [
             'Casual Leave', 'Half-Day Casual Leave', 'Sick Leave', 'Half-Day Sick Leave',
             'Exam Leave', 'Birthday Leave', 'Anniversary Leave', 'Work From Home', 'Compensation Off',
             'Maternity Leave', 'Paternity Leave',
-            'Early Leave', 'Late Arrival', 'Punch Miss Request',
         ];
         $leaveTypes = LeaveType::whereIn('name', $applyLeaveTypeNames)
             ->where(fn($q) => $q->whereNull('company_id')->orWhere('company_id', $companyId))
@@ -112,24 +126,58 @@ class WebLeaveController extends Controller
         $viewerEmployeeId = $scope['viewerEmployee']?->id;
         $minApplyDate     = now()->subDays(30)->toDateString();
 
-        // "My Leave Balances" — the viewer's own CL/SL standing, computed the
-        // same way WebSalaryReportController does (allocation minus FY-to-date
-        // usage, SL overflow spilling into CL). The leave_balances table
-        // (opening/accrued/availed rows) is not actually populated by
-        // anything in this app — accrued is always 0 there — so it never
-        // reflects a real number; this mirrors the one place that does.
+        // "My Leave Balances" — the viewer's own CL/SL/Comp-Off standing.
+        // The leave_balances table (opening/accrued/availed rows) is not
+        // actually populated by anything in this app — accrued is always 0
+        // there — so it never reflects a real number; these are computed
+        // live from actual usage instead. See LeaveEntitlementService.
         $myLeaveBalances = $scope['viewerEmployee']
-            ? collect($this->currentCLSLEntitlement($scope['viewerEmployee']))
+            ? collect($this->leaveEntitlementService->currentCLSL($scope['viewerEmployee']))
+                ->merge(['Compensation Off' => $this->leaveEntitlementService->currentCompOff($scope['viewerEmployee'])])
                 ->map(fn($available, $name) => (object) ['leaveType' => (object) ['name' => $name], 'available' => $available])
                 ->values()
             : collect();
+
+        // Per-employee CL/SL/CO + pending-count summary, shown alongside
+        // each row in the reviewer-facing tables only (HR/Admin's unified
+        // view, a manager's Team tab) — never on a self-view table, where
+        // "My Leave Balances" above already covers the same numbers for the
+        // viewer's own account. Built once per distinct employee actually
+        // appearing in the current page of results, not per row, since the
+        // same employee can have several rows.
+        $leaveSummaries = [];
+        if ($isLeaveAdmin && $applications) {
+            $leaveSummaries = $this->buildLeaveSummaries($applications);
+        } elseif ($teamApplications) {
+            $leaveSummaries = $this->buildLeaveSummaries($teamApplications);
+        }
 
         return view('leave.index', compact(
             'applications', 'selfApplications', 'teamApplications',
             'activeTab', 'leaveTypes', 'employees', 'companyId',
             'isLeaveAdmin', 'isManager', 'viewerEmployeeId', 'minApplyDate',
-            'myLeaveBalances'
+            'myLeaveBalances', 'leaveSummaries'
         ) + ['isAdmin' => $scope['isAdmin']]);
+    }
+
+    /**
+     * @param \Illuminate\Contracts\Pagination\LengthAwarePaginator $rows normalized rows, each with ->employee
+     * @return array<int, array{cl: float, sl: float, co: float, pending: int}> keyed by employee_id
+     */
+    protected function buildLeaveSummaries($rows): array
+    {
+        $summaries = [];
+        foreach ($rows->getCollection()->pluck('employee')->filter()->unique('id') as $employee) {
+            $clsl = $this->leaveEntitlementService->currentCLSL($employee);
+            $summaries[$employee->id] = [
+                'cl'      => $clsl['Casual Leave'] ?? 0,
+                'sl'      => $clsl['Sick Leave'] ?? 0,
+                'co'      => $this->leaveEntitlementService->currentCompOff($employee),
+                'pending' => LeaveTrackerRecord::where('employee_id', $employee->id)
+                    ->where('is_active', true)->where('is_approved', false)->count(),
+            ];
+        }
+        return $summaries;
     }
 
     /**
@@ -218,58 +266,6 @@ class WebLeaveController extends Controller
             ->values();
 
         return view('leave.calendar', compact('days', 'month', 'monthStart', 'canSeeNames', 'legend'));
-    }
-
-    /**
-     * Current Casual/Sick Leave standing for one employee — full annual
-     * allocation (from LeavePolicy, defaulting to 18/7 same as the salary
-     * report) minus leave taken since the start of the financial year
-     * (April 1), with SL overflow past its allocation spilling into CL
-     * usage first. This is the same rule WebSalaryReportController uses to
-     * compute "Closing CL"/"Closing SL" for payroll — duplicated here
-     * (rather than extracted into a shared service) since the salary report
-     * version is scoped to a specific payroll month/company batch and this
-     * needs today's FY-to-date figure for a single employee instead.
-     */
-    protected function currentCLSLEntitlement(Employee $employee): array
-    {
-        $today  = now();
-        $fyYear = $today->month >= 4 ? $today->year : $today->year - 1;
-        $fyStart = Carbon::createFromDate($fyYear, 4, 1)->startOfDay();
-        $fyEnd   = Carbon::createFromDate($fyYear + 1, 3, 31)->endOfDay();
-
-        $clLtId = LeaveType::where('code', 'CL')->value('id');
-        $slLtId = LeaveType::where('code', 'SL')->value('id');
-        $clAllocation = (float) (LeavePolicy::where('leave_type_id', $clLtId)->where('is_active', true)->value('days_per_year') ?? 18);
-        $slAllocation = (float) (LeavePolicy::where('leave_type_id', $slLtId)->where('is_active', true)->value('days_per_year') ?? 7);
-
-        $ltByCategory = LeaveType::where('is_active', true)->get(['code', 'category'])->groupBy('category');
-        $clCodes = $ltByCategory->get('casual', collect())->pluck('code')->toArray();
-        $slCodes = $ltByCategory->get('sick', collect())->pluck('code')->toArray();
-
-        $records = LeaveTrackerRecord::where('employee_id', $employee->id)
-            ->whereIn('leave_type', array_merge($clCodes, $slCodes))
-            ->whereBetween('leave_date', [$fyStart, $fyEnd])
-            ->where('is_active', true)
-            ->get(['leave_type']);
-
-        $clAvailed = $slAvailed = 0.0;
-        foreach ($records as $r) {
-            $units = str_starts_with($r->leave_type, 'H') ? 0.5 : 1.0;
-            if (in_array($r->leave_type, $clCodes)) {
-                $clAvailed += $units;
-            } elseif (in_array($r->leave_type, $slCodes)) {
-                $slAvailed += $units;
-            }
-        }
-
-        $slExcess        = max(0.0, $slAvailed - $slAllocation);
-        $effectiveCLUsed = $clAvailed + $slExcess;
-
-        return [
-            'Casual Leave' => round(max(0.0, $clAllocation - $effectiveCLUsed), 1),
-            'Sick Leave'   => round(max(0.0, $slAllocation - $slAvailed), 1),
-        ];
     }
 
     /**
@@ -571,9 +567,11 @@ class WebLeaveController extends Controller
             ])->withInput();
         }
 
-        DB::transaction(function () use ($period, $requestRef, $employee, $leaveType, $validated, $isHalfDayType) {
+        $createdRecordIds = [];
+
+        DB::transaction(function () use ($period, $requestRef, $employee, $leaveType, $validated, $isHalfDayType, &$createdRecordIds) {
             foreach ($period as $day) {
-                LeaveTrackerRecord::create([
+                $record = LeaveTrackerRecord::create([
                     'leave_ref_id'     => $requestRef . '-' . $day->format('Ymd'),
                     'employee_id'      => $employee->id,
                     'sheet_emp_id'     => $employee->employee_id,
@@ -588,12 +586,74 @@ class WebLeaveController extends Controller
                     'is_active'        => true,
                     'is_approved'      => false,
                 ]);
+                $createdRecordIds[] = $record->id;
             }
         });
 
         $this->notifyLeaveApplied($employee, $leaveType, $fromDate, $toDate, $validated['reason'] ?? null);
+        $this->notifyLeaveApplicationPendingInApp($employee, $leaveType, $fromDate, $toDate, $createdRecordIds);
 
         return redirect()->route('leave')->with('success', 'Leave application submitted.');
+    }
+
+    /**
+     * Bell/dropdown counterpart to notifyLeaveApplied()'s email — notifies
+     * the same recipients (reporting manager + this company's HR users) so
+     * the pending approval keeps showing in their notification bell on
+     * every subsequent login until it's read or the leave is resolved (see
+     * cleanupLeavePendingNotification()). Tracked per tracker-record-id
+     * (one id per day in the request) rather than by employee/date so
+     * cleanup can tell exactly which notification(s) a given approve/reject
+     * action should retire.
+     */
+    protected function notifyLeaveApplicationPendingInApp(Employee $employee, LeaveType $leaveType, string $fromDate, string $toDate, array $trackerRecordIds): void
+    {
+        if (empty($trackerRecordIds)) {
+            return;
+        }
+
+        $recipients = collect();
+        if ($employee->reportingManager?->user) {
+            $recipients->push($employee->reportingManager->user);
+        }
+        $recipients = $recipients->concat($this->hrUsersForCompany($employee->company_id))->unique('id');
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        \Illuminate\Support\Facades\Notification::send(
+            $recipients,
+            new \App\Notifications\LeaveApplicationPending($employee, $leaveType, $fromDate, $toDate, $trackerRecordIds)
+        );
+    }
+
+    /**
+     * Retires the in-app "Leave Approval Pending" notification(s) tied to
+     * this tracker record once it's approved/rejected — called from
+     * resolveTrackerRecord() so the bell doesn't keep showing something
+     * that's already been acted on. A multi-day request shares one
+     * notification per recipient covering every day's tracker-record-id;
+     * this only deletes it once every one of those ids has been resolved,
+     * so a partially-actioned request still shows until the rest is done.
+     */
+    protected function cleanupLeavePendingNotification(LeaveTrackerRecord $record): void
+    {
+        \Illuminate\Notifications\DatabaseNotification::where('type', \App\Notifications\LeaveApplicationPending::class)
+            ->whereJsonContains('data->tracker_record_ids', $record->id)
+            ->get()
+            ->each(function ($notif) use ($record) {
+                $remaining = collect($notif->data['tracker_record_ids'] ?? [])
+                    ->reject(fn($id) => (int) $id === $record->id)
+                    ->values()
+                    ->all();
+
+                if (empty($remaining)) {
+                    $notif->delete();
+                } else {
+                    $notif->forceFill(['data' => array_merge($notif->data, ['tracker_record_ids' => $remaining])])->save();
+                }
+            });
     }
 
     /**
@@ -648,12 +708,15 @@ class WebLeaveController extends Controller
      */
     protected function hrEmailsForCompany(?int $companyId): array
     {
+        return $this->hrUsersForCompany($companyId)->pluck('email')->filter()->values()->all();
+    }
+
+    /** Same company-scoping convention as hrEmailsForCompany(), returning the User models instead of just emails. */
+    protected function hrUsersForCompany(?int $companyId)
+    {
         return User::role('HR')
             ->where(fn($q) => $q->whereNull('company_id')->orWhere('company_id', $companyId))
-            ->pluck('email')
-            ->filter()
-            ->values()
-            ->all();
+            ->get();
     }
 
     /**
@@ -860,6 +923,8 @@ class WebLeaveController extends Controller
             $record->leave_date->format('Y-m-d'),
             $action
         );
+
+        $this->cleanupLeavePendingNotification($record);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

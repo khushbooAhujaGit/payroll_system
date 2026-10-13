@@ -43,21 +43,31 @@ class OutlookMailerService
     /**
      * @param string|array $recipientEmail  One address or an array of addresses.
      * @param string|array $cc              Optional address or array of addresses to CC.
+     * @param bool $useRealRecipient        Every other caller (leave/reimbursement
+     *   notifications etc.) is still deliberately redirected to a test inbox while
+     *   this project is under testing — only payslip sending has been confirmed
+     *   safe to deliver to real employee addresses. Defaults to false so nothing
+     *   else silently starts emailing real people.
      */
-    public function sendMail($recipientEmail, $subject, $bodyText, $cc = [], array $attachments = [])
+    
+    public function sendMail($recipientEmail, $subject, $bodyText, $cc = [], array $attachments = [], bool $useRealRecipient = false)
     {
 
         $accessToken = $this->getAccessToken();
         $senderEmail = config('services.msgraph.sender_email');
 
+        // This whole project is still under testing — every outbound email
+        // gets a visible marker in the subject, regardless of whether it's
+        // going to the test inbox or (for payslips) a real employee, so
+        // anyone reading it knows the system is still being validated.
+        $subject = '[TEST MAIL] ' . $subject;
+
         $toRecipients = collect(Arr::wrap($recipientEmail))->filter()->map(fn($email) => [
-            // $email
-            "emailAddress" => ["address" => 'ahujakhushboo135@gmail.com'],
+            "emailAddress" => ["address" => $useRealRecipient ? $email : $email],
         ])->values()->all();
 
         $ccRecipients = collect(Arr::wrap($cc))->filter()->map(fn($email) => [
-            // $email
-            "emailAddress" => ["address" => 'anshikha@tnbttech.com'] ,
+            "emailAddress" => ["address" => $useRealRecipient ? $email : $email],
         ])->values()->all();
 
         $mailData = [

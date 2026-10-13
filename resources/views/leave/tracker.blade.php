@@ -12,6 +12,7 @@
 
 @php $isDaily = ($view ?? 'spells') === 'daily'; @endphp
 
+<div id="ajax-results">
 <div class="g4" style="margin-bottom:16px">
   <div class="sc">
     <div class="lbl">Total Leave Days (all)</div>
@@ -38,7 +39,7 @@
 </div>
 
 {{-- Filters --}}
-<form method="GET" action="{{ route('leave.tracker') }}" class="card"
+<form method="GET" action="{{ route('leave.tracker') }}" class="card" data-ajax-filter
       style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <input type="hidden" name="view" value="{{ $view ?? 'spells' }}">
   {{-- Preserve date range from spell drill-down links --}}
@@ -67,11 +68,11 @@
     @if(request('date_from') !== request('date_to')) – {{ \Carbon\Carbon::parse(request('date_to'))->format('d M Y') }}
     @else{{ \Carbon\Carbon::parse(request('date_from'))->format(' Y') }}@endif
     <a href="{{ route('leave.tracker', ['view' => 'daily', 'emp_id' => request('emp_id'), 'leave_type' => request('leave_type')]) }}"
-       style="margin-left:8px;color:var(--t3)">✕ clear dates</a>
+       style="margin-left:8px;color:var(--t3)" data-ajax-reset>✕ clear dates</a>
   </div>
   @endif
   <button type="submit" class="btn acc">Filter</button>
-  <a href="{{ route('leave.tracker', ['view' => $view ?? 'spells']) }}" class="btn">Reset</a>
+  <a href="{{ route('leave.tracker', ['view' => $view ?? 'spells']) }}" class="btn" data-ajax-reset>Reset</a>
 </form>
 
 <div class="card">
@@ -225,6 +226,7 @@
 @endif
 
 </div>
+</div> {{-- #ajax-results --}}
 
 {{-- Manual Add Modal --}}
 <div class="modal" id="tracker-add-modal">

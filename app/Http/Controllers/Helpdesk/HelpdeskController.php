@@ -7,11 +7,14 @@ use App\Models\HelpdeskTicket;
 use App\Models\HelpdeskCategory;
 use App\Models\HelpdeskComment;
 use App\Models\User;
+use App\Services\PublicFileStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class HelpdeskController extends Controller
 {
+    public function __construct(protected PublicFileStore $publicFileStore) {}
+
     // ─────────────────────────────────────────────
     // CATEGORIES
     // ─────────────────────────────────────────────
@@ -62,9 +65,7 @@ class HelpdeskController extends Controller
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store(
-                "helpdesk/{$employee->id}", 'local'
-            );
+            $attachmentPath = $this->publicFileStore->store($request->file('attachment'), 'helpdesk');
         }
 
         $ticket = HelpdeskTicket::create([
@@ -165,7 +166,7 @@ class HelpdeskController extends Controller
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store("helpdesk/comments/{$ticket->id}", 'local');
+            $attachmentPath = $this->publicFileStore->store($request->file('attachment'), 'helpdesk/comments');
         }
 
         $comment = HelpdeskComment::create([

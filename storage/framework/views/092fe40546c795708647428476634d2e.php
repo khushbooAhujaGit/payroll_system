@@ -2,6 +2,7 @@
 
 <?php $__env->startSection('page_actions'); ?>
   <?php if(!$isHistoric): ?>
+    <button class="btn acc" onclick="openSalAddModal()">+ Add Salary</button>
     <a href="<?php echo e(route('salary.template')); ?>" class="btn">📥 Template</a>
     <button class="btn" onclick="om('sal-import-modal')">📤 Import</button>
   <?php endif; ?>
@@ -12,7 +13,7 @@
 <?php $__env->startSection('content'); ?>
 
   
-  <form method="GET" action="<?php echo e(route('salary')); ?>" class="card"
+  <form method="GET" action="<?php echo e(route('salary')); ?>" class="card" data-ajax-filter
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <input type="hidden" name="company_id" value="<?php echo e($companyId); ?>">
     <div class="fld" style="flex:1;min-width:160px">
@@ -26,7 +27,7 @@
         onfocus="this.style.borderColor='var(--acc)'" onblur="this.style.borderColor='var(--b1)'">
     </div>
     <button type="submit" class="btn acc">Filter</button>
-    <a href="<?php echo e(route('salary')); ?>" class="btn">Reset</a>
+    <a href="<?php echo e(route('salary')); ?>" class="btn" data-ajax-reset>Reset</a>
   </form>
 
   
@@ -40,6 +41,7 @@
     </div>
   <?php endif; ?>
 
+  <div id="ajax-results">
   
   <?php if(!$isHistoric): ?>
   <form id="bulk-form" method="POST" action="<?php echo e(route('salary.bulk_destroy')); ?>" style="display:contents">
@@ -175,6 +177,7 @@
       </div>
     <?php endif; ?>
   </div>
+  </div> 
 
   
   <?php if(!$isHistoric): ?>
@@ -187,6 +190,15 @@
         <form method="POST" id="sal-form">
           <?php echo csrf_field(); ?>
           <div class="fg2">
+            <div class="fld full" id="sal-modal-employee-wrap" style="display:none">
+              <label class="req">Employee</label>
+              <select id="sal-employee-select" required onchange="onSalEmployeeChange(this.value)">
+                <option value="">Select employee</option>
+                <?php $__currentLoopData = $allEmployeesForSalary; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $emp): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                  <option value="<?php echo e($emp->id); ?>"><?php echo e($emp->employee_id); ?> — <?php echo e($emp->full_name); ?></option>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+              </select>
+            </div>
             <div class="fld">
               <label class="req">CTC Annual (₹)</label>
               <input type="number" name="ctc_annual" id="sal-ctc" required min="1" step="1"
@@ -301,11 +313,28 @@ unset($__errorArgs, $__bag); ?>
     <script>
       /* ── Set / Edit salary modal ─────────────────────────── */
       function openSalModal(empId, name, ctc, gross) {
+        document.getElementById('sal-modal-employee-wrap').style.display = 'none';
         document.getElementById('sal-modal-title').textContent = 'Salary — ' + name;
         document.getElementById('sal-form').action = '/salary/' + empId + '/set';
         document.getElementById('sal-ctc').value  = ctc   || '';
         document.getElementById('sal-gross').value = gross || '';
         om('sal-modal');
+      }
+
+      /* ── Add salary for a manually-picked employee ─────────── */
+      function openSalAddModal() {
+        document.getElementById('sal-modal-employee-wrap').style.display = 'flex';
+        document.getElementById('sal-modal-title').textContent = 'Add Salary';
+        document.getElementById('sal-employee-select').value = '';
+        document.getElementById('sal-form').action = '';
+        document.getElementById('sal-ctc').value = '';
+        document.getElementById('sal-gross').value = '';
+        if (window._ssSync) window._ssSync(document.getElementById('sal-employee-select'));
+        om('sal-modal');
+      }
+
+      function onSalEmployeeChange(empId) {
+        document.getElementById('sal-form').action = empId ? '/salary/' + empId + '/set' : '';
       }
       function calcGross() {
         const ctc = parseFloat(document.getElementById('sal-ctc').value) || 0;
@@ -441,6 +470,12 @@ unset($__errorArgs, $__bag); ?>
 
       // Initialise on page load
       document.addEventListener('DOMContentLoaded', restoreSelections);
+
+      // Searching/filtering now swaps #ajax-results in place instead of a
+      // full reload — the per-filter storage key already means "a changed
+      // filter starts a fresh selection" (see comment above), so replicate
+      // that: clear any in-progress selection whenever the region refreshes.
+      document.getElementById('ajax-results')?.addEventListener('ajax:loaded', clearAllPages);
 
       function confirmBulkDelete() {
         const stored = _getStored();

@@ -18,10 +18,13 @@ class EmployeeBioId extends Model
     protected $table = "employee_bio_ids";
 
     // Machine type → device label mapping
+    // 'IV' => 'OTHER' is a virtual "machine" for employees with no physical
+    // punch device (Work From Home / Client Location) — see WfhAttendanceImporter.
     const MACHINE_MAP = [
         'I'   => '10',
         'II'  => '12',
         'III' => 'K',
+        'IV'  => 'OTHER',
     ];
 
     protected $fillable = [
@@ -51,7 +54,7 @@ class EmployeeBioId extends Model
     public static function parse(string $raw): ?array
     {
         $raw = trim($raw);
-        if (!preg_match('/^(III|II|I)-(\d+)$/i', $raw, $m)) {
+        if (!preg_match('/^(IV|III|II|I)-(\d+)$/i', $raw, $m)) {
             return null;
         }
         $type = strtoupper($m[1]);

@@ -8,7 +8,7 @@
 
 @section('content')
 
-<form method="GET" action="{{ route('revisions') }}" class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end">
+<form method="GET" action="{{ route('revisions') }}" class="card" data-ajax-filter style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end">
   <div class="fld" style="min-width:140px">
     <label>Status</label>
     <select name="status">
@@ -19,9 +19,10 @@
     </select>
   </div>
   <button type="submit" class="btn acc">Filter</button>
-  <a href="{{ route('revisions') }}" class="btn">Reset</a>
+  <a href="{{ route('revisions') }}" class="btn" data-ajax-reset>Reset</a>
 </form>
 
+<div id="ajax-results">
 <div class="card">
   @if($revisions->isNotEmpty())
   <table>
@@ -65,6 +66,7 @@
   @else
   <div class="empty"><div class="ico">📈</div><p>No salary revisions yet.</p></div>
   @endif
+</div>
 </div>
 
 {{-- Raise Revision Modal --}}

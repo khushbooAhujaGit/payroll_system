@@ -30,10 +30,11 @@ class EmployeeDocument extends Model
         'experience_letter' => 'Experience Letter',
         'cancelled_cheque'  => 'Cancelled Cheque',
         'uan_document'      => 'UAN Document',
+        'last_salary_slip'  => 'Last Salary Slip',
         'other'             => 'Other Document',
     ];
 
-    protected $fillable = ['employee_id','document_type','document_number','document_name','file_path','file_name','file_type','issue_date','expiry_date','is_verified','verified_by','verified_at','remarks','uploaded_by'];
+    protected $fillable = ['employee_id','document_type','document_number','document_name','file_path','source_url','file_name','file_type','issue_date','expiry_date','is_verified','verified_by','verified_at','remarks','uploaded_by'];
     protected $casts = [
         'issue_date' => 'date',
         'expiry_date' => 'date',

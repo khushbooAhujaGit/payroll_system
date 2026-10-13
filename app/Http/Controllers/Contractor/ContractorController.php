@@ -6,13 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Contractor;
 use App\Models\ContractorInvoice;
 use App\Services\ExcelImportService;
+use App\Services\PublicFileStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ContractorController extends Controller
 {
-    public function __construct(protected ExcelImportService $excelImportService) {}
+    public function __construct(
+        protected ExcelImportService $excelImportService,
+        protected PublicFileStore $publicFileStore
+    ) {}
 
     // ─────────────────────────────────────────────
     // CONTRACTOR MASTER
@@ -115,9 +119,7 @@ class ContractorController extends Controller
 
         $invoicePath = null;
         if ($request->hasFile('invoice_file')) {
-            $invoicePath = $request->file('invoice_file')->store(
-                "contractor_invoices/{$contractor->id}", 'local'
-            );
+            $invoicePath = $this->publicFileStore->store($request->file('invoice_file'), 'contractor_invoices');
         }
 
         $invoice = ContractorInvoice::create([

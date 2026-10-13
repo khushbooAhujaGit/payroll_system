@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\PoiSubmission;
 use App\Models\InvestmentDeclaration;
 use App\Models\DeclarationInvestment;
+use App\Services\PublicFileStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PoiController extends Controller
 {
+    public function __construct(protected PublicFileStore $publicFileStore) {}
+
     // ─────────────────────────────────────────────
     // EMPLOYEE: UPLOAD PROOF
     // ─────────────────────────────────────────────
@@ -32,10 +35,7 @@ class PoiController extends Controller
             ->where('employee_id', $employee->id)
             ->firstOrFail();
 
-        $filePath = $request->file('file')->store(
-            "poi/{$employee->id}/{$declaration->financial_year}/{$validated['section']}",
-            'local'
-        );
+        $filePath = $this->publicFileStore->store($request->file('file'), 'poi');
 
         // Check if proof already submitted for same declaration_investment
         $existing = PoiSubmission::where('investment_declaration_id', $declaration->id)
@@ -206,14 +206,9 @@ class PoiController extends Controller
 
     public function downloadProof(PoiSubmission $poi): \Symfony\Component\HttpFoundation\Response
     {
-        if (!\Illuminate\Support\Facades\Storage::exists($poi->file_path)) {
-            abort(404, 'File not found.');
-        }
+        abort_unless($this->publicFileStore->exists($poi->file_path), 404, 'File not found.');
 
-        return response()->download(
-            storage_path("app/{$poi->file_path}"),
-            $poi->file_name
-        );
+        return response()->download($this->publicFileStore->absolutePath($poi->file_path), $poi->file_name);
     }
 
     // ─────────────────────────────────────────────

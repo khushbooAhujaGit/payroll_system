@@ -7,7 +7,7 @@
 
 @section('content')
 
-<form method="GET" action="{{ route('employees.master_history') }}"
+<form method="GET" action="{{ route('employees.master_history') }}" data-ajax-filter
       class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <div class="fld" style="min-width:220px">
     <label>Search Emp ID / Name</label>
@@ -33,10 +33,11 @@
   </div>
   <button type="submit" class="btn acc">Search</button>
   @if($search || $fieldType || $changedVia)
-    <a href="{{ route('employees.master_history') }}" class="btn">✕ Clear</a>
+    <a href="{{ route('employees.master_history') }}" class="btn" data-ajax-reset>✕ Clear</a>
   @endif
 </form>
 
+<div id="ajax-results">
 <div class="card">
   <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
     <div class="ct">Employee Master Change History</div>
@@ -134,5 +135,6 @@
   </div>
   @endif
 </div>
+</div> {{-- #ajax-results --}}
 
 @endsection

@@ -9,16 +9,17 @@
 
   @include('rbac._nav')
 
-  <form method="GET" action="{{ route('rbac.permissions') }}" class="card"
+  <form method="GET" action="{{ route('rbac.permissions') }}" class="card" data-ajax-filter
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div class="fld" style="flex:1;min-width:220px">
       <label>Search</label>
       <input type="text" name="search" value="{{ request('search') }}" placeholder="Permission or group name…">
     </div>
     <button type="submit" class="btn acc">Filter</button>
-    <a href="{{ route('rbac.permissions') }}" class="btn">Reset</a>
+    <a href="{{ route('rbac.permissions') }}" class="btn" data-ajax-reset>Reset</a>
   </form>
 
+  <div id="ajax-results">
     <div class="card">
       <div class="ch"><div class="ct">Permissions</div></div>
       @if($permissions->isEmpty())
@@ -159,6 +160,7 @@
     </div>
   </div>
 @endforeach
+  </div> {{-- #ajax-results --}}
 
 @if($errors->any())
   <script>

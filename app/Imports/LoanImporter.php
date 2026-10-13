@@ -81,9 +81,7 @@ class LoanImporter extends BaseImporter
     {
         $companyId = $this->meta['company_id'];
 
-        $employee = Employee::where('company_id', $companyId)
-            ->where('employee_id', $data['emp_id'])
-            ->first();
+        $employee = Employee::findByEmployeeIdLoose($data['emp_id'], $companyId);
 
         if (!$employee) {
             throw new \RuntimeException("Employee '{$data['emp_id']}' not found");

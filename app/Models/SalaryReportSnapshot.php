@@ -29,11 +29,13 @@ class SalaryReportSnapshot extends Model
         'snapshot_data',
         'locked_at',
         'locked_by',
+        'payslip_sent_at',
     ];
 
     protected $casts = [
-        'snapshot_data' => 'array',
-        'locked_at'     => 'datetime',
+        'snapshot_data'   => 'array',
+        'locked_at'       => 'datetime',
+        'payslip_sent_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo

@@ -10,7 +10,7 @@
 @section('content')
 
   {{-- ── Filter + Search bar ────────────────────────────────────────────── --}}
-  <form method="GET" action="{{ route('holidays') }}" class="card"
+  <form method="GET" action="{{ route('holidays') }}" class="card" data-ajax-filter
     style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
 
     <div class="fld" style="min-width:160px">
@@ -43,10 +43,11 @@
     </div>
 
     <button type="submit" class="btn acc">Search</button>
-    <a href="{{ route('holidays', ['year' => $year]) }}" class="btn">Reset</a>
+    <a href="{{ route('holidays', ['year' => $year]) }}" class="btn" data-ajax-reset>Reset</a>
   </form>
 
   {{-- ── Holidays Table ───────────────────────────────────────────────────── --}}
+  <div id="ajax-results">
   <div class="card">
     <div class="ch" style="display:flex;justify-content:space-between;align-items:center">
       <div class="ct">Holidays — {{ $year }}</div>
@@ -123,7 +124,7 @@
         <div class="empty" style="padding:24px">
           <div class="ico">🔍</div>
           <p>No holidays matching your search.</p>
-          <a href="{{ route('holidays', ['year' => $year]) }}" class="btn acc" style="margin-top:10px">Clear Search</a>
+          <a href="{{ route('holidays', ['year' => $year]) }}" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
         </div>
       @endif
     @else
@@ -133,6 +134,7 @@
         <p style="font-size:12px;color:var(--t3);margin-top:4px">Add a holiday, configure week offs, or bulk upload.</p>
       </div>
     @endif
+  </div>
   </div>
 
   {{-- ── Configure Week Offs Modal ─────────────────────────────────────── --}}

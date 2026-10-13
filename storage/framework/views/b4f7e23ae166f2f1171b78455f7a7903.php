@@ -69,7 +69,7 @@
 </div>
 
 
-<form method="GET" action="<?php echo e(route('salary.report.view', $month)); ?>"
+<form method="GET" action="<?php echo e(route('salary.report.view', $month)); ?>" data-ajax-filter
       class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <div class="fld" style="min-width:220px">
     <label>Search Emp ID / Name</label>
@@ -87,7 +87,7 @@
   </div>
   <button type="submit" class="btn acc">Search</button>
   <?php if(!empty($search) || !empty($filter)): ?>
-    <a href="<?php echo e(route('salary.report.view', $month)); ?>" class="btn">✕ Clear</a>
+    <a href="<?php echo e(route('salary.report.view', $month)); ?>" class="btn" data-ajax-reset>✕ Clear</a>
     <?php if(!empty($search) || !empty($filter)): ?>
       <span style="font-size:12px;color:var(--t2);padding-bottom:2px">
         <?php echo e($rows->total()); ?> result(s)
@@ -103,6 +103,7 @@
   <?php endif; ?>
 </form>
 
+<div id="ajax-results">
 <div class="card" style="overflow-x:auto;will-change:transform;-webkit-overflow-scrolling:touch">
   <div class="ch">
     <div class="ct">
@@ -275,10 +276,11 @@
     <div class="empty" style="padding:24px">
       <div class="ico">🔍</div>
       <p>No employees matching "<?php echo e(e($search)); ?>".</p>
-      <a href="<?php echo e(route('salary.report.view', $month)); ?>" class="btn acc" style="margin-top:10px">Clear Search</a>
+      <a href="<?php echo e(route('salary.report.view', $month)); ?>" class="btn acc" style="margin-top:10px" data-ajax-reset>Clear Search</a>
     </div>
   <?php endif; ?>
 </div>
+</div> 
 
 
 <div class="modal" id="reupload-modal">

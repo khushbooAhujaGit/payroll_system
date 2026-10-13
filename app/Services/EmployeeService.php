@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Employee;
+use App\Models\EmployeeBioId;
 use App\Models\EmployeeHistory;
 use App\Models\EmployeeSalary;
 use App\Models\EmployeeSalaryComponent;
@@ -80,12 +81,50 @@ class EmployeeService
             // Initial leave balance for this year
             $this->initLeaveBalances($employee);
 
-            // Default login account (password "rsc@2026") so the employee
-            // can sign in and change it themselves.
+            // Login account with a freshly-generated, unique password
+            // (emailed to the employee) so they can sign in and change it.
             $this->userProvisioningService->createDefaultAccountFor($employee);
+
+            // WFH / Client Location employees have no physical punch device —
+            // auto-assign them a Bio ID under the virtual "OTHER" machine
+            // (item 64) so they're covered by Bio-ID-driven flows the same
+            // as an office employee, without HR doing it by hand.
+            $this->ensureRemoteBioId($employee);
 
             return $employee->fresh(['department', 'designation', 'grade', 'company']);
         });
+    }
+
+    /**
+     * Auto-create a Bio ID (type IV, machine "OTHER" — see
+     * EmployeeBioId::MACHINE_MAP) for an employee whose work type has no
+     * physical punch device. No-op if they already have any Bio ID, or if
+     * their work type isn't wfh/client_location. Bio IDs aren't scoped per
+     * company, so the next number is the global max — same convention
+     * WebBioIdController::index() already uses for the "next expected"
+     * hint on the manual Add form.
+     */
+    public function ensureRemoteBioId(Employee $employee): void
+    {
+        if (!in_array($employee->work_type, ['wfh', 'client_location'], true)) {
+            return;
+        }
+
+        if (EmployeeBioId::where('employee_id', $employee->id)->exists()) {
+            return;
+        }
+
+        $machine    = EmployeeBioId::MACHINE_MAP['IV'];
+        $nextNumber = ((int) EmployeeBioId::where('machine_name', $machine)->max('bio_number')) + 1;
+
+        EmployeeBioId::create([
+            'employee_id'  => $employee->id,
+            'bio_id_full'  => 'IV-' . $nextNumber,
+            'bio_type'     => 'IV',
+            'bio_number'   => $nextNumber,
+            'machine_name' => $machine,
+            'is_active'    => true,
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -202,6 +241,8 @@ class EmployeeService
         // along with them) — this is a no-op if one already exists.
         $this->userProvisioningService->createDefaultAccountFor($employee);
 
+        $this->ensureRemoteBioId($employee);
+
         return $employee->fresh(['department', 'designation', 'grade', 'company']);
     }
     
@@ -209,7 +250,7 @@ class EmployeeService
     public function update(Employee $employee, array $data): Employee
     {
         return DB::transaction(function () use ($employee, $data) {
-            $trackableFields = ['department_id', 'designation_id', 'grade_id', 'branch_id', 'employee_status', 'reporting_manager_id'];
+            $trackableFields = ['department_id', 'designation_id', 'grade_id', 'branch_id', 'location_id', 'employee_status', 'reporting_manager_id'];
             $changed = array_intersect_key($data, array_flip($trackableFields));
             $old     = $employee->only(array_keys($changed));
 
@@ -237,6 +278,11 @@ class EmployeeService
                     ])
                 );
             }
+
+            // Covers work_type being changed to wfh/client_location on an
+            // existing employee — no-op if they already have a Bio ID or
+            // their (possibly unchanged) work_type isn't a remote one.
+            $this->ensureRemoteBioId($employee);
 
             return $employee->fresh();
         });

@@ -46,7 +46,7 @@
        class="btn sm {{ $activeTab === 'team' ? 'acc' : '' }}">Team Application</a>
   </div>
   @endif
-  <form method="GET" action="{{ route('leave') }}"
+  <form method="GET" action="{{ route('leave') }}" data-ajax-filter
     style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     @if($isManager && !$isLeaveAdmin)
       <input type="hidden" name="applications_tab" value="{{ $activeTab }}">
@@ -69,10 +69,11 @@
       <input type="date" name="date_to" value="{{ request('date_to') }}" style="font-size:12px">
     </div>
     <button type="submit" class="btn sm acc">Filter</button>
-    <a href="{{ route('leave', ['applications_tab' => $activeTab]) }}" class="btn sm">Reset</a>
+    <a href="{{ route('leave', ['applications_tab' => $activeTab]) }}" class="btn sm" data-ajax-reset>Reset</a>
   </form>
 </div>
 
+<div id="ajax-results">
 @if($isManager && !$isLeaveAdmin)
   @if($activeTab === 'team')
     {{-- Combined list: formal applications + tracker-only rows (bulk
@@ -88,6 +89,7 @@
       'emptyText'    => 'No leave records found for your team.',
       'formId'       => 'team-applications-form',
       'tabValue'     => 'team',
+      'leaveSummaries' => $leaveSummaries,
     ])
   @else
     @include('leave._applications_table', [
@@ -101,6 +103,7 @@
       'emptyText'    => 'No leave records found.',
       'formId'       => 'self-applications-form',
       'tabValue'     => 'self',
+      'leaveSummaries' => [],
     ])
   @endif
 @else
@@ -116,8 +119,10 @@
     'viewerEmployeeId' => $viewerEmployeeId,
     'emptyText'    => 'No leave records found.',
     'formId'       => 'all-applications-form',
+    'leaveSummaries' => $leaveSummaries,
   ])
 @endif
+</div> {{-- #ajax-results --}}
 
 {{-- Apply Leave Modal --}}
 <div class="modal" id="leave-modal">

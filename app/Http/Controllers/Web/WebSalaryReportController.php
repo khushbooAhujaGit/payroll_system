@@ -21,10 +21,14 @@ use App\Models\LeaveTrackerRecord;
 use App\Models\LeaveType;
 use App\Models\EmployeeLoan;
 use App\Models\LoanInstallment;
+use App\Services\OutlookMailerService;
+use App\Services\PayslipPdfService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -1096,8 +1100,15 @@ class WebSalaryReportController extends Controller
         $this->performLock($month, $rows);
 
         $count = count($rows);
+        $queued = $this->autoSendPayslipsOnLock($month);
+
+        $message = "Report locked ✓ — {$count} employee rows frozen. Loan deductions recorded.";
+        $message .= $queued > 0
+            ? " {$queued} payslip email(s) queued — sending in the background, check back shortly."
+            : ' No new payslip emails to send.';
+
         return redirect()->route('salary.report', ['month' => $month, 'company_id' => $companyId])
-            ->with('success', "Report locked ✓ — {$count} employee rows frozen. Loan deductions recorded.");
+            ->with('success', $message);
     }
 
     // ─────────────────────────────────────────────
@@ -2090,5 +2101,97 @@ class WebSalaryReportController extends Controller
         $ws->freezePane('A2');
 
         return $wb;
+    }
+
+    // ─────────────────────────────────────────────
+    // PAYSLIPS  — generate + email for every employee in a locked month
+    // ─────────────────────────────────────────────
+
+    /**
+     * Items #24-25: emails every employee in this locked month their
+     * payslip PDF. Only ever reads from the LOCKED snapshot (never live
+     * data), so what's emailed always matches what was actually processed.
+     * Deliberately a separate, explicit action from locking itself — a
+     * month can be re-locked after a correction, and auto-sending on every
+     * lock would risk emailing a duplicate/corrected payslip each time.
+     */
+    public function sendPayslips(Request $request)
+    {
+        $this->authorize('payroll_view');
+
+        $request->validate(['month' => 'required|date_format:Y-m']);
+        $month = $request->get('month');
+
+        $snapshotIds = SalaryReportSnapshot::where('year_month', $month)->pluck('id');
+
+        if ($snapshotIds->isEmpty()) {
+            return redirect()->route('salary.report', ['month' => $month])
+                ->with('error', 'No locked report found for ' . $month . ' — save/lock it first.');
+        }
+
+        $queued = $this->queuePayslipEmails($snapshotIds);
+
+        $monthLabel = Carbon::createFromFormat('Y-m', $month)->format('F Y');
+        return redirect()->route('salary.report', ['month' => $month])
+            ->with('success', "Queued {$queued} payslip email(s) for {$monthLabel} — sending in the background, check back shortly.");
+    }
+
+    /**
+     * Auto-send hook for lockSnapshot() (the explicit "Save / Re-lock"
+     * button) only — deliberately NOT wired into performLock() itself,
+     * since that's also called from index() the first time a month is
+     * merely *viewed* with no snapshot yet. Emailing real payslips off a
+     * page view instead of an explicit action would be a serious mistake.
+     *
+     * Guarded against re-lock duplicates by only queuing snapshots that
+     * don't already have payslip_sent_at set — a correction + re-lock won't
+     * re-email everyone, only anyone newly added since the last send.
+     */
+    protected function autoSendPayslipsOnLock(string $month): int
+    {
+        $snapshotIds = SalaryReportSnapshot::where('year_month', $month)
+            ->whereNull('payslip_sent_at')
+            ->pluck('id');
+
+        return $this->queuePayslipEmails($snapshotIds);
+    }
+
+    /**
+     * Dispatches one SendPayslipEmailJob per snapshot instead of sending
+     * synchronously — generating a PDF and calling Graph's sendMail is a
+     * real network round-trip per employee, and doing that inline for
+     * 50+ people made "Save / Re-lock" hang for a minute or more. Requires
+     * a queue worker actually running (QUEUE_CONNECTION=database here) —
+     * see the note left for the user on setting that up.
+     */
+    protected function queuePayslipEmails($snapshotIds): int
+    {
+        foreach ($snapshotIds as $id) {
+            \App\Jobs\SendPayslipEmailJob::dispatch($id);
+        }
+
+        return $snapshotIds->count();
+    }
+
+    /**
+     * Admin/HR downloading any employee's payslip for any locked month.
+     * Employee self-download lives on WebMyPayslipController instead, since
+     * that one is scoped to "my own record only".
+     */
+    public function downloadPayslip(string $month, Employee $employee, PayslipPdfService $payslipService)
+    {
+        $this->authorize('payroll_view');
+
+        $snapshot = SalaryReportSnapshot::where('employee_id', $employee->id)
+            ->where('year_month', $month)
+            ->first();
+
+        abort_unless($snapshot, 404, 'No locked payslip found for this employee/month.');
+
+        $path = $payslipService->ensureGenerated($employee, $month, $snapshot->snapshot_data);
+
+        return response()->download($path, "Payslip_{$employee->employee_id}_{$month}.pdf", [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ]);
     }
 }

@@ -3,7 +3,7 @@
 
 @section('page_actions')
   <a href="{{ route('reports') }}" class="btn">← Reports</a>
-  @if($from && count($rows))
+  @if($from && $rows->total() > 0)
   <button class="btn" onclick="om('att-reupload-modal')">📤 Re-upload Approvals</button>
   <a href="{{ route('reports.attendance.export', array_filter(['month' => $monthStr, 'emp_id' => $empFilter])) }}"
      class="btn acc">📥 Export Excel</a>
@@ -12,7 +12,8 @@
 
 @section('content')
 
-{{-- Filter Form --}}
+{{-- Month / Employee — a real navigation, since the header's Export link
+     and Re-upload button both depend on these too. --}}
 <form method="GET" action="{{ route('reports.attendance') }}" class="card"
       style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
   <div class="fld" style="min-width:160px">
@@ -31,11 +32,24 @@
     </select>
   </div>
   <button type="submit" class="btn acc">Generate</button>
-  @if($monthStr)
-  <a href="{{ route('reports.attendance') }}?month={{ $monthStr }}" class="btn">Reset Filter</a>
-  @endif
 </form>
 
+{{-- Search — narrows the already-generated report only, so this one is AJAX --}}
+@if($monthStr)
+<form method="GET" action="{{ route('reports.attendance') }}" data-ajax-filter class="card"
+      style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+  <input type="hidden" name="month" value="{{ $monthStr }}">
+  <input type="hidden" name="emp_id" value="{{ $empFilter }}">
+  <div class="fld" style="min-width:200px">
+    <label>Search (name / emp ID)</label>
+    <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="e.g. Dhruv or 201818002">
+  </div>
+  <button type="submit" class="btn acc">Search</button>
+  <a href="{{ route('reports.attendance') }}?month={{ $monthStr }}" class="btn" data-ajax-reset>Reset Filter</a>
+</form>
+@endif
+
+<div id="ajax-results">
 @if(!$monthStr)
 {{-- No month selected --}}
 <div class="card">
@@ -45,31 +59,26 @@
   </div>
 </div>
 
-@elseif(empty($rows))
+@elseif($rows->total() === 0)
 <div class="card">
   <div class="empty">
     <div class="ico">🕐</div>
-    <p>No attendance data found for {{ $from->format('F Y') }}.</p>
-    <p style="font-size:12px;color:var(--t3)">Make sure attendance has been imported for this period.</p>
+    <p>{{ $search ? 'No rows match "' . $search . '".' : 'No attendance data found for ' . $from->format('F Y') . '.' }}</p>
+    <p style="font-size:12px;color:var(--t3)">
+      {{ $search ? 'Try a different name or employee ID.' : 'Make sure attendance has been imported for this period.' }}
+    </p>
   </div>
 </div>
 
 @else
 
-{{-- Summary row --}}
-@php
-  $totalRows     = count($rows);
-  $presentCount  = collect($rows)->filter(fn($r) => $r['punch_in_type'] === 'On Time' || $r['punch_in_type'] === 'LateTimeIn')->count();
-  $lateCount     = collect($rows)->filter(fn($r) => $r['punch_in_type'] === 'LateTimeIn')->count();
-  $missingIn     = collect($rows)->filter(fn($r) => $r['punch_in_type'] === 'Punch Missing' && !$r['has_leave'] && !$r['is_weekend'])->count();
-  $leaveCount    = collect($rows)->filter(fn($r) => $r['has_leave'])->count();
-@endphp
+{{-- Summary row — reflects the full searched set, not just this page --}}
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">
-  <span class="bx" style="background:var(--s2)">Total Rows: <strong>{{ $totalRows }}</strong></span>
-  <span class="bx" style="background:#f0fdf4;color:#16a34a">Present / On Time: <strong>{{ $presentCount - $lateCount }}</strong></span>
-  <span class="bx" style="background:#fff7ed;color:#c05621">Late In: <strong>{{ $lateCount }}</strong></span>
-  <span class="bx" style="background:#fef2f2;color:#dc2626">Punch Missing: <strong>{{ $missingIn }}</strong></span>
-  <span class="bx" style="background:#eff6ff;color:#2563eb">Leave Days: <strong>{{ $leaveCount }}</strong></span>
+  <span class="bx" style="background:var(--s2)">Total Rows: <strong>{{ $summary['total'] }}</strong></span>
+  <span class="bx" style="background:#f0fdf4;color:#16a34a">Present / On Time: <strong>{{ $summary['present'] - $summary['late'] }}</strong></span>
+  <span class="bx" style="background:#fff7ed;color:#c05621">Late In: <strong>{{ $summary['late'] }}</strong></span>
+  <span class="bx" style="background:#fef2f2;color:#dc2626">Punch Missing: <strong>{{ $summary['missing'] }}</strong></span>
+  <span class="bx" style="background:#eff6ff;color:#2563eb">Leave Days: <strong>{{ $summary['leave'] }}</strong></span>
 </div>
 
 {{-- Legend --}}
@@ -91,21 +100,31 @@
   <div style="overflow-x:auto;max-height:75vh;overflow-y:auto">
     <table style="font-size:11px;min-width:1500px;border-collapse:collapse">
       {{-- Explicit background on every th overrides the global sticky-th CSS background --}}
-      @php $thStyle = 'padding:8px 10px;white-space:nowrap;background:#3b7de8;color:#fff;border-right:1px solid rgba(255,255,255,.2);text-align:left'; @endphp
+      @php
+        $thStyle = 'padding:8px 10px;white-space:nowrap;background:#3b7de8;color:#fff;border-right:1px solid rgba(255,255,255,.2);text-align:left';
+        // Sortable column header: link toggles asc/desc on this column,
+        // preserves month/emp_id/search, always resets to page 1.
+        $sortLink = function (string $col, string $label) use ($sortBy, $sortDir) {
+            $nextDir = ($sortBy === $col && $sortDir === 'asc') ? 'desc' : 'asc';
+            $arrow = $sortBy === $col ? ($sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+            $url = request()->fullUrlWithQuery(['sort' => $col, 'dir' => $nextDir, 'page' => 1]);
+            return "<a href=\"{$url}\" style=\"color:inherit;text-decoration:none\">{$label}{$arrow}</a>";
+        };
+      @endphp
       <thead>
         <tr>
           <th style="{{ $thStyle }}">Month</th>
-          <th style="{{ $thStyle }}">Date</th>
+          <th style="{{ $thStyle }}">{!! $sortLink('date_ymd', 'Date') !!}</th>
           <th style="{{ $thStyle }}">Day Name</th>
-          <th style="{{ $thStyle }}">New Emp ID</th>
-          <th style="{{ $thStyle }}">Employee Name</th>
+          <th style="{{ $thStyle }}">{!! $sortLink('emp_id', 'New Emp ID') !!}</th>
+          <th style="{{ $thStyle }}">{!! $sortLink('emp_name', 'Employee Name') !!}</th>
           <th style="{{ $thStyle }};text-align:center">TimeIn</th>
           <th style="{{ $thStyle }};text-align:center">TimeOut</th>
-          <th style="{{ $thStyle }}">Punch In Type</th>
-          <th style="{{ $thStyle }}">Punch Out Type</th>
+          <th style="{{ $thStyle }}">{!! $sortLink('punch_in_type', 'Punch In Type') !!}</th>
+          <th style="{{ $thStyle }}">{!! $sortLink('punch_out_type', 'Punch Out Type') !!}</th>
           <th style="{{ $thStyle }};text-align:center">Clocked Time</th>
           <th style="{{ $thStyle }}">CT_Remark</th>
-          <th style="{{ $thStyle }}">Leave Type</th>
+          <th style="{{ $thStyle }}">{!! $sortLink('leave_type', 'Leave Type') !!}</th>
           <th style="{{ $thStyle }}">Reason For Leave</th>
           <th style="{{ $thStyle }};text-align:center">Punch Deviation</th>
           <th style="{{ $thStyle }};text-align:center">Punch In Approval</th>
@@ -205,12 +224,17 @@
     </table>
   </div>
   <div style="padding:10px 14px;font-size:11px;color:var(--t3);border-top:1px solid var(--b1)">
-    {{ count($rows) }} rows · {{ $from->format('F Y') }} · Standard start time: 10:00 AM
+    Showing {{ $rows->firstItem() }}–{{ $rows->lastItem() }} of {{ $rows->total() }} rows · {{ $from->format('F Y') }} · Standard start time: 10:00 AM
     @if($empFilter) · Filtered: {{ $empFilter }} @endif
+    @if($search) · Search: "{{ $search }}" @endif
+  </div>
+  <div style="padding:10px 14px;border-top:1px solid var(--b1)">
+    {{ $rows->links() }}
   </div>
 </div>
 
 @endif {{-- end rows --}}
+</div> {{-- #ajax-results --}}
 
 {{-- Re-upload Approvals Modal --}}
 <div class="modal" id="att-reupload-modal">

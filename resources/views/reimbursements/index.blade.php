@@ -8,7 +8,7 @@
 
 @section('content')
 
-<form method="GET" action="{{ route('reimbursements') }}" class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end">
+<form method="GET" action="{{ route('reimbursements') }}" class="card" data-ajax-filter style="padding:14px 18px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-end">
   <div class="fld" style="min-width:140px">
     <label>Status</label>
     <select name="status">
@@ -20,9 +20,10 @@
     </select>
   </div>
   <button type="submit" class="btn acc">Filter</button>
-  <a href="{{ route('reimbursements') }}" class="btn">Reset</a>
+  <a href="{{ route('reimbursements') }}" class="btn" data-ajax-reset>Reset</a>
 </form>
 
+<div id="ajax-results">
 <div class="card">
   @if($claims->isNotEmpty())
   <table>
@@ -63,6 +64,7 @@
   @else
   <div class="empty"><div class="ico">💳</div><p>No reimbursement claims found.</p></div>
   @endif
+</div>
 </div>
 
 {{-- Submit Claim Modal --}}

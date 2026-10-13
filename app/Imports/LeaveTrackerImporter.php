@@ -36,10 +36,14 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
  *   - ID is required (used as natural key for idempotent re-imports)
  *
  * EMP ID lookup:
- *   Attempts to match sheet EMP ID against employees.employee_id.
- *   If no match is found the row is SILENTLY SKIPPED — it is not imported and
- *   does not appear in the error file.  This prevents importing ghost records
- *   for EMP IDs that have not been registered in the employees table yet.
+ *   Matches sheet EMP ID against employees.employee_id — exact first, then
+ *   falling back to a numeric-only comparison (stripping a leading "EMP",
+ *   case-insensitive) in either direction, since stored employee_id values
+ *   are inconsistently "EMP202618056" vs. "202618056" for the same sequence.
+ *   See resolveEmployee(). If no match is found the row is SILENTLY SKIPPED
+ *   — it is not imported and does not appear in the error file. This
+ *   prevents importing ghost records for EMP IDs that have not been
+ *   registered in the employees table yet.
  *
  * Idempotency:
  *   Re-uploading the same file updates existing rows rather than duplicating them.
@@ -301,11 +305,11 @@ class LeaveTrackerImporter extends BaseImporter
             return null;
         }
 
-        if (!array_key_exists($sheetEmpId, $this->empCache)) {
-            $this->empCache[$sheetEmpId] = Employee::where('employee_id', $sheetEmpId)->first();
+        if (array_key_exists($sheetEmpId, $this->empCache)) {
+            return $this->empCache[$sheetEmpId];
         }
 
-        return $this->empCache[$sheetEmpId];
+        return $this->empCache[$sheetEmpId] = Employee::findByEmployeeIdLoose($sheetEmpId);
     }
 
     /**

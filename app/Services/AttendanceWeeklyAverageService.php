@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\AttendanceRawPunch;
 use Carbon\Carbon;
 
 /**
@@ -20,6 +19,10 @@ class AttendanceWeeklyAverageService
 {
     public const THRESHOLD_HOURS = 9;
 
+    public function __construct(private AttendanceDayResolver $resolver)
+    {
+    }
+
     /**
      * Average clocked hours/day over any date range — used with a Mon-Sun
      * range for the weekly check, and reused with a full-month range for
@@ -29,10 +32,9 @@ class AttendanceWeeklyAverageService
      */
     public function forEmployeeDateRange(int $employeeId, Carbon $rangeStart, Carbon $rangeEnd): ?array
     {
-        $punchesByDate = AttendanceRawPunch::where('employee_id', $employeeId)
-            ->whereBetween('attendance_date', [$rangeStart->toDateString(), $rangeEnd->toDateString()])
-            ->get()
-            ->groupBy(fn($p) => $p->attendance_date->format('Y-m-d'));
+        $punchesByDate = $this->resolver->punchesForEmployeeRange(
+            $employeeId, $rangeStart->toDateString(), $rangeEnd->toDateString()
+        );
 
         $totalSeconds = 0;
         $dayCount     = 0;

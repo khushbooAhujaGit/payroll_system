@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ReimbursementClaim;
 use App\Models\ReimbursementItem;
 use App\Models\ReimbursementType;
+use App\Services\PublicFileStore;
 use App\Services\ReimbursementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\DB;
 
 class ReimbursementController extends Controller
 {
-    public function __construct(protected ReimbursementService $reimbursementService) {}
+    public function __construct(
+        protected ReimbursementService $reimbursementService,
+        protected PublicFileStore $publicFileStore
+    ) {}
 
     // ─────────────────────────────────────────────
     // REIMBURSEMENT TYPES
@@ -106,7 +110,7 @@ class ReimbursementController extends Controller
             foreach ($validated['items'] as $idx => $item) {
                 $billPath = null;
                 if ($request->hasFile("bills.{$idx}")) {
-                    $billPath = $request->file("bills.{$idx}")->store("reimbursements/{$employee->id}", 'local');
+                    $billPath = $this->publicFileStore->store($request->file("bills.{$idx}"), 'reimbursements');
                 }
 
                 ReimbursementItem::create([
@@ -149,7 +153,7 @@ class ReimbursementController extends Controller
 
         $billPath = null;
         if ($request->hasFile('bill')) {
-            $billPath = $request->file('bill')->store("reimbursements/{$claim->employee_id}", 'local');
+            $billPath = $this->publicFileStore->store($request->file('bill'), 'reimbursements');
         }
 
         $item = $claim->items()->create(array_merge($validated, ['bill_path' => $billPath, 'status' => 'pending']));

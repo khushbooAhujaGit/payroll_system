@@ -61,7 +61,7 @@ class BioIdImporter extends BaseImporter
         return [
             'Employee Name' => ['required' => false, 'format' => 'Text',                          'example' => 'Parth Patel'],
             'New Emp ID'    => ['required' => true,  'format' => 'Numeric company employee ID',   'example' => '201820001'],
-            'BioID'         => ['required' => false, 'format' => 'I-N, II-N, III-N (comma sep)', 'example' => 'I-20,II-6,III-8'],
+            'BioID'         => ['required' => false, 'format' => 'I-N, II-N, III-N, IV-N (comma sep; IV = Other/WFH)', 'example' => 'I-20,II-6,III-8'],
         ];
     }
 
@@ -134,7 +134,7 @@ class BioIdImporter extends BaseImporter
 
             $parsed = EmployeeBioId::parse($rawPart);
             if ($parsed === null) {
-                $errors[] = "Unrecognised Bio ID format: \"{$rawPart}\". Expected I-N, II-N, or III-N.";
+                $errors[] = "Unrecognised Bio ID format: \"{$rawPart}\". Expected I-N, II-N, III-N, or IV-N.";
                 continue;
             }
 
@@ -225,20 +225,25 @@ class BioIdImporter extends BaseImporter
     {
         $companyId = (int) ($this->meta['company_id'] ?? 0);
 
-        // 1. Match by employee_id or external_emp_id within the entity
-        $employee = Employee::where('employee_id', $newEmpId)->first();
+        // 1. Match by employee_id, tolerant of an inconsistent "EMP" prefix
+        // (see Employee::findByEmployeeIdLoose()).
+        $employee = Employee::findByEmployeeIdLoose($newEmpId);
 
         if ($employee) {
             return $employee;
         }
 
-        // 2. Fallback: exact full-name match within the entity (normalise spaces)
+        // 2. Fallback: exact full-name match within the entity (normalise
+        // spaces). Deliberately does NOT also filter by employee_id here —
+        // this branch only runs once step 1 has already failed to match
+        // that id in any form, so repeating it would make this fallback
+        // permanently unreachable.
         $name = preg_replace('/\s+/', ' ', trim((string) $name));
         if ($name === '') {
             return null;
         }
 
-        return Employee::where('employee_id', $newEmpId)
+        return Employee::where('company_id', $companyId)
             ->whereRaw(
                 "LOWER(TRIM(CONCAT_WS(' ', first_name, NULLIF(TRIM(COALESCE(middle_name, '')), ''), last_name))) = LOWER(?)",
                 [$name]
